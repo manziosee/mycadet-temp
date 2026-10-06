@@ -1,15 +1,18 @@
 name: PR Design Library Checks
 
 on:
-  pull_request:
-    types: [synchronize, opened, reopened]
-    paths:
-      - "package.json"
-      - "bun.lock"
-      - "patches/**"
-      - "packages/design-library/**"
-      - ".github/workflows/pr-design-library.yaml"
-
+  # rebrand(cadet): PR triggers disabled for the CI-minute budget.
+  # Vargas re-enables by uncommenting this block.
+  # pull_request:
+  #   types: [synchronize, opened, reopened]
+  #   paths:
+  #     - "package.json"
+  #     - "bun.lock"
+  #     - "patches/**"
+  #     - "packages/design-library/**"
+  #     - ".github/workflows/pr-design-library.yaml"
+  #
+  workflow_dispatch:
 concurrency:
   group: pr-design-library-${{ github.event.pull_request.number }}
   cancel-in-progress: true
@@ -18,6 +21,7 @@ jobs:
   checks:
     name: Lint, Type Check & Test
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     defaults:
       run:
         working-directory: packages/design-library

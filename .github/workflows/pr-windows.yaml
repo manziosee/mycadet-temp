@@ -1,27 +1,30 @@
 name: PR Windows Checks
 
 on:
-  pull_request:
-    types: [synchronize, opened, reopened]
-    paths:
-      - "package.json"
-      - "bun.lock"
-      - ".tool-versions"
-      - "patches/**"
-      - "assistant/**"
-      - "cli/**"
-      - "credential-executor/**"
-      - "gateway/**"
-      - "clients/windows/**"
-      - "clients/web/**"
-      - "clients/macos/src/preload/**"
-      - "meta/feature-flags/**"
-      - "skills/**"
-      - "packages/**"
-      - ".github/workflows/pr-windows.yaml"
-      - ".github/workflows/release-windows.yaml"
-      - ".github/workflows/publish-windows.yaml"
-
+  # rebrand(cadet): PR triggers disabled for the CI-minute budget.
+  # Vargas re-enables by uncommenting this block.
+  # pull_request:
+  #   types: [synchronize, opened, reopened]
+  #   paths:
+  #     - "package.json"
+  #     - "bun.lock"
+  #     - ".tool-versions"
+  #     - "patches/**"
+  #     - "assistant/**"
+  #     - "cli/**"
+  #     - "credential-executor/**"
+  #     - "gateway/**"
+  #     - "clients/windows/**"
+  #     - "clients/web/**"
+  #     - "clients/macos/src/preload/**"
+  #     - "meta/feature-flags/**"
+  #     - "skills/**"
+  #     - "packages/**"
+  #     - ".github/workflows/pr-windows.yaml"
+  #     - ".github/workflows/release-windows.yaml"
+  #     - ".github/workflows/publish-windows.yaml"
+  #
+  workflow_dispatch:
 concurrency:
   group: pr-windows-${{ github.event.pull_request.number }}
   cancel-in-progress: true
@@ -30,6 +33,7 @@ jobs:
   typecheck:
     name: Type Check (Windows Electron)
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     defaults:
       run:
         working-directory: clients/windows
@@ -72,6 +76,7 @@ jobs:
   test:
     name: Unit Tests (Windows Electron)
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     defaults:
       run:
         working-directory: clients/windows
@@ -93,6 +98,7 @@ jobs:
   native:
     name: Native Helper (Windows)
     runs-on: windows-2025
+    timeout-minutes: 5
     defaults:
       run:
         working-directory: clients/windows
@@ -125,6 +131,7 @@ jobs:
     needs: [typecheck, build, test, native]
     if: always()
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - name: Aggregate results
         env:

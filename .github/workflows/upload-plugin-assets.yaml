@@ -5,10 +5,11 @@
 name: Upload Plugin Assets to GCS
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - "plugins/assets/**"
+  # rebrand(cadet): main-push trigger disabled for the CI-minute budget.
+  # Vargas re-enables by uncommenting this block.
+  #   branches: [main]
+  #   paths:
+  #     - "plugins/assets/**"
   workflow_dispatch:
 
 jobs:

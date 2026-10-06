@@ -1,18 +1,21 @@
 name: PR Gateway Checks
 
 on:
-  pull_request:
-    types: [synchronize, opened, reopened]
-    paths:
-      - "package.json"
-      - "bun.lock"
-      - "patches/**"
-      - "gateway/**"
-      - "packages/**"
-      - "meta/feature-flags/**"
-      - "meta/sync-bundled-copies.ts"
-      - ".github/workflows/pr-gateway.yaml"
-
+  # rebrand(cadet): PR triggers disabled for the CI-minute budget.
+  # Vargas re-enables by uncommenting this block.
+  # pull_request:
+  #   types: [synchronize, opened, reopened]
+  #   paths:
+  #     - "package.json"
+  #     - "bun.lock"
+  #     - "patches/**"
+  #     - "gateway/**"
+  #     - "packages/**"
+  #     - "meta/feature-flags/**"
+  #     - "meta/sync-bundled-copies.ts"
+  #     - ".github/workflows/pr-gateway.yaml"
+  #
+  workflow_dispatch:
 concurrency:
   group: pr-gateway-${{ github.event.pull_request.number }}
   cancel-in-progress: true
@@ -21,6 +24,7 @@ jobs:
   checks:
     name: Lint, Type Check & Test
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     defaults:
       run:
         working-directory: gateway

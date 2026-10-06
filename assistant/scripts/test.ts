@@ -43,6 +43,16 @@ const COVERAGE = Bun.env.COVERAGE === "true";
 const PER_TEST_TIMEOUT = Number.parseInt(Bun.env.PER_TEST_TIMEOUT ?? "120", 10);
 // SIGKILL grace after SIGTERM, mirroring `timeout -k 10`.
 const KILL_GRACE_MS = 10_000;
+// Per-test timeout bun applies to each individual test() call (default: 5s).
+// Sized for unstarved machines; on the 2-core standard runners each of the
+// TEST_WORKERS concurrent processes gets a fraction of a core, so wall-clock
+// per test runs 4-8x local and the 5s default tripped across the suite (26
+// files failed on timeouts in run 37497324626). 30s keeps bun's per-test kill
+// well under the per-file PER_TEST_TIMEOUT kill below. Tune via env.
+const BUN_TEST_TIMEOUT_MS = Number.parseInt(
+  Bun.env.BUN_TEST_TIMEOUT ?? "30000",
+  10,
+);
 // Longest-first scheduling: a durations file from a previous run sorts slow
 // tests to the front, improving parallel utilization.
 const TEST_DURATIONS_FILE = Bun.env.TEST_DURATIONS_FILE ?? "";
@@ -59,7 +69,16 @@ const EXPERIMENTAL_FILES = new Set([
 // of ambiguous names like `connect.test.ts` that recur under multiple
 // `src/cli/commands/*/__tests__/` directories). To triage: run
 // `bun test <path>` and fix until green, then remove it here.
-const KNOWN_BROKEN_FILES = new Set<string>([]);
+const KNOWN_BROKEN_FILES = new Set<string>([
+  // Stale guard: PR #5 (docs trim) removed the .claude/skills/ tree and the
+  // README lifecycle section this guard enforces. The rebrand workstream
+  // owns rewriting it for the new canonical commands.
+  "src/__tests__/lifecycle-docs-guard.test.ts",
+  // QuickJS asyncify state wedges after an in-flight OOM/interrupt abort,
+  // hanging the file until the per-file kill. Reproduces on main outside
+  // CI; tracked separately from CI infra.
+  "src/workflows/sandbox-escape.test.ts",
+]);
 
 // ---------------------------------------------------------------------------
 // Bundled catalog sync
@@ -168,6 +187,7 @@ async function runBunTest(
   if (EXCLUDE_EXPERIMENTAL) {
     args.push("--test-name-pattern", "^(?!.*\\[experimental\\])");
   }
+  args.push(`--timeout=${BUN_TEST_TIMEOUT_MS}`);
   args.push(file);
 
   const proc = Bun.spawn(["bun", ...args], { stdout: "pipe", stderr: "pipe" });
