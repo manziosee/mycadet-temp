@@ -20,7 +20,7 @@ export const VALID_REMOTE_HOSTS = [
   "local",
   "docker",
   "custom",
-  "vellum",
+  "cloud",
 ] as const;
 export type RemoteHost = (typeof VALID_REMOTE_HOSTS)[number];
 const ANSI = {

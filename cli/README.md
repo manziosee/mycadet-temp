@@ -57,7 +57,7 @@ cadet hatch [options]
 
 - **`local`** -- Starts the local assistant and local gateway. Gateway source resolution order is: repo source tree, then installed `@mycadet/vellum-gateway` package.
 - **`docker`** -- Starts the assistant, gateway, and credential service in Docker containers.
-- **`cadet`** -- Hatches an assistant on the Cadet Platform.
+- **`cadet`** -- Hatches an assistant on the Cadet Cloud.
 - **`custom`** -- Recognized but not yet implemented.
 
 #### Environment Variables
@@ -91,7 +91,7 @@ cadet terminal attach <session> [name] [options]
 cadet terminal list [name] [options]
 ```
 
-Only available for managed assistants (those running in a Cadet Platform container). Local assistants don't have a container to terminal into.
+Only available for managed assistants (those running in a Cadet Cloud container). Local assistants don't have a container to terminal into.
 
 #### Subcommands
 
@@ -128,7 +128,7 @@ cadet terminal attach my-session
 cadet terminal attach my-session my-assistant
 ```
 
-This pairs well with the [`terminal-sessions` skill](https://github.com/vargasjr-dev/mycadet-temp/tree/main/skills/terminal-sessions), which lets the assistant create and manage its own `tmux` sessions. You can `cadet terminal attach` into one of those sessions to watch the assistant work in real time -- for example, pairing on a long-running Claude Code run.
+This pairs well with the [`terminal-sessions` skill](https://github.com/vargasjr-dev/mycadet/tree/main/skills/terminal-sessions), which lets the assistant create and manage its own `tmux` sessions. You can `cadet terminal attach` into one of those sessions to watch the assistant work in real time -- for example, pairing on a long-running Claude Code run.
 
 ### `retire`
 
