@@ -12,32 +12,13 @@
 import { writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { beforeEach, describe, expect, test } from "bun:test";
-import { mock } from "bun:test";
-
-import * as realLogger from "../../../../util/logger.js";
+import {} from "bun:test";
 
 // Captured at module scope: the preload cleans up its env var between suites.
 const PRELOAD_WS = process.env.VELLUM_WORKSPACE_DIR!;
 
 let tmpDir: string;
 let pidPath: string;
-
-// Spread the real modules and override only what we need: `mock.module` is
-// global across the test process, so a partial mock missing exports that other
-// co-run files import (e.g. jobs-worker's `getWorkspaceDir`) would break them.
-
-const noopLogger = {
-  info: () => {},
-  warn: () => {},
-  error: () => {},
-  debug: () => {},
-};
-mock.module("../../../../util/logger.js", () => ({
-  ...realLogger,
-  getLogger: () => noopLogger,
-  getCliLogger: () => noopLogger,
-  getCurrentLogFilePath: () => join(tmpDir, "worker-control-test.log"),
-}));
 
 const { spawnMemoryWorkerProcess, MemoryWorkerSpawnError, probeMemoryWorker } =
   await import("../worker-control.js");

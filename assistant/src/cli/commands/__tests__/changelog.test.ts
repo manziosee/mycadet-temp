@@ -23,7 +23,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { join } from "node:path";
-import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
 import { Command } from "commander";
 
@@ -31,15 +31,6 @@ import { Command } from "commander";
 
 // The preload's workspace is where the changelog cache is written.
 const TMP_ROOT = process.env.VELLUM_WORKSPACE_DIR!;
-
-mock.module("../../logger.js", () => ({
-  log: {
-    info: () => {},
-    warn: () => {},
-    error: () => {},
-    debug: () => {},
-  },
-}));
 
 // ── Test fixtures ────────────────────────────────────────────────────
 

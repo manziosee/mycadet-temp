@@ -11,7 +11,6 @@ import {
   beforeEach,
   describe,
   expect,
-  mock,
   spyOn,
   test,
 } from "bun:test";
@@ -20,22 +19,6 @@ const checkerTestDir = process.env.VELLUM_WORKSPACE_DIR!;
 
 // Point the file-based trust backend at the test temp dir.
 process.env.GATEWAY_SECURITY_DIR = join(checkerTestDir, "protected");
-
-// Capture logger.warn() calls so tests can assert on deprecation warnings.
-const loggerWarnCalls: string[] = [];
-mock.module("../util/logger.js", () => ({
-  getLogger: () =>
-    new Proxy({} as Record<string, unknown>, {
-      get: (_target: Record<string, unknown>, prop: string) => {
-        if (prop === "warn") {
-          return (...args: unknown[]) => {
-            loggerWarnCalls.push(String(args[0]));
-          };
-        }
-        return () => {};
-      },
-    }),
-}));
 
 import {
   installIpcMock,
@@ -190,7 +173,6 @@ describe("Permission Checker", () => {
     _clearGlobalCacheForTesting();
     // Reset guardian persona mock so each test opts in explicitly
     mockGuardianPersonaPath = null;
-    loggerWarnCalls.length = 0;
     try {
       rmSync(join(checkerTestDir, "protected", "trust.json"));
     } catch {

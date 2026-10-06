@@ -8,28 +8,13 @@
 
 import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
-
-import * as realLogger from "../../util/logger.js";
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
 // Captured at module scope: the preload cleans up its env var between suites.
 const PRELOAD_WS = process.env.VELLUM_WORKSPACE_DIR!;
 
 let tmpDir: string;
 let pidPath: string;
-
-const noopLogger = {
-  info: () => {},
-  warn: () => {},
-  error: () => {},
-  debug: () => {},
-};
-mock.module("../../util/logger.js", () => ({
-  ...realLogger,
-  getLogger: () => noopLogger,
-  getCliLogger: () => noopLogger,
-  getCurrentLogFilePath: () => join(tmpDir, "monitoring-test.log"),
-}));
 
 const {
   spawnMonitoringWorkerProcess,

@@ -14,7 +14,7 @@
  */
 
 import { tmpdir } from "node:os";
-import { afterAll, beforeEach, describe, expect, mock, test } from "bun:test";
+import { afterAll, beforeEach, describe, expect, test } from "bun:test";
 
 import { installAcpConfigStub } from "./__tests__/helpers/acp-config-stub.js";
 import { installExecFileStub } from "./__tests__/helpers/exec-file-stub.js";
@@ -32,18 +32,6 @@ const BUN_ADD_KEY = `${BUN_BIN} add`;
 afterAll(() => {
   which.restore();
 });
-
-// Spread the real module so other test files that load logger consumers
-// (e.g. `truncateForLog` importers) after this process-global mock still
-// resolve every named export.
-const realLogger = await import("../util/logger.js");
-mock.module("../util/logger.js", () => ({
-  ...realLogger,
-  getLogger: () =>
-    new Proxy({} as Record<string, unknown>, {
-      get: () => () => {},
-    }),
-}));
 
 const {
   ensureAdapterInstalled,
