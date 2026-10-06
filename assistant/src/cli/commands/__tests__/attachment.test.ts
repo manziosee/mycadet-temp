@@ -250,8 +250,7 @@ describe("attachment register", () => {
   test("error (daemon not running): exits 1 with error message", async () => {
     mockIpcResult = {
       ok: false,
-      error:
-        "Could not connect to assistant. Is it running? Try 'vellum wake'.",
+      error: "Could not connect to assistant. Is it running? Try 'cadet wake'.",
     };
 
     const { exitCode } = await runCommand([
@@ -269,8 +268,7 @@ describe("attachment register", () => {
   test("error (daemon not running) --json: outputs structured error", async () => {
     mockIpcResult = {
       ok: false,
-      error:
-        "Could not connect to assistant. Is it running? Try 'vellum wake'.",
+      error: "Could not connect to assistant. Is it running? Try 'cadet wake'.",
     };
 
     const { exitCode, stdout } = await runCommand([
