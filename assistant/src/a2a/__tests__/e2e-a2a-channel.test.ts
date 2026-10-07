@@ -10,9 +10,28 @@
  * mocked config for feature flag checks.
  */
 
-import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import {
+  afterAll,
+  afterEach,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  test,
+} from "bun:test";
 
 import type { ChannelReplyPayload } from "@mycadet/gateway-client";
+
+import { installFastTimers } from "../../__tests__/fast-timers.js";
+
+// Accelerated clocks: retry timers fire as microtasks.
+let restoreTimers: () => void;
+beforeAll(() => {
+  restoreTimers = installFastTimers();
+});
+afterAll(() => {
+  restoreTimers();
+});
 
 // ---------------------------------------------------------------------------
 // Mock state

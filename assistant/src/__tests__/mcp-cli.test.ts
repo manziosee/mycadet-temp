@@ -13,6 +13,17 @@ import {
 
 import { Command } from "commander";
 
+import { installFastTimers } from "./fast-timers.js";
+
+// Accelerated clocks: poll timers fire as microtasks.
+let restoreTimers: () => void;
+beforeAll(() => {
+  restoreTimers = installFastTimers();
+});
+afterAll(() => {
+  restoreTimers();
+});
+
 // ── Module mocks (must precede imports that pull them in) ──────────────
 
 type MockIpcResult = { ok: boolean; result?: unknown; error?: string };

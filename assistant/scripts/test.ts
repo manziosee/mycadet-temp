@@ -57,6 +57,10 @@ const BUN_TEST_TIMEOUT_MS = Number.parseInt(
 // tests to the front, improving parallel utilization.
 const TEST_DURATIONS_FILE = Bun.env.TEST_DURATIONS_FILE ?? "";
 const TEST_DURATIONS_OUTPUT = Bun.env.TEST_DURATIONS_OUTPUT ?? "";
+// Run only test files changed vs TEST_DIFF_BASE; fails open when the diff
+// cannot be computed.
+const TEST_DIFF_ONLY = Bun.env.TEST_DIFF_ONLY === "true";
+const TEST_DIFF_BASE = Bun.env.TEST_DIFF_BASE ?? "origin/main";
 
 const EXPERIMENTAL_FILES = new Set([
   "skill-load-tool.test.ts",
@@ -163,6 +167,33 @@ function sortLongestFirst(files: string[]): string[] {
     `Sorted tests longest-first using ${TEST_DURATIONS_FILE} (${known.length} known, ${unknown.length} new)`,
   );
   return [...known, ...unknown];
+}
+
+// Intersect collected test files with those changed vs the base ref.
+function diffTestFiles(files: string[]): string[] | null {
+  const repoRoot = join(import.meta.dir, "..", "..");
+  const proc = Bun.spawnSync(
+    [
+      "git",
+      "diff",
+      "--name-only",
+      `${TEST_DIFF_BASE}...HEAD`,
+      "--",
+      "assistant/src",
+    ],
+    { cwd: repoRoot, stdout: "pipe", stderr: "pipe" },
+  );
+  if (proc.exitCode !== 0) {
+    return null;
+  }
+  const changed = new Set(
+    proc.stdout
+      .toString()
+      .split("\n")
+      .filter(Boolean)
+      .map((p) => p.replace(/^assistant\//, "")),
+  );
+  return files.filter((f) => changed.has(f));
 }
 
 // ---------------------------------------------------------------------------
@@ -542,6 +573,24 @@ async function main(): Promise<void> {
   if (testFiles.length === 0) {
     console.log("No test files found under src");
     process.exit(1);
+  }
+  if (TEST_DIFF_ONLY) {
+    const scoped = diffTestFiles(testFiles);
+    if (scoped === null) {
+      console.log(
+        `TEST_DIFF_ONLY set but the diff vs ${TEST_DIFF_BASE} could not be computed — running the full suite`,
+      );
+    } else if (scoped.length === 0) {
+      console.log(
+        `No test files changed vs ${TEST_DIFF_BASE} — nothing to run`,
+      );
+      process.exit(0);
+    } else {
+      console.log(
+        `Diff-scoped run: ${scoped.length} of ${testFiles.length} test file(s) changed vs ${TEST_DIFF_BASE}`,
+      );
+      testFiles = scoped;
+    }
   }
   testFiles = sortLongestFirst(testFiles);
 
