@@ -1,5 +1,10 @@
 import { beforeEach, describe, expect, mock, test } from "bun:test";
 
+import { ensureConversationExists } from "../../persistence/conversation-crud.js";
+import { initializeDb } from "../../persistence/db-init.js";
+
+await initializeDb();
+
 import type {
   ChannelTransport,
   ProactiveTarget,
@@ -79,12 +84,6 @@ mock.module("../../notifications/conversation-pairing.js", () => ({
 }));
 mock.module("../../notifications/delivered-post-record.js", () => ({
   recordDeliveredChannelPost: recordMock,
-}));
-mock.module("../../persistence/conversation-crud.js", () => ({
-  getConversation: (id: string) => ({ id, createdAt: 1700000000000 }),
-}));
-mock.module("../../persistence/conversation-disk-view.js", () => ({
-  syncMessageToDisk: () => {},
 }));
 let bindCreates = true;
 let bindThrows = false;
@@ -332,6 +331,9 @@ describe("delivery through the transport", () => {
 });
 
 describe("recording after acknowledgement", () => {
+  beforeEach(() => {
+    ensureConversationExists("home-1", undefined);
+  });
   test("records every acknowledged id in the chat's home, cross-posted from the sender", async () => {
     deliverResult = { ok: true, messageIds: ["10", "11", "12"] };
     const result = await sendChannelText({
