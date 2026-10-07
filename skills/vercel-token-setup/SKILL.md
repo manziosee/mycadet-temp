@@ -8,7 +8,7 @@ metadata:
   cadet:
     category: "development"
     display-name: "Vercel Token Setup"
-    includes: ["vellum-browser-use"]
+    includes: ["cadet-browser-use"]
 ---
 
 You are helping your user set up a Vercel API token so they can publish apps to the web.

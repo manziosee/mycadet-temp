@@ -208,7 +208,7 @@ Present the candidate inventory (the parsers' stderr census plus the items thems
 
 ### 3. Shape approved items into v3 article pages
 
-Write the approved items as concept pages in a staging directory (for example `.mv3/staging/`), one `.md` file per page. Follow the `vellum-memory-v3-migration` skill's `references/v3-wiki-principles.md` for the article shape rather than improvising; the essentials are:
+Write the approved items as concept pages in a staging directory (for example `.mv3/staging/`), one `.md` file per page. Follow the `cadet-memory-v3-migration` skill's `references/v3-wiki-principles.md` for the article shape rather than improvising; the essentials are:
 
 - The lead paragraph is the summary (there is no `summary:` field; the lead is the retrieval card).
 - Detail lives in `## ` sections with names that work as navigation.

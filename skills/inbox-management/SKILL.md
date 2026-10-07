@@ -302,7 +302,7 @@ Cursor state is JSON at `schedules/<id>/state/state.json` (same idea as the gmai
 - Update to a newer shipped script: re-copy both files from the skill directory into `schedules/<id>/`, re-applying any custom edits.
 - Pause / resume: disable / enable the schedule.
 - Remove: delete the schedule; optionally clean up its `schedules/<id>/` directory.
-- If polls start failing on auth, try `assistant oauth ping google`; if that fails, load the `vellum-oauth-integrations` skill to reconnect.
+- If polls start failing on auth, try `assistant oauth ping google`; if that fails, load the `cadet-oauth-integrations` skill to reconnect.
 
 ---
 
