@@ -352,7 +352,13 @@ describe("sandboxPolicyWithHostFallback", () => {
     const boundary = makeTempDir();
 
     const result = sandboxPolicyWithHostFallback(
-      join(process.env.HOME!, ".cadet", "protected", "actor-token-signing-key"),
+      join(
+        process.env.XDG_DATA_HOME?.trim() ||
+          join(process.env.HOME!, ".local", "share"),
+        "cadet",
+        "protected",
+        "actor-token-signing-key",
+      ),
       boundary,
       { mustExist: false },
     );

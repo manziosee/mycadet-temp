@@ -5,13 +5,13 @@
  * Caches are stored under $CADET_WORKSPACE_DIR/data/slack-skill/.
  */
 
-import { homedir } from "node:os";
-import { join } from "node:path";
 import { mkdirSync, readFileSync, writeFileSync, existsSync } from "node:fs";
+import { join } from "node:path";
+
 import { slackRequest } from "./slack-client.js";
 
 const CACHE_DIR = join(
-  process.env.CADET_WORKSPACE_DIR ?? join(homedir(), ".cadet", "workspace"),
+  process.env.CADET_WORKSPACE_DIR!,
   "data",
   "slack-skill",
 );

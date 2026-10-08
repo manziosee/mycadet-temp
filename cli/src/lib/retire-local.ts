@@ -1,8 +1,6 @@
 import { spawn } from "child_process";
-import { homedir } from "os";
 import { existsSync, mkdirSync, renameSync, writeFileSync } from "fs";
 import { basename, dirname, join, win32 } from "path";
-import { instanceStateDir } from "@mycadet/local-mode";
 
 import {
   getDaemonPidPath,
@@ -101,14 +99,14 @@ export async function retireLocal(
     );
   }
   const resources = entry.resources;
-  const cadetDir = instanceStateDir(resources.instanceDir);
+  const cadetDir = resources.instanceDir;
 
   // Check whether another local assistant shares the same data directory.
   const otherSharesDir = loadAllAssistants().some((other) => {
     if (other.cloud !== "local") return false;
     if (other.assistantId === name) return false;
     if (!other.resources) return false;
-    const otherCadetDir = instanceStateDir(other.resources.instanceDir);
+    const otherCadetDir = other.resources.instanceDir;
     return otherCadetDir === cadetDir;
   });
 
@@ -176,11 +174,8 @@ export async function retireLocal(
     await stopOrphanedDaemonProcesses(otherAssistantPids);
   }
 
-  // For named instances (instanceDir differs from the base directory),
-  // archive and remove the entire instance directory. For the default
-  // instance, archive only the .cadet subdirectory.
-  const isNamedInstance = resources.instanceDir !== homedir();
-  const dirToArchive = isNamedInstance ? resources.instanceDir : cadetDir;
+  // Archive and remove the entire instance directory.
+  const dirToArchive = resources.instanceDir;
 
   // Move the data directory out of the way so the path is immediately available
   // for the next hatch, then kick off the tar archive in the background.

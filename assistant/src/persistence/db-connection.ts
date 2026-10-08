@@ -1,6 +1,5 @@
 import { existsSync } from "node:fs";
-import { homedir } from "node:os";
-import { join, sep } from "node:path";
+import { sep } from "node:path";
 import { Database } from "bun:sqlite";
 
 import { canonicalizePathThroughExistingParent } from "@mycadet/environments/test-path-guard";
@@ -43,8 +42,7 @@ export function assertTestDbIsIsolated(): void {
   const resolvedWorkspaceDir =
     canonicalizePathThroughExistingParent(workspaceDir);
   const realWorkspaceDir = canonicalizePathThroughExistingParent(
-    process.env.CADET_TEST_REAL_WORKSPACE_DIR?.trim() ||
-      join(homedir(), ".cadet", "workspace"),
+    process.env.CADET_TEST_REAL_WORKSPACE_DIR?.trim() ?? "",
   );
   if (
     resolvedWorkspaceDir === realWorkspaceDir ||

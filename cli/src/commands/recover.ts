@@ -6,7 +6,6 @@ import {
   unlinkSync,
 } from "fs";
 import { basename, dirname, join } from "path";
-import { instanceStateDir } from "@mycadet/local-mode";
 
 import { saveAssistantEntry } from "../lib/assistant-config";
 import type { AssistantEntry } from "../lib/assistant-config";
@@ -73,7 +72,7 @@ export async function recover(): Promise<void> {
   }
 
   // 3. Check that the recovering entry's own target directory is free.
-  const target = instanceStateDir(entry.resources.instanceDir);
+  const target = entry.resources.instanceDir;
   if (existsSync(target)) {
     console.error(
       `Error: ${target} already exists (owned by ${entry.assistantId}). ` +
@@ -84,16 +83,15 @@ export async function recover(): Promise<void> {
 
   // 4. Determine the original target directory, then extract and rename.
   //
-  // retireLocal archives either the full instanceDir (named instances) or just
-  // the .cadet/ subdirectory (default instance whose instanceDir === homedir()).
-  // The directory is staged under `<archive>.staging` inside the retired dir
-  // before being packed with `tar -C <retiredDir> <stagingBasename>`, so the
-  // top-level entry inside the tarball is always `<name>.tar.gz.staging`.
+  // retireLocal archives the full instanceDir. The directory is staged under
+  // `<archive>.staging` inside the retired dir before being packed with
+  // `tar -C <retiredDir> <stagingBasename>`, so the top-level entry inside
+  // the tarball is always `<name>.tar.gz.staging`.
   //
   // Correct restoration: extract to retiredDir, then rename the staging entry
-  // back to the original target path.  Using homedir() as the -C target was
+  // back to the original target path. Using homedir() as the -C target was
   // wrong for any instance stored outside the home directory.
-  const targetDir = instanceStateDir(entry.resources.instanceDir);
+  const targetDir = entry.resources.instanceDir;
   const retiredDir = dirname(archivePath);
   const extractedPath = join(retiredDir, basename(archivePath) + ".staging");
 

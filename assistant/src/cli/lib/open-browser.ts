@@ -16,16 +16,7 @@ import { spawn } from "node:child_process";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
-function getWorkspaceDir(): string {
-  return (
-    process.env.CADET_WORKSPACE_DIR ??
-    join(
-      process.env.HOME ?? process.env.USERPROFILE ?? "/tmp",
-      ".cadet",
-      "workspace",
-    )
-  );
-}
+import { getWorkspaceDir } from "../../util/platform.js";
 
 export function openInHostBrowser(
   url: string,

@@ -13,11 +13,10 @@ import {
   existsSync,
   mkdirSync,
   mkdtempSync,
-  renameSync,
   rmSync,
   writeFileSync,
 } from "node:fs";
-import { homedir, tmpdir } from "node:os";
+import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
 
 import type { AssistantEntry } from "../lib/assistant-config.js";
@@ -219,49 +218,6 @@ describe("recover error cases", () => {
     process.argv = ["bun", "cadet", "recover", name];
     await expect(recover()).rejects.toThrow("process.exit(1)");
     expect(consoleErrorSpy.mock.calls[0][0]).toContain("already exists");
-  });
-});
-
-describe("recover extraction path — default instance (instanceDir === homedir())", () => {
-  test("extracts to retiredDir and renames staging dir to instanceDir/.cadet", async () => {
-    const name = "default-instance";
-    const entry = makeEntry(name, homedir());
-    const { archivePath, extractedPath } = writeArchiveFixtures(name, entry);
-
-    const expectedTargetDir = join(homedir(), ".cadet");
-    // If a real ~/.cadet exists (e.g. the machine runs a live assistant),
-    // temporarily move it aside so the collision guard doesn't fire.
-    const backupDir = join(homedir(), ".cadet-recover-test-bak");
-    const hadExisting = existsSync(expectedTargetDir);
-    if (hadExisting) renameSync(expectedTargetDir, backupDir);
-
-    try {
-      process.argv = ["bun", "cadet", "recover", name];
-      await recover();
-
-      // exec must have been called with -C retiredDir, NOT -C homedir()
-      expect(execMock).toHaveBeenCalledTimes(1);
-      const [cmd, args] = execMock.mock.calls[0] as [string, string[]];
-      expect(cmd).toBe("tar");
-      expect(args).toContain("-C");
-      const cIndex = args.indexOf("-C");
-      expect(args[cIndex + 1]).toBe(retiredDir);
-      expect(args[cIndex + 1]).not.toBe(homedir());
-
-      // Staging dir was renamed to the correct target
-      expect(existsSync(extractedPath)).toBe(false);
-      expect(existsSync(expectedTargetDir)).toBe(true);
-
-      // Archive and metadata were cleaned up
-      expect(existsSync(archivePath)).toBe(false);
-
-      // Daemon and gateway were started
-      expect(startLocalDaemonMock).toHaveBeenCalledTimes(1);
-      expect(startGatewayMock).toHaveBeenCalledTimes(1);
-    } finally {
-      rmSync(expectedTargetDir, { recursive: true, force: true });
-      if (hadExisting) renameSync(backupDir, expectedTargetDir);
-    }
   });
 });
 
