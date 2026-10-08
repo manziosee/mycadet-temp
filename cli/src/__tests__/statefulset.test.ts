@@ -60,9 +60,9 @@ describe("getBuilderManagedEnvKeys", () => {
       a.name.localeCompare(b.name),
     );
     expect(sorted).toEqual([
-      { name: "TUNNEL_BASE_URL", hostVar: "TUNNEL_BASE_URL" },
       { name: "CADET_ENVIRONMENT", hostVar: "CADET_ENVIRONMENT" },
       { name: "CADET_PLATFORM_URL", hostVar: "CADET_PLATFORM_URL" },
+      { name: "TUNNEL_BASE_URL", hostVar: "TUNNEL_BASE_URL" },
     ]);
   });
 
