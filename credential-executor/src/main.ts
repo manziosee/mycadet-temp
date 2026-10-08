@@ -19,7 +19,7 @@
 
 import { mkdirSync } from "node:fs";
 import { createServer as createNetServer, type Socket } from "node:net";
-import { dirname, join } from "node:path";
+import { dirname } from "node:path";
 import { Readable, Writable } from "node:stream";
 
 import {
@@ -345,19 +345,9 @@ async function main(): Promise<void> {
   process.on("SIGINT", shutdown);
 
   // -- Secure key backend + migrations --------------------------------------
-  // The secure key backend path differs by mode:
-  // - Local: dirname(getSecurityDir()) — the parent of ~/.cadet/protected
-  //   (or CREDENTIAL_SECURITY_DIR when set by the CLI).
-  // - Managed: join(assistantDataMount, ".cadet") — the assistant data mount.
-  const secureKeyBackend =
-    mode === "managed"
-      ? createLocalSecureKeyBackend(
-          join(
-            process.env["CES_ASSISTANT_DATA_MOUNT"] ?? "/assistant-data-ro",
-            ".cadet",
-          ),
-        )
-      : createLocalSecureKeyBackend(dirname(getSecurityDir()));
+  // Both modes resolve the store location through getSecurityDir() (env var,
+  // cwd fallback convention) — see paths.ts.
+  const secureKeyBackend = createLocalSecureKeyBackend(getSecurityDir());
 
   await runCesMigrations(
     getCesDataRoot(mode),
