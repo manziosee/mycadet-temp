@@ -133,9 +133,7 @@ function packagePath(
 function hasLocalRuntimeComponents(installDir: string): boolean {
   return (
     existsSync(packagePath(installDir, "@mycadet/assistant", "src/index.ts")) &&
-    existsSync(
-      packagePath(installDir, "@mycadet/gateway", "src/index.ts"),
-    ) &&
+    existsSync(packagePath(installDir, "@mycadet/gateway", "src/index.ts")) &&
     existsSync(
       packagePath(installDir, "@mycadet/credential-executor", "src/main.ts"),
     )
@@ -556,10 +554,11 @@ function resolveDaemonMainPath(assistantIndex: string): string {
  *
  * Both the daemon and gateway must use the same HMAC signing key so JWT
  * tokens minted by one can be verified by the other. The CLI generates
- * an ephemeral key each time and passes it as `ACTOR_TOKEN_SIGNING_KEY`
- * to both processes — the daemon and gateway each persist it on their
+ * a key at hatch and passes it as `ACTOR_TOKEN_SIGNING_KEY` to both
+ * processes — the daemon and gateway each persist it on their
  * own terms (the `.cadet/` directory layout is their concern, not the
- * CLI's).
+ * CLI's). Lifecycle resumes resolve the existing identity rather than
+ * generating a key.
  */
 export function generateLocalSigningKey(): string {
   return randomBytes(32).toString("hex");
@@ -602,18 +601,9 @@ function applyDaemonEnvOverrides(
   options?: DaemonStartOptions,
 ): void {
   if (resources) {
-    env.CADET_WORKSPACE_DIR = join(
-      resources.instanceDir,
-      "workspace",
-    );
-    env.GATEWAY_SECURITY_DIR = join(
-      resources.instanceDir,
-      "gateway-security",
-    );
-    env.CREDENTIAL_SECURITY_DIR = join(
-      resources.instanceDir,
-      "ces-security",
-    );
+    env.CADET_WORKSPACE_DIR = join(resources.instanceDir, "workspace");
+    env.GATEWAY_SECURITY_DIR = join(resources.instanceDir, "gateway-security");
+    env.CREDENTIAL_SECURITY_DIR = join(resources.instanceDir, "ces-security");
     env.CES_DATA_DIR = join(resources.instanceDir, "ces-data");
     env.RUNTIME_HTTP_PORT = String(resources.daemonPort);
     env.GATEWAY_PORT = String(resources.gatewayPort);
@@ -1075,9 +1065,7 @@ export async function startCes(
   watch: boolean = false,
   resources?: LocalInstanceResources,
 ): Promise<void> {
-  const cadetDir = resources
-    ? resources.instanceDir
-    : defaultCadetRoot();
+  const cadetDir = resources ? resources.instanceDir : defaultCadetRoot();
   const cesPidFile = join(cadetDir, "ces.pid");
 
   // Kill any existing sibling first — a stale CES holds the socket and would
@@ -1513,7 +1501,8 @@ export async function startLocalDaemon(
   watch: boolean = false,
   resources: LocalInstanceResources,
   options?: DaemonStartOptions,
-): Promise<void> {  writeAssistantWrapper(resources);
+): Promise<void> {
+  writeAssistantWrapper(resources);
 
   const runtimeAssistantIndex = !watch
     ? localRuntimeAssistantIndex(resources)
@@ -1823,9 +1812,7 @@ export async function startGateway(
   // Without this, crashed/stale gateways accumulate as zombies — the old
   // process holds the port (or lingers after losing it), and every restart
   // attempt spawns yet another process that fails with EADDRINUSE.
-  const gwPidDir = resources
-    ? resources.instanceDir
-    : defaultCadetRoot();
+  const gwPidDir = resources ? resources.instanceDir : defaultCadetRoot();
   const gwPidFile = join(gwPidDir, "gateway.pid");
   await stopProcessByPidFile(gwPidFile, "gateway");
 
@@ -1861,18 +1848,9 @@ export async function startGateway(
     // assistant DB directly for guardian bootstrap.
     ...(resources
       ? {
-          CADET_WORKSPACE_DIR: join(
-            resources.instanceDir,
-            "workspace",
-          ),
-          GATEWAY_SECURITY_DIR: join(
-            resources.instanceDir,
-            "gateway-security",
-          ),
-          CREDENTIAL_SECURITY_DIR: join(
-            resources.instanceDir,
-            "ces-security",
-          ),
+          CADET_WORKSPACE_DIR: join(resources.instanceDir, "workspace"),
+          GATEWAY_SECURITY_DIR: join(resources.instanceDir, "gateway-security"),
+          CREDENTIAL_SECURITY_DIR: join(resources.instanceDir, "ces-security"),
           CES_DATA_DIR: join(resources.instanceDir, "ces-data"),
         }
       : {}),
@@ -1928,9 +1906,7 @@ export async function startGateway(
   gateway.unref();
 
   if (gateway.pid) {
-    const gwPidDir = resources
-      ? resources.instanceDir
-      : defaultCadetRoot();
+    const gwPidDir = resources ? resources.instanceDir : defaultCadetRoot();
     writeFileSync(join(gwPidDir, "gateway.pid"), String(gateway.pid), "utf-8");
   }
 
@@ -1976,9 +1952,7 @@ function isNgrokProcess(pid: number): boolean {
 export async function stopLocalProcesses(
   resources?: LocalInstanceResources,
 ): Promise<void> {
-  const cadetDir = resources
-    ? resources.instanceDir
-    : defaultCadetRoot();
+  const cadetDir = resources ? resources.instanceDir : defaultCadetRoot();
   const daemonPidFile = getDaemonPidPath(resources);
   await stopProcessByPidFile(
     daemonPidFile,
