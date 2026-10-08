@@ -22,13 +22,13 @@ describe("isCadetStaff", () => {
   });
 
   test("accepts a Cadet address case-insensitively", () => {
-    expect(isCadetStaff(user({ email: "alice@" + "CADET.AI" }))).toBe(true);
+    expect(isCadetStaff(user({ email: "alice@" + "MYCADET.AI" }))).toBe(true);
   });
 
   test("rejects a lookalike domain", () => {
     // Suffix matching includes the "@", so a domain that merely ends in
     // "mycadet.ai" does not qualify.
-    expect(isCadetStaff(user({ email: "eve@notcadet.ai" }))).toBe(false);
+    expect(isCadetStaff(user({ email: "eve@notmycadet.ai" }))).toBe(false);
   });
 
   test("rejects regular users", () => {
