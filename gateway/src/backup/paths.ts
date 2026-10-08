@@ -22,7 +22,7 @@ const BACKUP_KEY_FILENAME = "backup.key";
  *
  * The key lives in the gateway security directory, which is:
  * - In Docker: a dedicated volume at /gateway-security (GATEWAY_SECURITY_DIR)
- * - Locally: ~/.cadet/protected/
+ * - Locally: the XDG data home (`$XDG_DATA_HOME/cadet/gateway-security`)
  *
  * This keeps the key outside the workspace — the assistant's sandbox
  * boundary — so model-driven tools (file_read, shell) cannot access it.
@@ -38,19 +38,11 @@ export function getBackupKeyPath(): string {
 /**
  * Returns the backup root directory. Respects the `CADET_BACKUP_DIR`
  * environment variable override (used in containerized deployments where
- * backups must be on a persistent volume); falls back to `<cwd>/backups`.
+ * backups must be on a persistent volume); falls back to `<cwd>/backups`
+ * (the spawner picks the cwd — the XDG data home for CLI-hatched instances).
  */
 export function getBackupRootDir(): string {
   return process.env.CADET_BACKUP_DIR?.trim() || join(process.cwd(), "backups");
-}
-
-/**
- * Returns the directory for local (on-device) backups. By default this lives
- * under `~/.cadet/backups/local`; callers can pass an explicit override from
- * config to place backups elsewhere on disk.
- */
-export function getLocalBackupsDir(override?: string | null): string {
-  return override ?? join(getBackupRootDir(), "local");
 }
 
 // ---------------------------------------------------------------------------
