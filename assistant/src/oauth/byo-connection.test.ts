@@ -13,13 +13,13 @@ import {
   test,
 } from "bun:test";
 
+import { useMemorySecureKeys } from "../__tests__/helpers/secure-keys.js";
 // ---------------------------------------------------------------------------
 // Mock logger
 // ---------------------------------------------------------------------------
 // ---------------------------------------------------------------------------
 // Use encrypted backend with a temp store path
 // ---------------------------------------------------------------------------
-import { setStorePathForTesting } from "../__tests__/encrypted-store-test-helpers.js";
 import { _resetBackend } from "../security/secure-keys.js";
 
 const TEST_DIR = join(
@@ -174,9 +174,11 @@ afterAll(() => {
 });
 
 beforeEach(() => {
-  setStorePathForTesting(STORE_PATH);
   _setMetadataPath(join(TEST_DIR, "metadata.json"));
   _resetBackend();
+  // CES is the only credential store now — pin the memory backend so
+  // seeded tokens land somewhere real instead of reporting unreachable.
+  useMemorySecureKeys();
   _resetRefreshBreakers();
   _resetInflightRefreshes();
   // Clear mock oauth-store maps

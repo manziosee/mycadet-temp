@@ -35,13 +35,12 @@ afterAll(() => {
 });
 
 import { _resetBackend } from "../security/secure-keys.js";
-import { setStorePathForTesting } from "./encrypted-store-test-helpers.js";
+import { useMemorySecureKeys } from "./helpers/secure-keys.js";
 
 const TEST_DIR = join(
   tmpdir(),
   `cadet-invariants-test-${randomBytes(4).toString("hex")}`,
 );
-const STORE_PATH = join(TEST_DIR, "keys.enc");
 
 // ---------------------------------------------------------------------------
 // Mock registry to avoid double-registration
@@ -410,15 +409,16 @@ describe("Invariant 4: credentials only used for allowed purpose", () => {
 
   beforeEach(() => {
     mkdirSync(TEST_DIR, { recursive: true });
-    setStorePathForTesting(STORE_PATH);
     _resetBackend();
+    // CES is the only credential store now — pin the memory backend so
+    // reads/writes land somewhere real instead of reporting unreachable.
+    useMemorySecureKeys();
     _setMetadataPath(join(TEST_DIR, "metadata.json"));
     broker = new CredentialBroker();
   });
 
   afterEach(() => {
     _setMetadataPath(null);
-    setStorePathForTesting(null);
     _resetBackend();
     rmSync(TEST_DIR, { recursive: true, force: true });
   });
@@ -497,14 +497,15 @@ describe("Invariant 4: credentials only used for allowed purpose", () => {
 describe("Invariant 6: oauth2ClientSecret not in metadata, only in secure store", () => {
   beforeEach(() => {
     mkdirSync(TEST_DIR, { recursive: true });
-    setStorePathForTesting(STORE_PATH);
     _resetBackend();
+    // CES is the only credential store now — pin the memory backend so
+    // reads/writes land somewhere real instead of reporting unreachable.
+    useMemorySecureKeys();
     _setMetadataPath(join(TEST_DIR, "metadata.json"));
   });
 
   afterEach(() => {
     _setMetadataPath(null);
-    setStorePathForTesting(null);
     _resetBackend();
     rmSync(TEST_DIR, { recursive: true, force: true });
   });
