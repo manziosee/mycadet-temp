@@ -33,31 +33,13 @@ export function getConfigDirs(env: EnvironmentDefinition): string[] {
   return resolveConfigDirPaths(process.env, localPathOptions(env));
 }
 
-/**
- * Lockfile candidate paths for an environment, in priority order.
- *
- * Every environment keeps its canonical lockfile in the XDG config dir
- * (`~/.config/cadet/lockfile.json` for production, env-scoped for
- * non-production). Production additionally lists the home-level
- * `.cadet.lock.json` / `.cadet.lockfile.json` names so read-side callers
- * fall back to installs that predate the move.
- *
- * Read-side callers should iterate this array and use the first existing
- * file (matching `cli/src/lib/assistant-config.ts:readLockfile`). Write-side
- * callers should use {@link getLockfilePath}, which returns the first
- * (canonical) entry.
- *
- * `env.lockfileDirOverride` (populated by the resolver from
- * `CADET_LOCKFILE_DIR`) overrides the directory the lockfile lives in for
- * both production and non-production environments.
- */
 export function getLockfilePaths(env: EnvironmentDefinition): string[] {
   return resolveLockfilePaths(process.env, localPathOptions(env));
 }
 
 /**
  * Canonical lockfile path for writes — always the config-dir
- * `lockfile.json` (legacy reads handled by {@link getLockfilePaths}).
+ * `lockfile.json`.
  */
 export function getLockfilePath(env: EnvironmentDefinition): string {
   return getLockfilePaths(env)[0]!;

@@ -364,11 +364,6 @@ ${ANSI.bold}OPTIONS:${ANSI.reset}
     --disable-platform         Suppress all outbound platform API calls
     -h, --help                 Show this help message
 
-${ANSI.bold}DEFAULTS:${ANSI.reset}
-    Reads from the config-dir lockfile.json (home-level legacy names
-    still honored for reads; created by cadet hatch).
-    Override with flags above.
-
 ${ANSI.bold}EXAMPLES:${ANSI.reset}
     cadet client
     cadet client mycadet-foo
