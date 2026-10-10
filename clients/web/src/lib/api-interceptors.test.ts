@@ -31,8 +31,11 @@ import type * as RemoteGatewaySession from "@/lib/auth/remote-gateway-session";
 const isLocalClientMock = mock(() => !process.env.VITE_PLATFORM_MODE);
 const isPlatformDisabledMock = mock(() => false);
 const isRemoteGatewayModeMock = mock(
-  () => window.__CADET_CONFIG__?.mode === "remote-gateway",
+  () =>
+    window.__CADET_CONFIG__?.remote !== undefined &&
+    window.__CADET_CONFIG__?.remote !== "cloud",
 );
+const isCloudRemoteModeMock = mock(() => false);
 let primeGatewayWithRepairImpl: () => Promise<void> = async () => {};
 const primeGatewayWithRepairMock = mock(() => primeGatewayWithRepairImpl());
 // The lockfile selection the recovery snapshots; a test moves it to model an
@@ -54,6 +57,7 @@ mock.module(
     isLocalClient: isLocalClientMock,
     isPlatformDisabled: isPlatformDisabledMock,
     isPlatformAssistant: () => false,
+    isCloudRemoteMode: isCloudRemoteModeMock,
     isRemoteGatewayMode: isRemoteGatewayModeMock,
     loadLockfile: async () => ({ assistants: [], activeAssistant: null }),
     primeLocalGatewayConnection: async () => {},
@@ -858,7 +862,7 @@ describe("api-interceptors / self-hosted contact-family flattening", () => {
 
 describe("api-interceptors / remote gateway direct requests", () => {
   beforeEach(() => {
-    window.__CADET_CONFIG__ = { mode: "remote-gateway" };
+    window.__CADET_CONFIG__ = { remote: "docker" };
     useOrganizationStore.setState({ currentOrganizationId: TEST_ORG_ID });
     setCsrfCookie("test-csrf-token");
   });
@@ -1062,7 +1066,7 @@ describe("api-interceptors / platform features gate", () => {
   });
 
   test("aborts platform requests in remote-gateway mode", () => {
-    window.__CADET_CONFIG__ = { mode: "remote-gateway" };
+    window.__CADET_CONFIG__ = { remote: "docker" };
     const input = new Request(
       `${window.location.origin}/v1/feature-flags/client-flag-values/`,
     );
@@ -1074,7 +1078,7 @@ describe("api-interceptors / platform features gate", () => {
   });
 
   test("passes bearer-authenticated gateway requests in remote-gateway mode", () => {
-    window.__CADET_CONFIG__ = { mode: "remote-gateway" };
+    window.__CADET_CONFIG__ = { remote: "docker" };
     const input = new Request(
       `${window.location.origin}/v1/assistants/self/events/`,
       { headers: { Authorization: `Bearer ${ACTOR_TOKEN}` } },
@@ -1366,7 +1370,9 @@ describe("api-interceptors / localGatewayAuthRecoveryInterceptor", () => {
     });
     isLocalClientMock.mockImplementation(() => !process.env.VITE_PLATFORM_MODE);
     isRemoteGatewayModeMock.mockImplementation(
-      () => window.__CADET_CONFIG__?.mode === "remote-gateway",
+      () =>
+        window.__CADET_CONFIG__?.remote !== undefined &&
+        window.__CADET_CONFIG__?.remote !== "cloud",
     );
     setSelfHostedConnection(null);
     sessionStorage.removeItem(GW_401_RECOVERY_AT_KEY);
@@ -2296,6 +2302,30 @@ describe("api-interceptors / platformAuthRecoveryInterceptor", () => {
     );
   });
 
+  test("platform-auth mode claims a proxied-gateway 401 (bearer-path exclusion does not apply)", async () => {
+    isCloudRemoteModeMock.mockImplementation(() => true);
+    // The slot points at the platform's own same-origin proxy, whose URL
+    // prefixes the platform URL exactly as /web/<v> does in production —
+    // under the bearer-path exclusion this rejection would be skipped.
+    setSelfHostedConnection({ url: "https://platform.test", token: "tok" });
+    const refreshSession = mock(async () => {
+      mockAuthState.sessionStatus = "unauthenticated";
+      return false;
+    });
+    mockAuthState.refreshSession = refreshSession;
+
+    const response = makeResponse(401, PLATFORM_URL);
+    expect(platformAuthRecoveryInterceptor(response)).toBe(response);
+    await flush();
+
+    expect(refreshSession).toHaveBeenCalledTimes(1);
+    expect(hardNavigateMock).toHaveBeenCalledTimes(1);
+    expect(hardNavigateMock.mock.calls[0][0].startsWith(LOGIN_PREFIX)).toBe(
+      true,
+    );
+    isCloudRemoteModeMock.mockImplementation(() => false);
+  });
+
   test("403 that leaves the session live does not redirect and reopens the latch", async () => {
     const refreshSession = mock(async () => true); // session stays authenticated
     mockAuthState.refreshSession = refreshSession;
@@ -2762,7 +2792,7 @@ describe("api-interceptors / post-resume request counting", () => {
   });
 
   test("does not count a platform request aborted in remote-gateway mode", async () => {
-    window.__CADET_CONFIG__ = { mode: "remote-gateway" };
+    window.__CADET_CONFIG__ = { remote: "docker" };
     const input = new Request(
       `${window.location.origin}/v1/assistants/${SELF_HOSTED_ID}/conversations/`,
     );

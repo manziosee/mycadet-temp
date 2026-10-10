@@ -44,7 +44,10 @@ import {
   getGatewayToken,
   getLocalTokenUrl,
 } from "@/lib/auth/gateway-session";
-import { refreshRemoteGatewaySession } from "@/lib/auth/remote-gateway-session";
+import {
+  refreshRemoteGatewaySession,
+  remoteGatewayPublicPathPrefix,
+} from "@/lib/auth/remote-gateway-session";
 import {
   isLocalClient,
   isRemoteGatewayMode,
@@ -53,6 +56,7 @@ import {
   getLocalAssistants,
   getSelectedAssistant,
   isPairedAssistant,
+  isCloudRemoteMode,
   primeLocalGatewayConnection,
   primeLocalGatewayConnectionWithRepair,
   primeLocalGatewayConnectionWithStartupRetry,
@@ -985,6 +989,22 @@ const useAuthStoreBase = create<AuthStore>()((set, get) => ({
   // deliberate sign-in: a decision, which the guard exists to protect, rather
   // than an observation the guard should be able to discard.
   initSession: async () => {
+    if (isCloudRemoteMode()) {
+      // The platform session cookie authenticates every same-origin call:
+      // the serving proxy injects the acting user per request and never
+      // forwards gateway credentials. There is no gateway session to
+      // establish or rotate, so skip the pairing handshake and register
+      // the same-origin ingress for request rewriting; a 401 from this
+      // path is a platform session rejection, recovered by the platform
+      // interceptor. Trusting the platform here is sound: the user only
+      // reached this page through its server-side session gate.
+      setSelfHostedConnection({
+        url: `${window.location.origin}${remoteGatewayPublicPathPrefix()}`,
+        token: null,
+      });
+      set({ ...authenticatedLocalUser(), platformSession: "present" });
+      return;
+    }
     if (isRemoteGatewayMode()) {
       if (await hasRemoteGatewaySessionAfterRefresh()) {
         set({ ...authenticatedLocalUser(), platformSession: "absent" });
@@ -1225,6 +1245,27 @@ const useAuthStoreBase = create<AuthStore>()((set, get) => ({
     // branch below, so no caller reads an abandoned refresh as a verdict.
     const abandon = (): boolean => isAuthenticated(get().sessionStatus);
 
+    if (isCloudRemoteMode()) {
+      // The platform cookie is the only credential here: re-verify it
+      // authoritatively instead of pinging a gateway session that does
+      // not exist. A settled rejection ends the session (the recovery
+      // flow then routes to login); an ok probe re-stamps liveness.
+      let ok = false;
+      try {
+        ok = (await getSession()).ok;
+      } catch {
+        ok = false;
+      }
+      if (supersededByLogout()) {
+        return abandon();
+      }
+      if (ok) {
+        set({ ...authenticatedLocalUser(), platformSession: "present" });
+        return true;
+      }
+      await endSession(set);
+      return false;
+    }
     if (isRemoteGatewayMode()) {
       if (await hasRemoteGatewaySessionAfterRefresh()) {
         if (supersededByLogout()) {
