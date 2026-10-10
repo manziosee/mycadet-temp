@@ -30,6 +30,7 @@ import {
   DEFAULT_CONTEXT_WINDOW_MAX_INPUT_TOKENS,
   DEFAULT_PROVIDER_CHOICES,
   isDefaultProviderChoice,
+  type LLMConfig,
   type LLMDefaultConfig,
   type ProfileEntry,
 } from "./schemas/llm.js";
@@ -950,12 +951,6 @@ export function getEffectiveProfiles(
   return effective;
 }
 
-/** The slice of an `llm` block the listing functions read. */
-type LLMProfilesSource = {
-  profiles?: Record<string, ProfileEntry>;
-  default?: LLMDefaultConfig;
-};
-
 /**
  * Like `getEffectiveProfiles`, but resolves each default profile key through
  * the same `llm.default`-aware path the runtime resolver uses
@@ -965,7 +960,7 @@ type LLMProfilesSource = {
  * A blob with no usable `default.provider` reduces to `getEffectiveProfiles`.
  */
 export function getEffectiveProfilesForProvider(
-  llm: LLMProfilesSource | undefined,
+  llm: LLMConfig | undefined,
 ): Record<string, ProfileEntry> {
   const effective: Record<string, ProfileEntry> = {
     ...(llm?.profiles ?? {}),
@@ -995,7 +990,7 @@ export function getEffectiveProfilesForProvider(
  * are internal routes rather than profiles a user can choose directly.
  */
 export function getUserSelectableProfilesForProvider(
-  llm: LLMProfilesSource | undefined,
+  llm: LLMConfig | undefined,
 ): Record<string, ProfileEntry> {
   const selectable = getEffectiveProfilesForProvider(llm);
   for (const name of BACKUP_PROFILE_KEYS) {
@@ -1013,7 +1008,7 @@ export function getUserSelectableProfilesForProvider(
  * the wider selectable view, since the verdict sites are what Jev is for.
  */
 export function getConversationProfilesForProvider(
-  llm: LLMProfilesSource | undefined,
+  llm: LLMConfig | undefined,
 ): Record<string, ProfileEntry> {
   const selectable = getUserSelectableProfilesForProvider(llm);
   for (const [name, entry] of Object.entries(selectable)) {
