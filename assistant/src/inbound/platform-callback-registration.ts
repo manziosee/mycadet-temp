@@ -18,7 +18,7 @@
  * the platform can register a route that points at this instance.
  */
 
-import { getPlatformBaseUrl } from "../config/env.js";
+import { getCloudBaseUrl } from "../config/env.js";
 import { getIsPlatform } from "../config/env-registry.js";
 import { getConfig } from "../config/loader.js";
 import { resolvePlatformAssistantId } from "../config/platform-identity.js";
@@ -40,7 +40,7 @@ const log = getLogger("platform-callback-registration");
 
 export interface PlatformCallbackRegistrationContext {
   isPlatform: boolean;
-  platformBaseUrl: string;
+  cloudBaseUrl: string;
   assistantId: string;
   /**
    * Whether a managed assistant API key is available: `null` when the
@@ -63,10 +63,7 @@ export async function resolvePlatformCallbackRegistrationContext(): Promise<Plat
     ]);
 
   const storedBaseUrl = storedBaseUrlRaw?.trim();
-  const platformBaseUrl = (storedBaseUrl || getPlatformBaseUrl()).replace(
-    /\/+$/,
-    "",
-  );
+  const cloudBaseUrl = (storedBaseUrl || getCloudBaseUrl()).replace(/\/+$/, "");
   const envAssistantCredential = process.env.ASSISTANT_API_KEY?.trim();
   const assistantCredential =
     storedAssistantApiKey.value?.trim() || envAssistantCredential || undefined;
@@ -80,7 +77,7 @@ export async function resolvePlatformCallbackRegistrationContext(): Promise<Plat
 
   return {
     isPlatform: platform,
-    platformBaseUrl,
+    cloudBaseUrl,
     assistantId,
     hasAssistantApiKey,
     authHeader,
@@ -88,9 +85,7 @@ export async function resolvePlatformCallbackRegistrationContext(): Promise<Plat
     // Does NOT require IS_PLATFORM — self-hosted assistants with stored
     // credentials can also register routes.
     enabled:
-      platformBaseUrl.length > 0 &&
-      assistantId.length > 0 &&
-      authHeader !== null,
+      cloudBaseUrl.length > 0 && assistantId.length > 0 && authHeader !== null,
   };
 }
 
@@ -126,10 +121,10 @@ export async function registerCallbackRoute(
     );
   }
 
-  const platformBaseUrl = context.platformBaseUrl;
+  const cloudBaseUrl = context.cloudBaseUrl;
   const assistantId = context.assistantId;
 
-  const url = `${platformBaseUrl}/v1/internal/gateway/callback-routes/register/`;
+  const url = `${cloudBaseUrl}/v1/internal/gateway/callback-routes/register/`;
 
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
