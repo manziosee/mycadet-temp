@@ -37,7 +37,6 @@ import {
 } from "../../config/chat-settings.js";
 import {
   catalogEntryFor,
-  type InputModalities,
   modalitiesOf,
   resolveModalityOverride,
 } from "../../config/input-modalities.js";
@@ -523,132 +522,23 @@ async function handleSetEmbeddingConfig({ body }: RouteHandlerArgs) {
   }
 }
 
-function readPlainObject(value: unknown): Record<string, unknown> | undefined {
-  if (value === null || typeof value !== "object" || Array.isArray(value)) {
-    return undefined;
-  }
-  return value as Record<string, unknown>;
-}
-
-function stripTransportHeadersRecursively(value: unknown): void {
-  if (Array.isArray(value)) {
-    for (const item of value) {
-      stripTransportHeadersRecursively(item);
-    }
-    return;
-  }
-
-  const object = readPlainObject(value);
-  if (!object) {
-    return;
-  }
-  const transport = readPlainObject(object.transport);
-  if (transport) {
-    delete transport.headers;
-  }
-  for (const child of Object.values(object)) {
-    stripTransportHeadersRecursively(child);
-  }
-}
-
-function containsTransportHeadersRecursively(value: unknown): boolean {
-  if (Array.isArray(value)) {
-    return value.some((item) => containsTransportHeadersRecursively(item));
-  }
-
-  const object = readPlainObject(value);
-  if (!object) {
-    return false;
-  }
-  const transport = readPlainObject(object.transport);
-  if (transport && Object.hasOwn(transport, "headers")) {
-    return true;
-  }
-  return Object.values(object).some((child) =>
-    containsTransportHeadersRecursively(child),
-  );
-}
-
-function sanitizeMcpTransportHeadersForSettingsRead(config: unknown): void {
-  const root = readPlainObject(config);
-  if (!root) {
-    return;
-  }
-  const mcp = readPlainObject(root.mcp);
-  if (!mcp || !Object.hasOwn(mcp, "servers")) {
-    return;
-  }
-  if (Array.isArray(mcp.servers)) {
-    stripTransportHeadersRecursively(mcp.servers);
-    return;
-  }
-  const servers = readPlainObject(mcp.servers);
-  if (!servers) {
-    return;
-  }
-  for (const server of Object.values(servers)) {
-    stripTransportHeadersRecursively(server);
-  }
-}
-
-function patchContainsMcpTransportHeaders(patch: unknown): boolean {
-  const root = readPlainObject(patch);
-  const mcp = readPlainObject(root?.mcp);
-  if (!mcp || !Object.hasOwn(mcp, "servers")) {
-    return false;
-  }
-  if (Array.isArray(mcp.servers)) {
-    return containsTransportHeadersRecursively(mcp.servers);
-  }
-  const servers = readPlainObject(mcp.servers);
-  if (!servers) {
-    return false;
-  }
-  return Object.values(servers).some((server) =>
-    containsTransportHeadersRecursively(server),
-  );
-}
-
-function rejectMcpTransportHeaderWrite(patch: unknown): void {
-  if (!patchContainsMcpTransportHeaders(patch)) {
-    return;
-  }
-  throw new BadRequestError(
-    "MCP authentication headers must be managed through MCP server add/update APIs, not generic config writes.",
-  );
-}
-
-const MCP_CONFIG_WRITE_MESSAGE =
-  "MCP servers are stored in mcp.json. Use assistant mcp add or assistant mcp remove.";
-
-function stripMcpFromConfigWrite(patch: Record<string, unknown>): void {
-  if (Object.hasOwn(patch, "mcp")) {
-    delete patch.mcp;
-  }
-}
-
-function rejectMcpConfigSetPath(path: string, value: unknown): void {
-  if (path !== "mcp" && !path.startsWith("mcp.")) {
-    return;
-  }
-  const relative =
-    path === "mcp" ? value : nestPath(path.slice("mcp.".length), value);
-  if (patchContainsMcpTransportHeaders({ mcp: relative })) {
-    throw new BadRequestError(
-      "MCP authentication headers must be managed through MCP server add/update APIs, not generic config writes.",
-    );
-  }
-  throw new BadRequestError(MCP_CONFIG_WRITE_MESSAGE);
-}
-
-function nestPath(path: string, value: unknown): unknown {
-  const segments = path.split(".");
-  let current: unknown = value;
-  for (let i = segments.length - 1; i >= 0; i--) {
-    current = { [segments[i]!]: current };
-  }
-  return current;
-}
+/**
+ * Tolerant shape parses for raw config-write fragments — zod replaces the
+ * hand-rolled plain-object narrowing (`readPlainObject`) at every guard.
+ * They model exactly the fields each guard reads and pass everything else
+ * through, so a write guard sees intent even when the surrounding payload
+ * is sparse or malformed. A parse copies, so mutating guards write the
+ * normalized slice back onto the caller's object instead of relying on
+ * shared references.
+ */
+const JsonRecordSchema = z.record(z.string(), z.unknown());
+const RawProfileEntrySchema = z.record(z.string(), z.unknown());
+const RawLlmWriteSliceSchema = z
+  .object({
+    default: z.unknown().optional(),
+    profiles: z.record(z.string(), z.unknown()).nullable().optional(),
+  })
+  .passthrough();
 
 /**
  * Wire shape of the `memory` section in config responses. Passthrough
@@ -790,9 +680,12 @@ const ConfigGetResponseSchema = AssistantConfigSchema.pick({
 
 function handleGetConfig() {
   try {
-    const config = loadConfig();
+    // The overlays stamp wire-only state (catalog bodies, effective chat
+    // settings, capability flags) onto the returned object. Clone first so
+    // the loader's cached config — and every other `getConfig()` reader,
+    // including the config-write merge base — never sees the wire view.
+    const config = structuredClone(loadConfig());
     overlayWorkspaceMcpForConfigRead(config);
-    sanitizeMcpTransportHeadersForSettingsRead(config);
     overlayEffectiveProfilesForWire(config);
     enrichProfilesForWire(config);
     overlayChatSettingsForWire(config);
@@ -802,7 +695,6 @@ function handleGetConfig() {
     throw new InternalError(`Failed to read config: ${message}`);
   }
 }
-
 function overlayChatSettingsForWire(config: AssistantConfig): void {
   const effective = getConfig();
   config.conversations = {
@@ -844,37 +736,6 @@ function overlayEffectiveProfilesForWire(config: AssistantConfig): void {
 }
 
 /**
- * Per-profile keys that exist only on the wire — stamped onto config
- * responses by {@link enrichProfilesForWire}, never persisted to disk.
- * {@link stripWireOnlyProfileKeys} removes them from incoming writes so a
- * `config get` → `config set`/PATCH round-trip isn't rejected for phantom
- * fields; keep the stamp and strip lists in lock-step.
- */
-const WIRE_ONLY_PROFILE_KEYS = new Set(["invariant", "supportsVision"]);
-
-/**
- * Delete the wire-only keys ({@link WIRE_ONLY_PROFILE_KEYS}) from every
- * profile entry in a config-write fragment, in place.
- */
-function stripWireOnlyProfileKeys(patch: unknown): void {
-  const root = readPlainObject(patch);
-  const llm = readPlainObject(root?.llm);
-  const profiles = readPlainObject(llm?.profiles);
-  if (!profiles) {
-    return;
-  }
-  for (const profile of Object.values(profiles)) {
-    const entry = readPlainObject(profile);
-    if (!entry) {
-      continue;
-    }
-    for (const key of WIRE_ONLY_PROFILE_KEYS) {
-      delete entry[key];
-    }
-  }
-}
-
-/**
  * Normalize managed default-profile entries in a config-write fragment, in
  * place, so a `config get` → write round-trip of the enriched wire view is a
  * no-op while genuine edit attempts still reach the invariant guard's
@@ -893,33 +754,39 @@ function stripWireOnlyProfileKeys(patch: unknown): void {
  *   shadowed or given content. A clean echo reduces to a no-op
  *   `{source: "managed"}` stub.
  *
- * Entries are mutated (never replaced) so the normalization also reaches
- * `handleSetConfig`'s `raw` write, which shares object references with the
- * inspected patch shape.
+ * The llm slice is parsed through {@link RawLlmWriteSliceSchema} and the
+ * normalized slice written back — a zod parse copies, so the write-back (not
+ * shared references) is what carries the normalization to the caller's patch.
+ * `handleSetConfig` reads the written-back shape for entry-level SETs.
  */
-export function normalizeCloudProfileWrites(patch: unknown): void {
-  const root = readPlainObject(patch);
-  const llm = readPlainObject(root?.llm);
-  const profiles = readPlainObject(llm?.profiles);
-  if (!profiles) {
+export function normalizeCloudProfileWrites(
+  patch: Record<string, unknown>,
+): void {
+  const llm = RawLlmWriteSliceSchema.safeParse(patch.llm);
+  if (!llm.success || !llm.data.profiles) {
     return;
   }
+  const profiles = llm.data.profiles;
 
-  const currentProfiles = readPlainObject(
-    readPlainObject(loadRawConfig().llm)?.profiles,
-  ) as Record<string, ProfileEntry> | undefined;
+  const currentLlm = RawLlmWriteSliceSchema.safeParse(loadRawConfig().llm);
+  const typedCurrent = currentLlm.success
+    ? LLMSchema.shape.profiles.safeParse(currentLlm.data.profiles)
+    : undefined;
+  const currentProfiles: Record<string, unknown> | undefined =
+    typedCurrent?.success ? typedCurrent.data : undefined;
 
   for (const name of Object.keys(profiles)) {
     if (!MANAGED_PROFILE_NAMES.has(name)) {
       continue;
     }
-    const entry = readPlainObject(profiles[name]);
-    if (!entry) {
+    const entry = RawProfileEntrySchema.safeParse(profiles[name]);
+    if (!entry.success) {
       continue;
     }
 
-    const current = readPlainObject(currentProfiles?.[name]);
-    if (current && current.source !== "managed") {
+    const current = RawProfileEntrySchema.safeParse(currentProfiles?.[name]);
+
+    if (current.success && current.data.source !== "managed") {
       // Legacy user-owned shadow: fully editable, normal custom-profile rules.
       continue;
     }
@@ -927,26 +794,27 @@ export function normalizeCloudProfileWrites(patch: unknown): void {
     // Must resolve through the same provider column as
     // `overlayEffectiveProfilesForWire`, or an echo of the wire view would
     // not match `effective` and an honest round-trip would be rejected.
-    const effective = readPlainObject(
-      resolveDefaultProfileForProvider(
-        currentProfiles,
-        name,
-        getConfig().llm.default,
-      ),
+    const resolved = resolveDefaultProfileForProvider(
+      typedCurrent?.success ? typedCurrent.data : undefined,
+      name,
+      getConfig().llm.default,
     );
-    for (const key of Object.keys(entry)) {
+    const effective: Record<string, unknown> | undefined = resolved
+      ? { ...resolved }
+      : undefined;
+    for (const key of Object.keys(entry.data)) {
       if (key === "source" || key === "status") {
         continue;
       }
       const matchesEffective =
         effective != null &&
         key in effective &&
-        isDeepStrictEqual(entry[key], effective[key]);
-      if (current == null || !(key in current)) {
+        isDeepStrictEqual(entry.data[key], effective[key]);
+      if (!current.success || !(key in current.data)) {
         // Not on disk: a value matching the wire view is a client echo of
         // catalog content — drop it. Anything else stays for the guard.
         if (matchesEffective) {
-          delete entry[key];
+          delete entry.data[key];
         }
         continue;
       }
@@ -956,36 +824,46 @@ export function normalizeCloudProfileWrites(patch: unknown): void {
       // from disk is pinned back to the on-disk value (no change for the
       // guard to reject); everything else is left for the guard's
       // frozen-field comparison.
-      if (matchesEffective && !isDeepStrictEqual(entry[key], current[key])) {
-        entry[key] = current[key];
+      if (
+        matchesEffective &&
+        !isDeepStrictEqual(entry.data[key], current.data[key])
+      ) {
+        entry.data[key] = current.data[key];
       }
     }
 
-    if (current) {
+    if (current.success) {
       // Existing stub: the guard compares the merged result against it and
       // rejects everything but the status re-enable.
-      if (entry.source === undefined) {
-        entry.source = "managed";
+      if (entry.data.source === undefined) {
+        entry.data.source = "managed";
       }
+      profiles[name] = entry.data;
       continue;
     }
 
     // No on-disk entry: the name is catalog-owned. Nothing but a clean echo
-    // (which reduced to source/status above) may pass.
-    if ("source" in entry && entry.source !== "managed") {
+    // (which reduced to source/status above) may pass. The wire-only flags
+    // ride echoes too — the write path's schema parse strips them before
+    // anything persists.
+    if ("source" in entry.data && entry.data.source !== "managed") {
       throw new BadRequestError(
         `Cannot create profile "${name}" — the name is reserved for a code-defined default profile.`,
       );
     }
     if (
-      "status" in entry &&
-      entry.status != null &&
-      entry.status !== "active"
+      "status" in entry.data &&
+      entry.data.status != null &&
+      entry.data.status !== "active"
     ) {
       throw new BadRequestError(`Cannot disable cloud profile "${name}".`);
     }
-    const residual = Object.keys(entry).filter(
-      (key) => key !== "source" && key !== "status",
+    const residual = Object.keys(entry.data).filter(
+      (key) =>
+        key !== "source" &&
+        key !== "status" &&
+        key !== "invariant" &&
+        key !== "supportsVision",
     );
     if (residual.length > 0) {
       throw new BadRequestError(
@@ -993,13 +871,28 @@ export function normalizeCloudProfileWrites(patch: unknown): void {
           `Cloud profiles are read-only; duplicate to a custom profile to customize.`,
       );
     }
-    entry.source = "managed";
+    entry.data.source = "managed";
+    profiles[name] = entry.data;
   }
+
+  patch.llm = llm.data;
 }
 
 /**
- * Annotate each profile in `config.llm.profiles` with wire-only flags
- * (`WIRE_ONLY_PROFILE_KEYS`) — never persisted to disk:
+ * The enriched profile shape clients consume: {@link ProfileEntry} plus the
+ * wire-only flags `enrichProfilesForWire` stamps onto config-read responses.
+ * The flags are deliberately absent from `ProfileEntry` — the persisted
+ * schema — so a config write's schema parse strips echoed copies instead of
+ * persisting them.
+ */
+type WireProfileEntry = ProfileEntry & {
+  invariant?: boolean;
+  supportsVision?: boolean;
+};
+
+/**
+ * Annotate each profile in `config.llm.profiles` with wire-only flags —
+ * never persisted to disk:
  *
  * - `supportsVision`: resolved from the model catalog, with a profile
  *   `inputModalities.image` override winning when set. Unknown (provider,
@@ -1011,38 +904,21 @@ export function normalizeCloudProfileWrites(patch: unknown): void {
  *   a cloud name is fully editable, so it must render as a normal custom
  *   profile.
  */
-function enrichProfilesForWire(config: unknown): void {
-  const root = readPlainObject(config);
-  if (!root) {
-    return;
-  }
-  const llm = readPlainObject(root.llm);
-  if (!llm) {
-    return;
-  }
-  const profiles = readPlainObject(llm.profiles);
-  if (!profiles) {
-    return;
-  }
-
-  for (const [name, profile] of Object.entries(profiles)) {
-    const entry = readPlainObject(profile);
-    if (!entry) {
-      continue;
-    }
+function enrichProfilesForWire(config: AssistantConfig): void {
+  const profiles: Record<string, WireProfileEntry> = config.llm.profiles;
+  for (const [name, entry] of Object.entries(profiles)) {
     if (INVARIANT_PROFILE_NAMES.has(name) && entry.source === "managed") {
       entry.invariant = true;
     }
-    const provider = entry.provider;
-    const model = entry.model;
-    if (typeof provider !== "string" || typeof model !== "string") {
+
+    if (entry.provider == null || entry.model == null) {
       continue;
     }
 
-    const catalogModel = catalogEntryFor(provider, model);
+    const catalogModel = catalogEntryFor(entry.provider, entry.model);
     const catalogVision = catalogModel?.supportsVision;
     const imageOverride = modalitiesOf({
-      inputModalities: entry.inputModalities as InputModalities | null,
+      inputModalities: entry.inputModalities,
     })?.image;
     entry.supportsVision =
       resolveModalityOverride(imageOverride, catalogVision) ?? true;
@@ -1084,20 +960,23 @@ function handleGetConfigSchema({ queryParams = {} }: RouteHandlerArgs) {
 export function rejectCloudProfileDeletion(
   body: Record<string, unknown>,
 ): void {
-  const llm = asMutablePlainObject(body.llm);
-  if (!llm) {
+  const llm = RawLlmWriteSliceSchema.safeParse(body.llm);
+  if (!llm.success) {
     return;
   }
-  if ("profiles" in llm && llm.profiles === null) {
+  if (llm.data.profiles === null) {
     throw new BadRequestError(
       "Cannot null llm.profiles — cloud profiles would be deleted.",
     );
   }
-  const profiles = asMutablePlainObject(llm.profiles);
+  const profiles = llm.data.profiles;
   if (!profiles) {
     return;
   }
-  const existingProfiles = asMutablePlainObject(getConfig().llm.profiles) ?? {};
+  const existingLlm = RawLlmWriteSliceSchema.safeParse(getConfig().llm);
+  const existingProfiles = existingLlm.success
+    ? (existingLlm.data.profiles ?? {})
+    : {};
   for (const name of Object.keys(profiles)) {
     if (profiles[name] !== null || !MANAGED_PROFILE_NAMES.has(name)) {
       continue;
@@ -1105,8 +984,8 @@ export function rejectCloudProfileDeletion(
     // Only block deletion when the on-disk entry is Cadet Cloud. A
     // user-owned profile sharing a cloud name carries a non-managed `source`
     // and is freely deletable.
-    const existing = asMutablePlainObject(existingProfiles[name]);
-    if (existing?.source === "managed") {
+    const existing = RawProfileEntrySchema.safeParse(existingProfiles[name]);
+    if (existing.success && existing.data.source === "managed") {
       throw new BadRequestError(`Cannot delete cloud profile "${name}".`);
     }
   }
@@ -1138,11 +1017,11 @@ export function rejectCloudProfileDeletion(
  *   profile can never be disabled; a changed `status` must be `"active"`,
  *   `null`, or absent — re-enabling a disabled profile. Any other value is
  *   rejected.
- * - Wire-only keys (`WIRE_ONLY_PROFILE_KEYS`) are ignored on both sides:
- *   incoming writes have them stripped, but configs persisted before the
- *   strip existed may still carry them on disk, and treating that stale key
- *   as a removed field would reject every round-trip write until reboot
- *   reseeds the profile.
+ * - The wire-only flags (`invariant`, `supportsVision`) are ignored on both
+ *   sides: the write path's schema parse strips them from incoming writes,
+ *   but configs persisted before that was true may still carry them on
+ *   disk, and treating that stale key as a removed field would reject every
+ *   round-trip write until reboot reseeds the profile.
  * - Every other field is frozen: any changed, added, or removed key across
  *   the union of both entries' keys (except `status` and the wire-only keys)
  *   is rejected. A pre-existing on-disk override (e.g. `topP`) is preserved
@@ -1197,7 +1076,8 @@ function assertInvariantProfilesPreserved(
     ].filter(
       (key) =>
         key !== "status" &&
-        !WIRE_ONLY_PROFILE_KEYS.has(key) &&
+        key !== "invariant" &&
+        key !== "supportsVision" &&
         !isDeepStrictEqual(oldEntry[key], newEntry[key]),
     );
     if (changedKeys.length > 0) {
@@ -1222,17 +1102,17 @@ function completeChangedCustomProfiles(
   preWrite: Record<string, unknown>,
   raw: Record<string, unknown>,
 ): void {
-  const profiles = asMutablePlainObject(readPlainObject(raw.llm)?.profiles);
-  if (!profiles) {
+  const llm = RawLlmWriteSliceSchema.safeParse(raw.llm);
+  if (!llm.success || !llm.data.profiles) {
     return;
   }
-  const parsedDefault = LLMConfigBase.safeParse(
-    readPlainObject(raw.llm)?.default ?? {},
-  );
+  const profiles = llm.data.profiles;
+  const parsedDefault = LLMConfigBase.safeParse(llm.data.default ?? {});
   if (!parsedDefault.success) {
     return;
   }
-  const prior = readPlainObject(readPlainObject(preWrite.llm)?.profiles) ?? {};
+  const priorLlm = RawLlmWriteSliceSchema.safeParse(preWrite.llm);
+  const prior = priorLlm.success ? (priorLlm.data.profiles ?? {}) : {};
   for (const [name, entry] of Object.entries(profiles)) {
     if (isDeepStrictEqual(entry, prior[name])) {
       continue;
@@ -1252,14 +1132,20 @@ function completeChangedCustomProfiles(
     // depth: `safeParse` strips keys the schema doesn't know (top-level and
     // inside nested objects like `contextWindow`), and dropping them here
     // would delete forward-compatible fields whenever the entry is edited.
+    const entryRecord = RawProfileEntrySchema.safeParse(entry);
+    if (!entryRecord.success) {
+      continue;
+    }
     profiles[name] = mergePreservingUnknownKeys(
-      readPlainObject(entry) ?? {},
+      entryRecord.data,
       completeCustomProfile(parsedDefault.data, entryData) as Record<
         string,
         unknown
       >,
     );
   }
+  // A zod parse copies — write the completed slice back so `raw` carries it.
+  raw.llm = llm.data;
 }
 
 /**
@@ -1359,16 +1245,55 @@ function assertRoutableIdentityEntries(
  * `null`.
  */
 function assertCodeOwnedFallbackProfiles(raw: Record<string, unknown>): void {
-  const llm = readPlainObject(raw.llm);
-  const profiles = readPlainObject(llm?.profiles);
+  const llm = RawLlmWriteSliceSchema.safeParse(raw.llm);
+  if (!llm.success) {
+    return;
+  }
   // The sibling `llm.default` decides whether the cloud backups are valid
   // fallback targets: they resolve on the cloud column alone.
   const issues = collectFallbackProfileIssues(
-    profiles ?? undefined,
-    llm?.default,
+    llm.data.profiles ?? undefined,
+    llm.data.default,
   );
   if (issues.length > 0) {
     throw new BadRequestError(issues.map((issue) => issue.message).join(" "));
+  }
+}
+
+/**
+ * Stamp the managed marker onto `llm.profiles` entries of catalog-owned
+ * names that a write created without a `source` — a source-less entry reads
+ * as a user shadow that blocks the catalog body. A user-owned entry sharing
+ * the name (a legacy shadow) keeps its source, so its edits stay fully
+ * user-owned.
+ */
+function stampManagedProfileEntries(
+  preWrite: Record<string, unknown>,
+  raw: Record<string, unknown>,
+): void {
+  const newLlm = RawLlmWriteSliceSchema.safeParse(raw.llm);
+  if (!newLlm.success || !newLlm.data.profiles) {
+    return;
+  }
+  const oldLlm = RawLlmWriteSliceSchema.safeParse(preWrite.llm);
+  let stamped = false;
+  for (const name of MANAGED_PROFILE_NAMES) {
+    const written = RawProfileEntrySchema.safeParse(newLlm.data.profiles[name]);
+    if (!written.success || written.data.source !== undefined) {
+      continue;
+    }
+    const prior = RawProfileEntrySchema.safeParse(
+      oldLlm.success ? oldLlm.data.profiles?.[name] : undefined,
+    );
+    if (prior.success && prior.data.source !== "managed") {
+      continue;
+    }
+    written.data.source = "managed";
+    newLlm.data.profiles[name] = written.data;
+    stamped = true;
+  }
+  if (stamped) {
+    raw.llm = newLlm.data;
   }
 }
 
@@ -1381,10 +1306,14 @@ export async function commitConfigWrite(
   // false diffs. Runs before the watcher-suppress/save sequence so a
   // rejection needs no suppress-flag or cache cleanup.
   const preWrite = loadRawConfig();
+  // Direct callers (the profile routes) skip `handleSetConfig`'s full-schema
+  // parse — this keeps a chat-settings write's invalid values from reaching
+  // disk, while untouched legacy values ride (their issues filter out).
   const chatSettings = validateChatSettingsWrite(preWrite, raw);
   if (!chatSettings.success) {
     throw new BadRequestError(chatSettings.error.message);
   }
+  stampManagedProfileEntries(preWrite, raw);
   completeChangedCustomProfiles(preWrite, raw);
   assertInvariantProfilesPreserved(preWrite, raw);
   assertRoutableIdentityEntries(preWrite, raw);
@@ -1439,95 +1368,66 @@ export async function commitConfigWrite(
   publishConfigChanged();
 }
 
-/**
- * Web clients pair provider writes with a legacy `mode` key so their saves
- * stay valid on daemons whose schemas still carry it. The provider-only
- * services (web-search, image-generation) parse-strip that key, but the
- * deep-merge would still persist it to raw config.json on every save —
- * scrub it so the removed field cannot be resurrected on disk.
- */
-function scrubRemovedServiceModes(raw: Record<string, unknown>): void {
-  const services = raw.services as
-    | Record<string, Record<string, unknown> | undefined>
-    | undefined;
-  if (!services) {
-    return;
-  }
-  for (const key of ["web-search", "image-generation"]) {
-    const entry = services[key];
-    if (entry && typeof entry === "object" && "mode" in entry) {
-      delete entry.mode;
-    }
-  }
-}
-
-/**
- * A persisted `services.stt` block must satisfy SttServiceSchema, whose
- * `provider` is required. The services-level default fills the provider only
- * when `services.stt` is wholly absent, so a sparse patch like
- * `{ services: { stt: { language } } }` deep-merged into a config with no
- * stt block persists a provider-less block that fails validation and trips
- * the loader's salvage ladder: the patched value never applies and the whole
- * `services` section can reset to defaults on the next load (the LUM-2758
- * failure family). Seed the effective provider into any stt block that lacks
- * a non-empty string one so every config_patch writer stays self-consistent.
- * The seed applies to any stt key, not just language: the schema requires
- * the provider whenever the block exists. A block carrying a non-empty
- * string provider is left alone, even an invalid one, so an explicit
- * provider write is never silently rewritten.
- */
-function seedSttProviderForSparseBlock(raw: Record<string, unknown>): void {
-  const services = readPlainObject(raw.services);
-  const stt = readPlainObject(services?.stt);
-  if (!stt) {
-    return;
-  }
-  const provider = stt.provider;
-  if (typeof provider === "string" && provider.trim().length > 0) {
-    return;
-  }
-  stt.provider = getConfig().services.stt.provider;
-}
-
 async function handlePatchConfig({ body }: RouteHandlerArgs) {
-  if (
-    !body ||
-    typeof body !== "object" ||
-    Array.isArray(body) ||
-    Object.keys(body).length === 0
-  ) {
+  const patch = JsonRecordSchema.safeParse(body);
+  if (!patch.success || Object.keys(patch.data).length === 0) {
     throw new BadRequestError("Body must be a non-empty JSON object");
   }
-  const chatSettings = ChatSettingsPatchSchema.safeParse(body);
-  if (!chatSettings.success) {
-    throw new BadRequestError(chatSettings.error.message);
-  }
-  stripWireOnlyProfileKeys(body);
-  normalizeCloudProfileWrites(body);
-  rejectCloudProfileDeletion(body as Record<string, unknown>);
-  rejectMcpTransportHeaderWrite(body);
-  stripMcpFromConfigWrite(body as Record<string, unknown>);
+  // Managed-profile normalization runs on the fragment before it merges:
+  // an honest `config get` → PATCH round-trip reduces to a no-op, and a
+  // genuine edit reaches the invariant guard's precise rejections.
+  normalizeCloudProfileWrites(patch.data);
+  rejectCloudProfileDeletion(patch.data);
 
-  const raw = loadRawConfig();
-  const patch = body as Record<string, unknown>;
-  const patchedIngressUrl = readPlainObject(patch.ingress)?.publicBaseUrl;
+  // A patch is partial: merge it onto the current config so the schema
+  // parse in `handleSetConfig` always sees a complete config — untouched
+  // values ride, sparse fragments are completed by the merge base.
+  const merged: AssistantConfig = structuredClone(getConfig());
+  const ingress = z
+    .object({ publicBaseUrl: z.unknown().optional() })
+    .passthrough()
+    .safeParse(patch.data.ingress);
+  const patchedIngressUrl = ingress.success
+    ? ingress.data.publicBaseUrl
+    : undefined;
   if (patchedIngressUrl !== undefined) {
-    dropTunnelRecordsForNewUrl(readPlainObject(raw.ingress), patchedIngressUrl);
+    dropTunnelRecordsForNewUrl(merged.ingress, patchedIngressUrl);
   }
-  deepMergeOverwrite(raw, patch);
-  scrubRemovedServiceModes(raw);
-  scrubNulledAcpAgentLeaves(raw);
-  scrubNulledChatSettings(raw, patch);
-  seedSttProviderForSparseBlock(raw);
+  deepMergeOverwrite(merged, patch.data);
+  scrubNulledAcpAgentLeaves(merged);
+  scrubNulledChatSettings(merged, patch.data);
 
-  await commitConfigWrite(raw, "patch");
+  await handleSetConfig(merged);
 
   return handleGetConfig();
 }
 
 /**
- * Direct path assignment - replaces `config_patch` for the `assistant
- * config set <key> <value>` CLI path.
+ * The one config write: validate the merged config through
+ * `AssistantConfigSchema`, and either reject with `BadRequestError` or save.
+ * `handlePatchConfig` merges the patch with `getConfig()` first;
+ * `handleSetConfigByKey` replaces one path first. Everything the schema
+ * accepts is what lands on disk.
+ */
+async function handleSetConfig(merged: AssistantConfig): Promise<void> {
+  const parsed = AssistantConfigSchema.safeParse(merged);
+  if (!parsed.success) {
+    throw new BadRequestError(
+      parsed.error.issues
+        .map((issue) =>
+          issue.path.length > 0
+            ? `${issue.path.join(".")}: ${issue.message}`
+            : issue.message,
+        )
+        .join("; "),
+    );
+  }
+  await commitConfigWrite(parsed.data, "save");
+}
+
+/**
+ * Direct path assignment - the `assistant config set <key> <value>` CLI
+ * contract.
  *
  * `config_patch` uses `deepMergeOverwrite` semantics, which strips `null`
  * leaves when the target subtree doesn't exist and merges (rather than
@@ -1537,17 +1437,18 @@ async function handlePatchConfig({ body }: RouteHandlerArgs) {
  *   - `set heartbeat.activeHoursStart null` to persist explicit `null`
  *   - `set llm {}` to replace `llm`, not merge into it
  *
- * `config_set` performs `setNestedValue` directly on the loaded raw config
- * (no merge), then runs the same post-write side effects as patch.
+ * `config_set` performs `setNestedValue` directly on the current config
+ * (no merge), then funnels into the same schema-validated
+ * {@link handleSetConfig} write.
  */
-async function handleSetConfig({ body }: RouteHandlerArgs) {
-  if (!body || typeof body !== "object" || Array.isArray(body)) {
+async function handleSetConfigByKey({ body }: RouteHandlerArgs) {
+  const parsedBody = JsonRecordSchema.safeParse(body);
+  if (!parsedBody.success) {
     throw new BadRequestError(
       "Body must be a JSON object with `path` and `value`",
     );
   }
-  const bodyRecord = body as Record<string, unknown>;
-  const { path, value } = bodyRecord as { path?: unknown; value?: unknown };
+  const path = parsedBody.data.path;
   if (typeof path !== "string" || path.length === 0) {
     throw new BadRequestError("`path` must be a non-empty string");
   }
@@ -1555,85 +1456,62 @@ async function handleSetConfig({ body }: RouteHandlerArgs) {
   // this check, `undefined` flows into `setNestedValue` and gets dropped by
   // `JSON.stringify` at save time, silently removing the key - which is
   // distinct from the documented "set to null" semantics.
-  if (!("value" in bodyRecord)) {
+  if (!Object.hasOwn(parsedBody.data, "value")) {
     throw new BadRequestError(
       "`value` is required (use `null` to clear a key)",
     );
   }
-  // A leaf-path SET targeting a wire-only profile key is dropped without
-  // writing — the same treatment PATCH gives wire-only keys embedded in a
-  // profile fragment.
-  const pathSegments = path.split(".");
-  if (
-    pathSegments[0] === "llm" &&
-    pathSegments[1] === "profiles" &&
-    pathSegments.length >= 4 &&
-    WIRE_ONLY_PROFILE_KEYS.has(pathSegments[3]!)
-  ) {
-    return { ok: true };
-  }
-  // Build the equivalent patch shape so the cloud-profile guard can
-  // inspect the touched subtree. `setNestedValue` places `value` into
-  // `patchShape` by reference, so stripping wire-only profile keys here
-  // also strips the object written to `raw` below.
-  const patchShape: Record<string, unknown> = {};
-  setNestedValue(patchShape, path, value);
-  stripWireOnlyProfileKeys(patchShape);
-  normalizeCloudProfileWrites(patchShape);
-  rejectCloudProfileDeletion(patchShape);
-  rejectMcpConfigSetPath(path, value);
-  rejectMcpTransportHeaderWrite(patchShape);
+  const value = parsedBody.data.value;
 
-  const raw = loadRawConfig();
-  // A SET below the entry level (`llm.profiles.<name>.<leaf>`) writes the
-  // primitive leaf directly into `raw`, bypassing the by-reference
-  // normalization above — creating an entry for a cloud-owned name would
-  // leave it source-less, and a source-less entry reads as a user shadow
-  // that blocks the catalog body. Stamp the cloud marker onto the written
-  // entry when the name was absent or managed-owned before this write.
-  const managedEntryName =
-    pathSegments[0] === "llm" &&
-    pathSegments[1] === "profiles" &&
-    pathSegments.length >= 3 &&
-    MANAGED_PROFILE_NAMES.has(pathSegments[2]!)
-      ? pathSegments[2]!
-      : undefined;
-  const priorManagedEntry = managedEntryName
-    ? readPlainObject(
-        readPlainObject(readPlainObject(raw.llm)?.profiles)?.[managedEntryName],
-      )
-    : undefined;
+  const merged: AssistantConfig = structuredClone(getConfig());
   // `assistant config set ingress.publicBaseUrl <url>`, what the webhook
   // diagnostics tell users to run, retargets ingress like the settings route.
   if (path === "ingress.publicBaseUrl") {
-    dropTunnelRecordsForNewUrl(readPlainObject(raw.ingress), value);
+    dropTunnelRecordsForNewUrl(merged.ingress, value);
   }
-  setNestedValue(raw, path, value);
-  if (
-    managedEntryName &&
-    (priorManagedEntry == null || priorManagedEntry.source === "managed")
-  ) {
-    const written = readPlainObject(
-      readPlainObject(readPlainObject(raw.llm)?.profiles)?.[managedEntryName],
-    );
-    if (written && written.source === undefined) {
-      written.source = "managed";
+  // Any llm-touching SET rides the same normalization the profile routes
+  // use: `normalizeCloudProfileWrites` reduces an echo of the wire view to
+  // the workspace-owned stub and rejects genuine edits to managed entries.
+  // Its normalization lives in the parsed llm slice (a zod parse copies), so
+  // the written value below is the normalized slice/entry — and a leaf write
+  // below the entry level rides raw; the ladder stamps the managed marker
+  // onto an entry the write creates.
+  const pathSegments = path.split(".");
+  let writtenValue: unknown = value;
+  if (pathSegments[0] === "llm") {
+    const patchShape: Record<string, unknown> = {};
+    setNestedValue(patchShape, path, value);
+    normalizeCloudProfileWrites(patchShape);
+    rejectCloudProfileDeletion(patchShape);
+    const patchLlm = RawLlmWriteSliceSchema.safeParse(patchShape.llm);
+    if (patchLlm.success) {
+      if (pathSegments.length === 1) {
+        writtenValue = patchLlm.data;
+      } else if (pathSegments[1] === "profiles") {
+        if (pathSegments.length === 2) {
+          if (patchLlm.data.profiles) {
+            writtenValue = patchLlm.data.profiles;
+          }
+        } else if (pathSegments.length === 3) {
+          const normalized = patchLlm.data.profiles?.[pathSegments[2]!];
+          if (normalized !== undefined) {
+            writtenValue = normalized;
+          }
+        }
+      }
     }
   }
-  scrubNulledAcpAgentLeaves(raw);
-  // A SET can create `services.stt` with a leaf like `language` and no
-  // `provider`, which SttServiceSchema requires whenever the block exists;
-  // the same seeding that guards PATCH keeps this write's persisted block
-  // schema-valid.
-  seedSttProviderForSparseBlock(raw);
+  setNestedValue(merged, path, writtenValue);
+  scrubNulledAcpAgentLeaves(merged);
 
-  await commitConfigWrite(raw, "set");
+  await handleSetConfig(merged);
+
   // A `memory.v2` substrate tunable whose `memory.substrate` twin is set does
   // not mean what an unpaired write means: the substrate namespace wins in
   // `resolveSubstrateTuning`, and for the three twins the v2 injection engine
   // reads directly the two namespaces diverge instead. Report which case this
   // is alongside the success so the caller can tell the operator.
-  const shadowing = findSubstrateShadowing(raw, path);
+  const shadowing = findSubstrateShadowing(path);
   if (shadowing) {
     const warning = describeShadowedConfigSet(shadowing, path);
     log.warn({ path, substratePath: shadowing.substratePath }, warning);
@@ -2348,7 +2226,7 @@ export const ROUTES: RouteDefinition[] = [
       "(preserves explicit null, replaces object subtrees instead of merging). " +
       "Used by the `assistant config set <key> <value>` CLI command.",
     tags: ["config"],
-    handler: handleSetConfig,
+    handler: handleSetConfigByKey,
   },
   {
     operationId: "config_allowlist_validate",
