@@ -76,7 +76,6 @@ import type { RouteDefinition, RouteHandlerArgs } from "./types.js";
 
 const CREDENTIAL_KEYS = {
   apiKey: { service: "cadet", field: "assistant_api_key" },
-  assistantId: { service: "cadet", field: "platform_assistant_id" },
 } as const;
 
 // ---------------------------------------------------------------------------
@@ -420,11 +419,10 @@ async function handlePlatformDisconnect(
     );
   }
 
-  // Delete all cloud credentials
-  const keysToDelete = [
-    CREDENTIAL_KEYS.apiKey,
-    CREDENTIAL_KEYS.assistantId,
-  ] as const;
+  // Delete the stored cloud credential. The cloud_*_id fields are not
+  // credentials — they resolve from the api key via validate and live only
+  // in the in-memory identity, cleared right below.
+  const keysToDelete = [CREDENTIAL_KEYS.apiKey] as const;
 
   const failedKeys: string[] = [];
   for (const key of keysToDelete) {

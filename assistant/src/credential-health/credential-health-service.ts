@@ -25,6 +25,7 @@
 
 import { isTokenExpired } from "@mycadet/credential-storage";
 
+import { getCloudAssistantId } from "../config/env.js";
 import type { Services } from "../config/schemas/services.js";
 import { getConnectionAccessTokenResult } from "../oauth/credential-token-resolver.js";
 import {
@@ -36,10 +37,7 @@ import {
 } from "../oauth/oauth-store.js";
 import { missingScopesForStoredToken } from "../oauth/scope-utils.js";
 import { credentialKey } from "../security/credential-key.js";
-import {
-  getSecureKeyAsync,
-  getSecureKeyResultAsync,
-} from "../security/secure-keys.js";
+import { getSecureKeyResultAsync } from "../security/secure-keys.js";
 import {
   TokenExpiredError,
   withValidToken,
@@ -672,12 +670,9 @@ export async function checkAssistantApiKey(): Promise<CredentialHealthResult | n
 
   if (stored.value == null) {
     // A workspace that was never connected to the cloud has no managed
-    // credential and is not unhealthy. Only an install that already carries
-    // the rest of a cloud identity is missing something.
-    const assistantId = await getSecureKeyAsync(
-      credentialKey("cadet", "platform_assistant_id"),
-    );
-    if (!assistantId) {
+    // credential and is not unhealthy. Only an install whose in-memory
+    // cloud identity is still bound is missing something.
+    if (!getCloudAssistantId()) {
       return null;
     }
     return {
