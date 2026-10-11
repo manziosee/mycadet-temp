@@ -780,8 +780,10 @@ describe("credential-health-service", () => {
     // carries the repair.
     const assistantKeyResult = checkAssistantApiKey;
 
-    test("is not reported when the workspace was never connected", async () => {
-      expect(await assistantKeyResult()).toBeNull();
+    test("is missing_token when no key is stored, connected or not", async () => {
+      const result = await assistantKeyResult();
+      expect(result!.status).toBe("missing_token");
+      expect(result!.canAutoRecover).toBe(true);
     });
 
     test("is healthy when the cloud accepts the stored key", async () => {

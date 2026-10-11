@@ -668,10 +668,14 @@ export async function checkAssistantApiKey(): Promise<CredentialHealthResult | n
 
   if (stored.value == null) {
     // A workspace that was never connected to the cloud has no managed
-    // credential and is not unhealthy. The identity ids resolve from the
-    // api key via the validate endpoint, so a missing key means nothing is
-    // bound — there is nothing to check.
-    return null;
+    // credential yet — missing, not unhealthy.
+    return {
+      ...base,
+      status: "missing_token",
+      details:
+        "No Cadet Cloud credentials are stored yet. Log in to Cadet Cloud to set them up.",
+      canAutoRecover: true,
+    };
   }
 
   const { CadetCloudClient } = await import("../cloud/client.js");
