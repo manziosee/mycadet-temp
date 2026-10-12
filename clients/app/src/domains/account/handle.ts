@@ -19,11 +19,8 @@ import {
   assertHasResponse,
   extractErrorMessage,
 } from "@/utils/api-errors";
-import { parseDrfFieldError } from "@/domains/account/parse-drf-field-error";
-import {
-  USERNAME_ERROR_COPY,
-  type UsernameErrorCode,
-} from "@/domains/account/profile";
+import { parseDrfFieldError } from "./parse-drf-field-error";
+import { USERNAME_ERROR_COPY, type UsernameErrorCode } from "./profile";
 
 // ---------------------------------------------------------------------------
 // Types
