@@ -65,11 +65,7 @@ import {
   isModelInCatalog,
 } from "../../providers/model-catalog.js";
 import { ACTOR_PRINCIPALS } from "../auth/route-policy.js";
-import {
-  commitConfigWrite,
-  normalizeCloudProfileWrites,
-  rejectCloudProfileDeletion,
-} from "./conversation-query-routes.js";
+import { commitConfigWrite } from "./conversation-query-routes.js";
 import { BadRequestError, ConflictError, NotFoundError } from "./errors.js";
 import {
   describeUnavailableProfile,
@@ -116,7 +112,6 @@ const profileSummarySchema = z
     provider: z.string().nullable(),
     model: z.string().nullable(),
     status: z.enum(["active", "disabled"]),
-    source: z.enum(["managed", "user"]),
     provider_connection: z.string().optional(),
     /**
      * Whether the entry's (provider, model) accepts image input: the model
@@ -301,7 +296,7 @@ function profileConfigIssue(record: Record<string, unknown>): {
   code: "model_unknown" | "over_output_cap" | "no_input_room";
   message: string;
 } | null {
-  if (record.mix != null || record.source === "managed") {
+  if (record.mix != null || record.provider === "cadet") {
     return null;
   }
   const provider =
@@ -559,7 +554,6 @@ async function handleListProfiles() {
         provider: typeof record.provider === "string" ? record.provider : null,
         model: typeof record.model === "string" ? record.model : null,
         status: record.status === "disabled" ? "disabled" : "active",
-        source: record.source === "managed" ? "managed" : "user",
         ...(typeof record.provider_connection === "string"
           ? { provider_connection: record.provider_connection }
           : {}),
@@ -698,9 +692,6 @@ async function handleCreateProfile({ body = {} }: RouteHandlerArgs) {
   }
 
   profiles[name] = entry;
-  // Defensive: for a user-owned name this is a no-op; it re-asserts the
-  // managed-name protection at the shared write choke point.
-  normalizeCloudProfileWrites({ llm: { profiles: { [name]: entry } } });
 
   await commitConfigWrite(raw, "create inference profile");
 
@@ -747,7 +738,7 @@ async function handleUpdateProfile({
     }
     throw new NotFoundError(`Profile "${name}" not found.`);
   }
-  if (MANAGED_PROFILE_NAMES.has(name) && existing.source === "managed") {
+  if (MANAGED_PROFILE_NAMES.has(name) && existing.provider === "cadet") {
     throw new BadRequestError(
       `Cannot edit cloud profile "${name}". Cloud profiles are read-only; duplicate to a custom profile to customize.`,
     );
@@ -808,8 +799,6 @@ async function handleUpdateProfile({
     ...fragmentFromBody(body as Record<string, unknown>),
     ...(input.provider !== undefined ? { provider: input.provider } : {}),
     ...(input.model !== undefined ? { model: input.model } : {}),
-    source:
-      existing.source === "managed" ? "user" : (existing.source ?? "user"),
   };
   // Keep the allowUnlisted marker faithful to the pair being stored: stamp
   // it on a deliberate unlisted acceptance (warnings can only be the
@@ -843,7 +832,6 @@ async function handleUpdateProfile({
   }
 
   profiles[name] = merged;
-  normalizeCloudProfileWrites({ llm: { profiles: { [name]: merged } } });
 
   await commitConfigWrite(raw, "update inference profile");
 
@@ -877,11 +865,6 @@ async function handleDeleteProfile({ pathParams = {} }: RouteHandlerArgs) {
   const raw = loadRawConfig();
   const llm = asPlainObject(raw.llm);
   const profiles = asPlainObject(llm?.profiles);
-
-  // Reject deletion of a cloud default with a clear message before the
-  // existence check, so `delete balanced` explains itself even when the
-  // managed stub is on disk.
-  rejectCloudProfileDeletion({ llm: { profiles: { [name]: null } } });
 
   if (!profiles || profiles[name] === undefined) {
     throw new NotFoundError(`Profile "${name}" not found.`);
