@@ -17,11 +17,8 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { getConfig } from "../config/loader.js";
 import { resetDb } from "../persistence/db-connection.js";
 import { disableStreamSeqStamping } from "../runtime/assistant-stream-state.js";
+import { getMonitoringDataDir, getMonitoringPidPath } from "../util/layout.js";
 import { getLogger } from "../util/logger.js";
-import {
-  getMonitoringDataDir,
-  getMonitoringPidPath,
-} from "../util/platform.js";
 import {
   cleanupWorkerPidFile,
   startWorkerPidFileGuard,

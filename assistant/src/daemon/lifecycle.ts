@@ -56,13 +56,13 @@ import { reconcilePluginSchedules } from "../schedule/plugin-schedule-reconciler
 import { recoverStaleSchedules } from "../schedule/schedule-recovery.js";
 import { startScheduler } from "../schedule/scheduler.js";
 import { getSubagentManager } from "../subagent/index.js";
-import { getLogger, initLogger } from "../util/logger.js";
-import { DAEMON_OOM_SCORE_ADJ, setOomScoreAdj } from "../util/oom-priority.js";
 import {
   ensureDataDir,
   getDotEnvPath,
   getWorkspaceDir,
-} from "../util/platform.js";
+} from "../util/layout.js";
+import { getLogger, initLogger } from "../util/logger.js";
+import { DAEMON_OOM_SCORE_ADJ, setOomScoreAdj } from "../util/oom-priority.js";
 import { APP_VERSION } from "../version.js";
 import { drainOrphanedWatchTimelineEntries } from "../watch/watch-timeline.js";
 import { getWorkflowRunManager } from "../workflows/run-manager.js";
