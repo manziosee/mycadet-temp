@@ -12237,6 +12237,12 @@ paths:
         object subtrees instead of merging). Used by the `assistant config set <key> <value>` CLI command.
       tags:
         - config
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ConfigSetByKeyRequest"
       responses:
         "200":
           description: Successful response
@@ -44755,6 +44761,16 @@ components:
           readOnly: true
           type: string
           minLength: 1
+    ConfigSetByKeyRequest:
+      type: object
+      properties:
+        path:
+          type: string
+          minLength: 1
+        value: {}
+      required:
+        - path
+        - value
     ConnectionProvider:
       type: string
       enum:
@@ -45088,6 +45104,21 @@ components:
             - user
         provider_connection:
           type: string
+        supportsVision:
+          type: boolean
+        mix:
+          type: array
+          items:
+            type: object
+            properties:
+              profile:
+                type: string
+              weight:
+                type: number
+            required:
+              - profile
+              - weight
+            additionalProperties: false
         availability:
           anyOf:
             - $ref: "#/components/schemas/ProfileConnectionAvailability"
@@ -45169,10 +45200,7 @@ components:
         name:
           type: string
         entry:
-          type: object
-          propertyNames:
-            type: string
-          additionalProperties: {}
+          $ref: "#/components/schemas/ProfileEntryOutput"
         availability:
           anyOf:
             - $ref: "#/components/schemas/ProfileConnectionAvailability"
