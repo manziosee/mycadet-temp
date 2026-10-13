@@ -984,6 +984,41 @@ function resolveGatewayDir(resources?: LocalInstanceResources): string {
   }
 }
 
+/**
+ * How to invoke a `gateway <subcommand>` CLI process so it resolves the same
+ * workspace AND gateway security dir as the locally spawned gateway server:
+ * run the gateway package's CLI entry through bun with the spawn state root
+ * as cwd and the instance-pinned CADET_WORKSPACE_DIR / GATEWAY_SECURITY_DIR
+ * the server was given (the file-backed pairing store must resolve
+ * identically in both processes). Callers pass the resolved assistant
+ * entry's `resources` (undefined for the default instance, where both
+ * processes fall back to the same cwd-relative paths).
+ */
+export function gatewayCliInvocation(resources?: LocalInstanceResources): {
+  command: string;
+  args: string[];
+  cwd: string;
+  env: Record<string, string | undefined>;
+} {
+  return {
+    command: resolveBunExecutable(),
+    args: ["run", join(resolveGatewayDir(resources), "src/cli/index.ts")],
+    cwd: spawnStateRoot(),
+    env: {
+      ...process.env,
+      ...(resources
+        ? {
+            CADET_WORKSPACE_DIR: join(resources.instanceDir, "workspace"),
+            GATEWAY_SECURITY_DIR: join(
+              resources.instanceDir,
+              "gateway-security",
+            ),
+          }
+        : {}),
+    },
+  };
+}
+
 function resolveCesDir(resources?: LocalInstanceResources): string {
   const runtimeCesDir = localRuntimeCesDir(resources);
   if (runtimeCesDir) return runtimeCesDir;
@@ -1118,9 +1153,7 @@ export async function startCes(
     // Source tree / bunx: run the CES entry point via bun.
     const cesDir = runtimeCesDir ?? resolveCesDir(resources);
     const cesEntry = join(cesDir, "src/main.ts");
-    const bunArgs = watch
-      ? ["--watch", "run", cesEntry]
-      : ["run", cesEntry];
+    const bunArgs = watch ? ["--watch", "run", cesEntry] : ["run", cesEntry];
     const cesLogFd = openLogFile("hatch.log");
     ces = spawn(resolveBunExecutable(), bunArgs, {
       cwd: spawnStateRoot(),

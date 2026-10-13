@@ -3,9 +3,12 @@
  *
  * Print the pairing link for another device, and the same link rendered as a
  * QR code. Runs on the machine hosting the assistant: it mints a remote-web
- * pairing challenge over the loopback gateway and approves it immediately, so
- * running this command IS the local-presence proof and one scan (or one paste
- * into `cadet connect import`) completes the pairing.
+ * pairing challenge through the gateway CLI (`gateway pairing mint <url>` —
+ * locally, or docker-exec'd into the gateway container) which approves it
+ * immediately, so running this command IS the local-presence proof and one
+ * scan (or one paste into `cadet connect import`) completes the pairing.
+ * local and docker assistants mint without any HTTP; other topologies keep
+ * the loopback HTTP mint.
  *
  * `--web-approve` is the reverse direction: approve a code a device already
  * shows, for pairings that device started on its own.
@@ -38,8 +41,11 @@ import {
 import { GATEWAY_PORT } from "../lib/constants.js";
 import { getCurrentEnvironment } from "../lib/environments/resolve.js";
 import { isLoopbackUrl, loopbackSafeFetch } from "../lib/loopback-fetch.js";
+import { dockerResourceNames } from "../lib/docker.js";
+import { gatewayCliInvocation } from "../lib/local.js";
 import { formatWebApproveFailure, parseGatewayErrorCode } from "../lib/pair.js";
 import { STALE_CLI_UPDATE_HINT } from "../lib/stale-cli-hint.js";
+import { execOutput } from "../lib/step-runner.js";
 
 function assistantDisplayName(entry: AssistantEntry): string {
   return entry.name || entry.assistantName || entry.assistantId;
@@ -89,9 +95,10 @@ function printUsage(): void {
 USAGE:
     cadet pair [assistant] [options]
 
-Mints a pairing challenge on the assistant's gateway over loopback and
-approves it on the spot (running this command on the host machine is the
-approval), then prints the pairing link and the same link as a QR code.
+Mints a pairing challenge on the assistant's gateway (via the gateway CLI
+for local and docker assistants, over loopback HTTP otherwise) and approves
+it on the spot (running this command on the host machine is the approval),
+then prints the pairing link and the same link as a QR code.
 Scanning the QR, opening the link, or passing it to 'cadet connect import'
 on the other device completes the pairing in one step.
 
@@ -214,26 +221,122 @@ async function exitOnHttpError(response: Response): Promise<Response> {
   return response;
 }
 
-/** Create a remote-web pairing challenge (RFC 8628 device-code flow). */
-async function createRemoteWebPairingChallenge(
-  gatewayUrl: string,
+/**
+ * Mint (and approve) a remote-web pairing challenge. `local` and `docker`
+ * remotes mint through the gateway CLI — `gateway pairing mint <url>` run on
+ * the assistant's host (locally, or docker-exec'd into the gateway container)
+ * — replacing the old loopback HTTP mint whose loopback-peer gate
+ * containerized gateways could never satisfy (published-port NAT rewrites
+ * host-originated peers to the docker bridge address). The mint executes the
+ * pairing logic directly against the file-backed challenge store, so the
+ * running gateway's verification routes see it with no IPC round-trip.
+ * Process execution is the local-presence proof; the mint command approves
+ * on the spot, so the returned challenge is already paired-ready. Other
+ * topologies keep the loopback HTTP mint they used before.
+ */
+async function mintPairingChallengeOrExit(
+  entry: AssistantEntry,
   publicBaseUrl: string,
 ): Promise<RemoteWebPairingChallengeResponse> {
+  if (entry.cloud !== "local" && entry.cloud !== "docker") {
+    return mintPairingChallengeOverLoopbackOrExit(entry, publicBaseUrl);
+  }
+
+  let stdout: string;
+  try {
+    if (entry.cloud === "docker") {
+      stdout = await execOutput(
+        "docker",
+        [
+          "exec",
+          dockerResourceNames(entry.assistantId).gatewayContainer,
+          "bun",
+          "run",
+          "src/cli/index.ts",
+          "pairing",
+          "mint",
+          publicBaseUrl,
+        ],
+        { timeoutMs: 30_000 },
+      );
+    } else {
+      const invocation = gatewayCliInvocation(entry.resources);
+      stdout = await execOutput(
+        invocation.command,
+        [...invocation.args, "pairing", "mint", publicBaseUrl],
+        {
+          cwd: invocation.cwd,
+          env: invocation.env,
+          timeoutMs: 30_000,
+        },
+      );
+    }
+  } catch (err) {
+    console.error(
+      `Error: could not mint a pairing challenge on the gateway ` +
+        `(${err instanceof Error ? err.message : String(err)}).`,
+    );
+    console.error("Is the assistant running? Try `cadet wake`.");
+    process.exit(1);
+  }
+
+  const lastLine = stdout.split("\n").filter(Boolean).pop() ?? "";
+  let challenge: RemoteWebPairingChallengeResponse;
+  try {
+    challenge = JSON.parse(lastLine) as RemoteWebPairingChallengeResponse;
+  } catch {
+    console.error(
+      "Error: could not parse the gateway's pairing mint output.",
+    );
+    process.exit(1);
+  }
+  if (!challenge.deviceCode || !challenge.userCode) {
+    console.error(
+      "Error: the gateway's pairing mint output is missing the challenge codes.",
+    );
+    process.exit(1);
+  }
+  return challenge;
+}
+
+/**
+ * Mint a challenge over the gateway's loopback HTTP route — the path every
+ * topology took before the gateway-CLI mint existed. Kept for remotes that
+ * are neither `local` nor `docker` (apple containers, SSH-managed hosts,
+ * cloud-managed), where no gateway-CLI execution surface is defined.
+ */
+async function mintPairingChallengeOverLoopbackOrExit(
+  entry: AssistantEntry,
+  publicBaseUrl: string,
+): Promise<RemoteWebPairingChallengeResponse> {
+  // Mint over loopback (localUrl avoids mDNS for same-machine calls), then
+  // approve immediately: running this CLI on the host IS the local-presence
+  // proof, so the other device completes pairing in one step from the link.
+  const mintUrl = (
+    entry.localUrl ||
+    entry.runtimeUrl ||
+    `http://127.0.0.1:${GATEWAY_PORT}`
+  ).replace(/\/+$/, "");
   const response = await gatewayPostOrExit(
-    gatewayUrl,
+    mintUrl,
     "/v1/remote-web/pairing-challenge",
     { publicBaseUrl } satisfies RemoteWebPairingChallengeRequest,
   );
-  return (await response.json()) as RemoteWebPairingChallengeResponse;
+  const challenge: RemoteWebPairingChallengeResponse =
+    await response.json();
+  await gatewayPostOrExit(mintUrl, "/v1/remote-web/pairing-verification", {
+    userCode: challenge.userCode,
+  } satisfies RemoteWebPairingVerificationRequest);
+  return challenge;
 }
 
 /**
  * Approve a pending pairing challenge by its user code, the local-presence
  * proof for the device-code flow. Single owner of the pairing-verification
- * route and request body: the link flow approves via
- * {@link approveRemoteWebPairing} (generic exit on non-2xx), while
- * `--web-approve` calls this directly to inspect rejections and print mismatch
- * diagnostics (see {@link formatWebApproveFailure}).
+ * route and request body: `--web-approve` calls this directly to inspect
+ * rejections and print mismatch diagnostics (see
+ * {@link formatWebApproveFailure}); the link flow needs no separate
+ * verification call — the gateway-CLI mint approves on the spot.
  */
 async function postPairingVerification(
   gatewayUrl: string,
@@ -242,20 +345,6 @@ async function postPairingVerification(
   return gatewayPost(gatewayUrl, "/v1/remote-web/pairing-verification", {
     userCode,
   } satisfies RemoteWebPairingVerificationRequest);
-}
-
-/**
- * Approve the challenge this command just minted so one scan completes
- * pairing, exiting with a generic message on non-2xx.
- */
-async function approveRemoteWebPairing(
-  gatewayUrl: string,
-  userCode: string,
-): Promise<RemoteWebPairingVerificationResponse> {
-  const response = await exitOnHttpError(
-    await postPairingVerification(gatewayUrl, userCode),
-  );
-  return (await response.json()) as RemoteWebPairingVerificationResponse;
 }
 
 export const pair = Object.assign(
@@ -355,6 +444,24 @@ export const pair = Object.assign(
     }
   }
 
+  // Minting requires host presence on this machine. Native and docker
+  // topologies qualify (the latter via docker exec); an assistant this
+  // machine only knows through `connect import` has no host presence here
+  // at all, and `cadet pair` never worked against it (its loopback gate
+  // denied remote mints). Refuse clearly instead of a confusing mint
+  // failure.
+  if (entry.cloud === "paired") {
+    console.error(
+      `Error: ${formatAssistantReference(entry)} was paired as a remote ` +
+        "assistant (cadet connect import), so this machine does not host it.",
+    );
+    console.error(
+      "Run `cadet pair` on the machine hosting the assistant, or approve " +
+        "a code it shows with `cadet pair --web-approve <code>`.",
+    );
+    process.exit(1);
+  }
+
   // Mint over loopback (localUrl avoids mDNS for same-machine calls), but
   // advertise a REACHABLE url in the link, since the loopback url would point
   // the other device at its own localhost. Prefer an explicit --url, then the
@@ -437,14 +544,10 @@ export const pair = Object.assign(
   }
   const publicBaseUrl = resolved.url;
 
-  // Mint a challenge and immediately approve it: running this CLI on the host
-  // IS the local-presence proof, so the other device completes pairing in one
-  // step from the link alone.
-  const challenge = await createRemoteWebPairingChallenge(
-    mintUrl,
-    publicBaseUrl,
-  );
-  await approveRemoteWebPairing(mintUrl, challenge.userCode);
+  // Mint a challenge (approved on the spot by the gateway-CLI invocation):
+  // running this CLI on the host IS the local-presence proof, so the other
+  // device completes pairing in one step from the link alone.
+  const challenge = await mintPairingChallengeOrExit(entry, publicBaseUrl);
   const pairUrl = buildRemoteWebPairingUrl(challenge);
   const displayName = assistantDisplayName(entry);
   const appUrl = appVariant
