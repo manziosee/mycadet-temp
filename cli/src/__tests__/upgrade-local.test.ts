@@ -372,7 +372,7 @@ describe("cadet upgrade local", () => {
     await upgrade();
 
     expect(loopbackSafeFetchMock).toHaveBeenCalledWith(
-      "http://127.0.0.1:7830/healthz?include=migrations",
+      "http://127.0.0.1:7830/healthz",
       expect.any(Object),
     );
     expect(createBackupMock).toHaveBeenCalledWith(
@@ -380,13 +380,6 @@ describe("cadet upgrade local", () => {
       "local-assistant",
       expect.objectContaining({
         prefix: "local-assistant-pre-upgrade",
-      }),
-    );
-    expect(saveAssistantEntryMock).toHaveBeenCalledWith(
-      expect.objectContaining({
-        previousVersion: "v0.8.11",
-        previousDbMigrationVersion: 12,
-        previousWorkspaceMigrationId: "011-test",
       }),
     );
     expect(stopLocalProcessesMock).toHaveBeenCalledWith(

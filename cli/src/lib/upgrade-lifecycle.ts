@@ -25,7 +25,7 @@ import { getStateDir } from "./environments/paths.js";
 import { getCurrentEnvironment } from "./environments/resolve.js";
 import { loadGuardianToken } from "./guardian-token.js";
 import { classifyReadyzResponse } from "./http-client.js";
-import { fetchReleases, resolveImageRefs } from "./cloud-releases.js";
+import { resolveImageRefs } from "./cloud-releases.js";
 import { z } from "zod";
 
 const GatewayHealthSchema = z.object({
@@ -42,7 +42,7 @@ import {
   type ServiceName,
 } from "./statefulset.js";
 import { execOutput } from "./step-runner.js";
-import { compareVersions, stripVersionPrefix } from "./version-compat.js";
+import { compareVersions } from "./version-compat.js";
 import { loopbackSafeFetch } from "./loopback-fetch.js";
 
 // ---------------------------------------------------------------------------
@@ -345,41 +345,6 @@ export async function fetchAssistantIngressUrl(
 }
 
 /**
- * Determine the version that was running before the current one.
- *
- * Checks (in order):
- *  1. `entry.previousVersion` (saved by the upgrade flow from health).
- *  2. The releases list from the cloud API — finds the version
- *     immediately before `currentVersion`.
- *
- * Returns `undefined` when neither source yields a result.
- */
-export async function fetchPreviousVersion(
-  currentVersion: string | undefined,
-  previousVersionFromLockfile: string | undefined,
-): Promise<string | undefined> {
-  // 1. Lockfile-cached value (written during upgrade from health endpoint)
-  if (previousVersionFromLockfile) return previousVersionFromLockfile;
-
-  // 2. Derive from releases list
-  if (!currentVersion) return undefined;
-  const releases = await fetchReleases();
-  if (!releases) return undefined;
-
-  const normalizedCurrent = stripVersionPrefix(currentVersion);
-
-  // Releases are ordered newest-first; find the entry right after the
-  // current version (i.e. the one that was running before the upgrade).
-  const idx = releases.findIndex(
-    (r) => stripVersionPrefix(r.version ?? "") === normalizedCurrent,
-  );
-  if (idx >= 0 && idx + 1 < releases.length) {
-    return releases[idx + 1].version;
-  }
-  return undefined;
-}
-
-/**
  * Poll the gateway `/readyz` endpoint until the assistant reports migrations
  * ready or the timeout elapses. Returns whether the assistant became ready.
  *
@@ -624,16 +589,15 @@ export interface PerformDockerRollbackOptions {
 }
 
 /**
- * Perform a Docker rollback to a target version. Reusable by both `rollback.ts`
- * (targeted version rollback) and `restore.ts` (version + data restore).
+ * Switch Docker runtime versions as part of a versioned backup restore.
  *
  * This function handles the full lifecycle:
  * - Version validation (target must be older than current)
  * - Image resolution and pulling
- * - Migration ceiling lookup and pre-swap rollback
+ * - Post-swap migration rollback to the target runtime's registry ceiling
  * - Container stop/start with target images
  * - Readiness check
- * - Lockfile update with rollback state
+ * - Lockfile update with the running images
  * - Auto-rollback on failure
  */
 export async function performDockerRollback(
@@ -705,21 +669,6 @@ export async function performDockerRollback(
         emitCliError("VERSION_DIRECTION", msg);
         process.exit(1);
       }
-    }
-  }
-
-  // Persist rollback state to lockfile BEFORE any destructive changes
-  if (entry.containerInfo) {
-    const rollbackEntry: AssistantEntry = {
-      ...entry,
-      previousContainerInfo: { ...entry.containerInfo },
-      previousVersion: currentVersion,
-      previousDbMigrationVersion: preMigrationState.dbVersion,
-      previousWorkspaceMigrationId: preMigrationState.lastWorkspaceMigrationId,
-    };
-    saveAssistantEntry(rollbackEntry);
-    if (currentVersion) {
-      console.log(`   Saved rollback state: ${currentVersion}\n`);
     }
   }
 
@@ -869,8 +818,6 @@ export async function performDockerRollback(
       true,
     );
 
-    // Capture new digests from the rolled-back containers
-    // Swap current/previous state to enable "rollback the rollback"
     const updatedEntry: AssistantEntry = {
       ...entry,
       containerInfo: {
@@ -879,9 +826,6 @@ export async function performDockerRollback(
         cesImage: targetImageTags["credential-executor"],
         assistantPort,
       },
-      previousContainerInfo: entry.containerInfo,
-      previousDbMigrationVersion: preMigrationState.dbVersion,
-      previousWorkspaceMigrationId: preMigrationState.lastWorkspaceMigrationId,
     };
     saveAssistantEntry(updatedEntry);
 
@@ -1037,9 +981,6 @@ export async function performDockerRollback(
                 currentImageRefs["credential-executor"],
               assistantPort,
             },
-            previousContainerInfo: undefined,
-            previousDbMigrationVersion: undefined,
-            previousWorkspaceMigrationId: undefined,
           };
           saveAssistantEntry(revertedEntry);
 

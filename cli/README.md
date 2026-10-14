@@ -14,6 +14,19 @@ bun run ./src/index.ts <command> [options]
 
 ## Commands
 
+### Version changes: `upgrade`, `restore`
+
+Use `cadet upgrade` to move to a newer release. Rollbacks must restore a backup
+through `cadet restore`; version changes and backup data belong to the same
+restore operation. The CLI has no standalone `rollback` command.
+
+```bash
+cadet restore my-assistant --from backup.vbundle --version v1.2.3
+```
+
+Automatic failure recovery during an upgrade or restore uses the images and
+migration checkpoints captured in memory for that operation.
+
 ### Lifecycle: `ps`, `sleep`, `wake`
 
 Day-to-day process management for the assistant and gateway.
