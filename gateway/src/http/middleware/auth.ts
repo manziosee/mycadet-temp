@@ -1,6 +1,9 @@
 import type { Server } from "bun";
 
-import { admitActorToken } from "../../auth/actor-token-revocation.js";
+import {
+  admitActorToken,
+  type AdmittedActorTokenRecord,
+} from "../../auth/actor-token-revocation.js";
 import { findCadetGuardian } from "../../auth/guardian-bootstrap.js";
 import {
   isNarrowScopeProfile,
@@ -11,6 +14,7 @@ import { validateEdgeToken } from "../../auth/token-exchange.js";
 import type { Scope, TokenClaims } from "../../auth/types.js";
 import { AuthFallbackLogThrottle } from "../../auth-fallback-log-throttle.js";
 import type { AuthRateLimiter } from "../../auth-rate-limiter.js";
+import { getIsCloud } from "../../cloud-url.js";
 import { getLogger } from "../../logger.js";
 import { readStoredCloudUserId } from "../../cloud-user-id.js";
 import { isLoopbackPeer } from "../../util/is-loopback-address.js";
@@ -44,18 +48,12 @@ export function isHttpAuthDisabled(): boolean {
   return process.env.DISABLE_HTTP_AUTH?.trim().toLowerCase() === "true";
 }
 
-/** True when IS_CLOUD is set (vembda-managed deployment). */
-function isPlatformManaged(): boolean {
-  const v = process.env.IS_CLOUD?.trim();
-  return v === "1" || v?.toLowerCase() === "true";
-}
-
 /**
  * True when the cloud-managed auth bypass is in effect — both flags set.
  * Either alone leaves JWT validation in place.
  */
 export function isCloudAuthBypassActive(): boolean {
-  return isHttpAuthDisabled() && isPlatformManaged();
+  return isHttpAuthDisabled() && getIsCloud();
 }
 
 /**
@@ -66,7 +64,7 @@ export function logAuthBypassState(): void {
   if (!isHttpAuthDisabled()) {
     return;
   }
-  if (isPlatformManaged()) {
+  if (getIsCloud()) {
     log.info(
       "DISABLE_HTTP_AUTH + IS_CLOUD both set: JWT validation bypassed; " +
         "X-Cadet-User-Id is cross-checked against the bound platform user id",
@@ -78,6 +76,23 @@ export function logAuthBypassState(): void {
         "cloud-managed auth model.",
     );
   }
+}
+
+/**
+ * The actor-token row the auth layer already loaded by the request bearer's
+ * hash while admitting it (see admitActorToken), keyed by request so routes
+ * can reuse the row instead of re-querying the same token hash.
+ */
+const admittedActorTokenRecords = new WeakMap<
+  Request,
+  AdmittedActorTokenRecord
+>();
+
+/** The admitted actor-token row for this request, when edge auth loaded one. */
+export function admittedActorTokenRecord(
+  req: Request,
+): AdmittedActorTokenRecord | undefined {
+  return admittedActorTokenRecords.get(req);
 }
 
 /**
@@ -408,7 +423,11 @@ export function createAuthMiddleware(
     token: string,
     claims: TokenClaims,
   ): Response | null {
-    if (!admitActorToken(token, claims)) {
+    const admission = admitActorToken(token, claims);
+    if (admission.record) {
+      admittedActorTokenRecords.set(req, admission.record);
+    }
+    if (!admission.admitted) {
       authRateLimiter.recordFailure(getClientIp());
       log.warn(
         { path: new URL(req.url).pathname },

@@ -4,7 +4,10 @@ import { actorTokenRecordHash } from "../../auth/actor-token-revocation.js";
 import { getGatewayDb } from "../../db/connection.js";
 import { actorTokenRecords } from "../../db/schema.js";
 import { errorResponse } from "../loopback-guard.js";
-import { isCloudAuthBypassActive } from "../middleware/auth.js";
+import {
+  admittedActorTokenRecord,
+  isCloudAuthBypassActive,
+} from "../middleware/auth.js";
 
 /**
  * `GET /v1/devices/mine` — the caller's own paired-device row.
@@ -44,19 +47,25 @@ export async function handleGetMyDevice(req: Request): Promise<Response> {
     : "";
 
   const db = getGatewayDb();
-  const row = db
-    .select({
-      guardianPrincipalId: actorTokenRecords.guardianPrincipalId,
-      hashedDeviceId: actorTokenRecords.hashedDeviceId,
-      platform: actorTokenRecords.platform,
-      pairingUserAgent: actorTokenRecords.pairingUserAgent,
-      clientReportedName: actorTokenRecords.clientReportedName,
-      issuedAt: actorTokenRecords.issuedAt,
-      expiresAt: actorTokenRecords.expiresAt,
-    })
-    .from(actorTokenRecords)
-    .where(eq(actorTokenRecords.tokenHash, actorTokenRecordHash(bearer)))
-    .get();
+  // Edge auth already loaded this row by the bearer's hash while admitting
+  // the token (admitActorToken) — reuse it when present. The fallback query
+  // covers paths where admission produced no row (fail-open on a DB error,
+  // or the handler driven directly in tests).
+  const row =
+    admittedActorTokenRecord(req) ??
+    db
+      .select({
+        guardianPrincipalId: actorTokenRecords.guardianPrincipalId,
+        hashedDeviceId: actorTokenRecords.hashedDeviceId,
+        platform: actorTokenRecords.platform,
+        pairingUserAgent: actorTokenRecords.pairingUserAgent,
+        clientReportedName: actorTokenRecords.clientReportedName,
+        issuedAt: actorTokenRecords.issuedAt,
+        expiresAt: actorTokenRecords.expiresAt,
+      })
+      .from(actorTokenRecords)
+      .where(eq(actorTokenRecords.tokenHash, actorTokenRecordHash(bearer)))
+      .get();
 
   if (!row) {
     return errorResponse(

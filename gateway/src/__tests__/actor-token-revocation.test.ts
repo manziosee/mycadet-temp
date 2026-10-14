@@ -146,28 +146,41 @@ afterEach(() => {
 describe("admitActorToken: revocation verdict", () => {
   test("rejects an actor token whose record is revoked", () => {
     insertTokenRecord("token-revoked", "revoked");
-    expect(admitActorToken("token-revoked", actorClaims)).toBe(false);
+    expect(admitActorToken("token-revoked", actorClaims).admitted).toBe(false);
   });
 
   test("admits an actor token whose record is active", () => {
     insertTokenRecord("token-active", "active");
-    expect(admitActorToken("token-active", actorClaims)).toBe(true);
+    expect(admitActorToken("token-active", actorClaims).admitted).toBe(true);
+  });
+
+  test("hands the loaded record back for route reuse", () => {
+    insertTokenRecord("token-recorded", "active");
+    const { record } = admitActorToken("token-recorded", actorClaims);
+    expect(record).toMatchObject({
+      status: "active",
+      guardianPrincipalId: "guardian-001",
+      hashedDeviceId: hashToken("device-A"),
+      platform: "web",
+    });
+    expect(record?.issuedAt).toBeNumber();
+    expect(record?.expiresAt).toBeNumber();
   });
 
   test("admits (fail-open) an actor token with no record", () => {
-    expect(admitActorToken("token-unknown", actorClaims)).toBe(true);
+    expect(admitActorToken("token-unknown", actorClaims).admitted).toBe(true);
   });
 
   test("never checks non-actor tokens (svc)", () => {
     // Even if a row with this hash were revoked, a svc sub must be ignored.
     insertTokenRecord("svc-token", "revoked");
     const svcClaims = { sub: "svc:gateway:self" } as TokenClaims;
-    expect(admitActorToken("svc-token", svcClaims)).toBe(true);
+    expect(admitActorToken("svc-token", svcClaims).admitted).toBe(true);
   });
 
   test("admits (fail-open) when the gateway DB is unavailable", () => {
     resetGatewayDb();
-    expect(admitActorToken("token-anything", actorClaims)).toBe(true);
+    expect(admitActorToken("token-anything", actorClaims).admitted).toBe(true);
   });
 
   test("still detects revocation when the token has surrounding whitespace", () => {
@@ -175,8 +188,10 @@ describe("admitActorToken: revocation verdict", () => {
     // supplied with trailing whitespace (e.g. a `?token=<jwt>%20` WS param)
     // must still resolve to the revoked record.
     insertTokenRecord("token-revoked", "revoked");
-    expect(admitActorToken("token-revoked ", actorClaims)).toBe(false);
-    expect(admitActorToken(" token-revoked\n", actorClaims)).toBe(false);
+    expect(admitActorToken("token-revoked ", actorClaims).admitted).toBe(false);
+    expect(admitActorToken(" token-revoked\n", actorClaims).admitted).toBe(
+      false,
+    );
   });
 
   test("a revoked token is rejected without stamping any row", () => {
@@ -185,7 +200,7 @@ describe("admitActorToken: revocation verdict", () => {
     insertTokenRecord("token-stale", "revoked");
     insertTokenRecord("token-fresh", "active");
 
-    expect(admitActorToken("token-stale", actorClaims)).toBe(false);
+    expect(admitActorToken("token-stale", actorClaims).admitted).toBe(false);
 
     expect(readRow("token-stale")?.lastUsedAt).toBeNull();
     expect(readRow("token-fresh")?.lastUsedAt).toBeNull();
@@ -216,19 +231,19 @@ describe("signature-encoding canonicalization (revocation bypass)", () => {
     insertTokenRecord(jwt, "revoked"); // stored under the canonical token hash
 
     // Baseline: the canonical token is detected as revoked.
-    expect(admitActorToken(jwt, actorClaims)).toBe(false);
+    expect(admitActorToken(jwt, actorClaims).admitted).toBe(false);
 
     // Bypass attempt: same token, signature re-encoded (different string, same
     // bytes). Must still resolve to the revoked record.
     const padded = padSignature(jwt);
     expect(padded).not.toBe(jwt);
-    expect(admitActorToken(padded, actorClaims)).toBe(false);
+    expect(admitActorToken(padded, actorClaims).admitted).toBe(false);
   });
 
   test("does not falsely revoke an active token re-encoded with padding", () => {
     const jwt = mintActorJwt();
     insertTokenRecord(jwt, "active");
-    expect(admitActorToken(padSignature(jwt), actorClaims)).toBe(true);
+    expect(admitActorToken(padSignature(jwt), actorClaims).admitted).toBe(true);
   });
 });
 
@@ -353,12 +368,12 @@ describe("/auth/token revocation", () => {
       .get();
 
     expect(derivedRecord?.status).toBe("derived");
-    expect(admitActorToken(derivedJwt, actorClaims)).toBe(true);
+    expect(admitActorToken(derivedJwt, actorClaims).admitted).toBe(true);
 
     revokeActorTokensByDevice("guardian-001", hashToken("device-A"));
 
-    expect(admitActorToken(sourceJwt, actorClaims)).toBe(false);
-    expect(admitActorToken(derivedJwt, actorClaims)).toBe(false);
+    expect(admitActorToken(sourceJwt, actorClaims).admitted).toBe(false);
+    expect(admitActorToken(derivedJwt, actorClaims).admitted).toBe(false);
   });
 
   test("fails closed with a repairable 401 when guardian rows are lost over evidence (no divergent mint)", async () => {
@@ -516,7 +531,7 @@ describe("admitActorToken: device last-used stamping", () => {
     const before = readRow("token-used");
     expect(before?.lastUsedAt).toBeNull();
 
-    expect(admitActorToken("token-used", actorClaims)).toBe(true);
+    expect(admitActorToken("token-used", actorClaims).admitted).toBe(true);
 
     const after = readRow("token-used");
     expect(after?.lastUsedAt).toBeGreaterThan(0);
@@ -528,7 +543,7 @@ describe("admitActorToken: device last-used stamping", () => {
     insertTokenRecord("token-counted", "active");
 
     const sql = captureSql(() => {
-      expect(admitActorToken("token-counted", actorClaims)).toBe(true);
+      expect(admitActorToken("token-counted", actorClaims).admitted).toBe(true);
     });
 
     // The verdict and the stamp share one SELECT; the stamp adds the UPDATE.
@@ -548,7 +563,9 @@ describe("admitActorToken: device last-used stamping", () => {
       .run();
 
     const sql = captureSql(() => {
-      expect(admitActorToken("token-debounced", actorClaims)).toBe(true);
+      expect(admitActorToken("token-debounced", actorClaims).admitted).toBe(
+        true,
+      );
     });
 
     expect(readRow("token-debounced")?.lastUsedAt).toBe(sentinel);
@@ -581,7 +598,7 @@ describe("admitActorToken: device last-used stamping", () => {
     const svcClaims = { sub: "svc:gateway:self" } as TokenClaims;
 
     const sql = captureSql(() => {
-      expect(admitActorToken("svc-token", svcClaims)).toBe(true);
+      expect(admitActorToken("svc-token", svcClaims).admitted).toBe(true);
     });
 
     expect(readRow("svc-token")?.lastUsedAt).toBeNull();
@@ -592,7 +609,9 @@ describe("admitActorToken: device last-used stamping", () => {
   test("is a no-op for an unrecorded token hash", () => {
     insertTokenRecord("token-recorded", "active");
 
-    expect(admitActorToken("token-unrecorded", actorClaims)).toBe(true);
+    expect(admitActorToken("token-unrecorded", actorClaims).admitted).toBe(
+      true,
+    );
     expect(readRow("token-recorded")?.lastUsedAt).toBeNull();
   });
 
@@ -611,7 +630,7 @@ describe("admitActorToken: device last-used stamping", () => {
       "CREATE TRIGGER fail_last_used BEFORE UPDATE ON actor_token_records BEGIN SELECT RAISE(ABORT, 'stamp failed'); END",
     );
 
-    expect(admitActorToken("token-retry", actorClaims)).toBe(true);
+    expect(admitActorToken("token-retry", actorClaims).admitted).toBe(true);
     expect(readRow("token-retry")?.lastUsedAt).toBeNull();
 
     rawDb.exec("DROP TRIGGER fail_last_used");
@@ -645,7 +664,7 @@ describe("admitActorToken: device last-used stamping", () => {
     ).$client;
     rawDb.exec("ALTER TABLE actor_token_records RENAME TO actor_token_stash");
 
-    expect(admitActorToken("token-transient", actorClaims)).toBe(true);
+    expect(admitActorToken("token-transient", actorClaims).admitted).toBe(true);
 
     rawDb.exec("ALTER TABLE actor_token_stash RENAME TO actor_token_records");
     insertTokenRecord("token-transient", "active");

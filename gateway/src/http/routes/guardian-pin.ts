@@ -38,6 +38,7 @@ import type { Logger } from "pino";
 import { authorizeRuntimeAudioStream } from "./runtime-audio-stream.js";
 import { findCadetGuardian } from "../../auth/guardian-bootstrap.js";
 import type { GatewayConfig } from "../../config.js";
+import { getIsCloud } from "../../cloud-url.js";
 import { requestHasTunnelBridgeAuth } from "../../tunnel/bridge-auth.js";
 import { readStoredCloudUserId } from "../../cloud-user-id.js";
 import { isWebsocketUpgradeRequest } from "../utils.js";
@@ -45,16 +46,6 @@ import { isWebsocketUpgradeRequest } from "../utils.js";
 const TUNNEL_USER_ID_HEADER = "x-tunnel-user-id";
 const TUNNEL_ORG_ID_HEADER = "x-tunnel-org-id";
 const TUNNEL_ACTOR_HEADER = "x-tunnel-actor";
-
-/**
- * True when the gateway runs in managed/cloud mode (vembda + tunnel ingress).
- * Mirrors the `IS_CLOUD` check used by the gateway's HTTP edge auth
- * (`src/http/middleware/auth.ts`) and feature-flag resolver.
- */
-export function isPlatformManaged(): boolean {
-  const v = process.env.IS_CLOUD?.trim().toLowerCase();
-  return v === "1" || v === "true";
-}
 
 /**
  * True when a tunnel-attested caller can reach this gateway at all: a cloud
@@ -68,7 +59,7 @@ export function isPlatformManaged(): boolean {
 export function acceptsTunnelAttestation(
   config: Pick<GatewayConfig, "tunnelBaseUrl">,
 ): boolean {
-  return isPlatformManaged() || config.tunnelBaseUrl !== undefined;
+  return getIsCloud() || config.tunnelBaseUrl !== undefined;
 }
 
 /** Tunnel-attested managed caller context, extracted from injected headers. */

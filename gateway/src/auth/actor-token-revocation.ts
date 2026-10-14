@@ -97,9 +97,29 @@ export function actorTokenRecordHash(rawToken: string): string {
 }
 
 /**
+ * The projection of the presented token's row that admission loads — routes
+ * serving the row (e.g. `GET /v1/devices/mine`) read this instead of
+ * re-querying the same token hash.
+ */
+export type AdmittedActorTokenRecord = Pick<
+  typeof actorTokenRecords.$inferSelect,
+  | "status"
+  | "guardianPrincipalId"
+  | "hashedDeviceId"
+  | "platform"
+  | "pairingUserAgent"
+  | "clientReportedName"
+  | "issuedAt"
+  | "expiresAt"
+>;
+
+/**
  * Decide whether a validated token may proceed, and record the activity of the
- * device that presented it. Returns false only for an actor token whose record
- * is explicitly `status = 'revoked'`; every other case is fail-open.
+ * device that presented it. `admitted` is false only for an actor token whose
+ * record is explicitly `status = 'revoked'`; every other case is fail-open. The
+ * row loaded for the verdict rides back as `record` (null for non-actor
+ * principals, unrecorded tokens, and DB-error fail-open) so callers — routes
+ * especially — can reuse it instead of re-querying by the same token hash.
  *
  * One canonicalize + hash + indexed SELECT serves both jobs, and the two are
  * inseparable by construction: a caller cannot enforce revocation while
@@ -122,10 +142,10 @@ export function actorTokenRecordHash(rawToken: string): string {
 export function admitActorToken(
   rawToken: string,
   claims: TokenClaims,
-): boolean {
+): { admitted: boolean; record: AdmittedActorTokenRecord | null } {
   const parsed = parseSub(claims.sub);
   if (!parsed.ok || parsed.principalType !== "actor") {
-    return true;
+    return { admitted: true, record: null };
   }
 
   const tokenHash = actorTokenRecordHash(rawToken);
@@ -137,6 +157,11 @@ export function admitActorToken(
         status: actorTokenRecords.status,
         guardianPrincipalId: actorTokenRecords.guardianPrincipalId,
         hashedDeviceId: actorTokenRecords.hashedDeviceId,
+        platform: actorTokenRecords.platform,
+        pairingUserAgent: actorTokenRecords.pairingUserAgent,
+        clientReportedName: actorTokenRecords.clientReportedName,
+        issuedAt: actorTokenRecords.issuedAt,
+        expiresAt: actorTokenRecords.expiresAt,
       })
       .from(actorTokenRecords)
       .where(eq(actorTokenRecords.tokenHash, tokenHash))
@@ -144,17 +169,17 @@ export function admitActorToken(
 
     // Verdict first: a rejected token must never stamp.
     if (record?.status === "revoked") {
-      return false;
+      return { admitted: false, record };
     }
 
     if (stampDebounce.has(tokenHash)) {
-      return true;
+      return { admitted: true, record: record ?? null };
     }
 
     if (!record) {
       // A stable answer, not a failure: arm the window like a completed stamp.
       stampDebounce.mark(tokenHash);
-      return true;
+      return { admitted: true, record: null };
     }
 
     db.update(actorTokenRecords)
@@ -169,13 +194,13 @@ export function admitActorToken(
       .run();
 
     stampDebounce.mark(tokenHash);
-    return true;
+    return { admitted: true, record };
   } catch (err) {
     log.warn(
       { err: err instanceof Error ? err.message : String(err) },
       "Actor-token admission failed, allowing request (fail-open)",
     );
-    return true;
+    return { admitted: true, record: null };
   }
 }
 
