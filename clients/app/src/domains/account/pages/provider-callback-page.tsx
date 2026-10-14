@@ -7,7 +7,7 @@ import { readAuthCallbackIntent } from "@app/domains/account/provider-callback";
 
 import { AccountHeading } from "@app/components/account/account-form";
 import { AccountShell } from "@app/components/account/account-shell";
-import { listAssistants } from "@web/assistant/api";
+import { listAssistants } from "@app/assistant/api";
 import { refreshCloudAssistantsIfStale } from "@web/assistant/cloud-assistants-sync";
 import { getSession } from "@app/lib/auth/session-client";
 import { resolvePostAuthDestination } from "@web/domains/account/login-flow";
