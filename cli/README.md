@@ -164,3 +164,10 @@ CLI lifecycle logs remain in the environment's XDG config log directory
 (`~/.config/cadet/logs` in production). Local assistant and gateway stdout
 are appended to `<instanceDir>/logs/assistant-stdout.log` and
 `<instanceDir>/logs/gateway-stdout.log`.
+
+## Guardian recovery
+
+For persistent guardian authentication failures on a host you own, run
+`cadet wake <name> --repair-guardian`. This resets guardian provisioning and
+revokes existing device sessions; pair your clients again afterward. Ordinary
+`cadet wake` preserves those sessions.
