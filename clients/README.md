@@ -7,7 +7,8 @@ and desktop wrappers that users interact with directly.
 
 ```
 clients/
-├── web/               # Web app (Vite)
+├── app/               # Account client (Vite), to be bundle split from Web in the future
+├── web/               # Assistant web bundle (Vite)
 ├── docs/              # Public docs site: SSR Next.js app serving mycadet.ai/docs
 ├── ios/               # iOS Capacitor shell
 ├── android/           # Android Capacitor shell
