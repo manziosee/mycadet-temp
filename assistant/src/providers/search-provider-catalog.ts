@@ -27,10 +27,9 @@
  * The split between adapter (which carries the executor) and catalog (which
  * carries metadata) keeps the catalog purely declarative — adding an entry
  * never forces a code rebuild downstream and the JSON projection stays
- * trivial.
+ * trivial. BYOK-ness is expressed by the presence of key fields (secretKey /
+ * envVar / apiKeyPrefix).
  */
-
-export type SearchProviderKind = "managed" | "byok";
 
 export interface SearchProviderCatalogEntry {
   /** Stable provider identifier. Matches config + secret-catalog values. */
@@ -43,25 +42,13 @@ export interface SearchProviderCatalogEntry {
    */
   readonly displayNameLong?: string;
   /**
-   * Authentication style for the search provider choice.
-   *
-   * `managed` means the choice does not require a user-supplied search API key.
-   * `cadet` searches through the Cadet Cloud search proxy, billed to
-   * Cadet credits; the cloud connection is the credential. For
-   * `inference-provider-native`, the daemon uses the inference API's native
-   * hosted web-search tool only when the selected inference provider/model
-   * supports it; otherwise the app-executed `web_search` tool runs, falling
-   * back to the cloud search proxy only when no user search key is
-   * configured.
-   *
-   * `byok` providers require a user-supplied API key.
-   */
-  readonly kind: SearchProviderKind;
-  /**
    * BYOK provider that also works without a user-supplied key (keyless by
    * default; a key is optional and only lifts rate limits). The daemon adapter
    * runs it even when no key is stored, and the missing-key fallback/error path
-   * does not treat it as fatal.
+   * does not treat it as fatal. The one managed-shaped entry
+   * (`inference-provider-native`) routes to the inference provider's own
+   * hosted web-search tool when the model supports one, and never carries
+   * key fields.
    */
   readonly keyless?: boolean;
   /** Placeholder shown in the API-key input. BYOK providers only. */
@@ -87,23 +74,13 @@ export interface SearchProviderCatalogEntry {
 }
 
 export const SEARCH_PROVIDER_CATALOG: readonly SearchProviderCatalogEntry[] = [
-  // cadet leads: it is the cloud option, selected like any other provider.
-  // Legacy configs carrying the pre-rebrand id `cadet` normalize on parse.
-  {
-    id: "cadet",
-    displayName: "Cadet",
-    displayNameLong: "Cadet Managed Search",
-    kind: "managed",
-  },
   {
     id: "inference-provider-native",
     displayName: "Provider Native",
-    kind: "managed",
   },
   {
     id: "perplexity",
     displayName: "Perplexity",
-    kind: "byok",
     apiKeyPrefix: "pplx-...",
     envVar: "PERPLEXITY_API_KEY",
     secretKey: "perplexity",
@@ -114,7 +91,6 @@ export const SEARCH_PROVIDER_CATALOG: readonly SearchProviderCatalogEntry[] = [
     id: "brave",
     displayName: "Brave",
     displayNameLong: "Brave Search",
-    kind: "byok",
     apiKeyPrefix: "BSA...",
     envVar: "BRAVE_API_KEY",
     secretKey: "brave",
@@ -124,7 +100,6 @@ export const SEARCH_PROVIDER_CATALOG: readonly SearchProviderCatalogEntry[] = [
   {
     id: "tavily",
     displayName: "Tavily",
-    kind: "byok",
     apiKeyPrefix: "tvly-...",
     envVar: "TAVILY_API_KEY",
     secretKey: "tavily",
@@ -134,7 +109,6 @@ export const SEARCH_PROVIDER_CATALOG: readonly SearchProviderCatalogEntry[] = [
   {
     id: "firecrawl",
     displayName: "Firecrawl",
-    kind: "byok",
     apiKeyPrefix: "fc-...",
     envVar: "FIRECRAWL_API_KEY",
     secretKey: "firecrawl",
@@ -144,7 +118,6 @@ export const SEARCH_PROVIDER_CATALOG: readonly SearchProviderCatalogEntry[] = [
   {
     id: "keenable",
     displayName: "Keenable",
-    kind: "byok",
     keyless: true,
     apiKeyPrefix: "keen_... (optional)",
     envVar: "KEENABLE_API_KEY",
@@ -155,7 +128,6 @@ export const SEARCH_PROVIDER_CATALOG: readonly SearchProviderCatalogEntry[] = [
   {
     id: "fastcrw",
     displayName: "fastCRW",
-    kind: "byok",
     apiKeyPrefix: "crw_live_...",
     envVar: "FASTCRW_API_KEY",
     secretKey: "fastcrw",
@@ -167,7 +139,6 @@ export const SEARCH_PROVIDER_CATALOG: readonly SearchProviderCatalogEntry[] = [
   {
     id: "searxng",
     displayName: "SearXNG",
-    kind: "byok",
     keyless: true,
     apiKeyPrefix: "token (optional)",
     envVar: "SEARXNG_API_KEY",
@@ -179,7 +150,6 @@ export const SEARCH_PROVIDER_CATALOG: readonly SearchProviderCatalogEntry[] = [
   {
     id: "tinyfish",
     displayName: "TinyFish",
-    kind: "byok",
     apiKeyPrefix: "TinyFish API key...",
     envVar: "TINYFISH_API_KEY",
     secretKey: "tinyfish",
@@ -191,7 +161,6 @@ export const SEARCH_PROVIDER_CATALOG: readonly SearchProviderCatalogEntry[] = [
   {
     id: "exa",
     displayName: "Exa",
-    kind: "byok",
     apiKeyPrefix: "Exa API key...",
     envVar: "EXA_API_KEY",
     secretKey: "exa",
@@ -201,7 +170,6 @@ export const SEARCH_PROVIDER_CATALOG: readonly SearchProviderCatalogEntry[] = [
   {
     id: "serply",
     displayName: "Serply",
-    kind: "byok",
     apiKeyPrefix: "Serply API key...",
     envVar: "SERPLY_API_KEY",
     secretKey: "serply",
@@ -216,7 +184,7 @@ export const SEARCH_PROVIDER_IDS: readonly string[] =
 
 /** Catalog entries that store an API key under their bare provider name. */
 export const BYOK_SEARCH_PROVIDERS: readonly SearchProviderCatalogEntry[] =
-  SEARCH_PROVIDER_CATALOG.filter((p) => p.kind === "byok");
+  SEARCH_PROVIDER_CATALOG.filter((p) => p.secretKey !== undefined);
 
 /** BYOK provider ids, ordered by `fallbackOrder` (ascending). */
 export const SEARCH_PROVIDER_FALLBACK_ORDER: readonly string[] =

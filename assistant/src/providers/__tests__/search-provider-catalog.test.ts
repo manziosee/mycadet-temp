@@ -38,7 +38,9 @@ describe("search-provider-catalog", () => {
   });
 
   test("cloud providers omit BYOK-only fields", () => {
-    const managed = SEARCH_PROVIDER_CATALOG.filter((p) => p.kind === "managed");
+    const managed = SEARCH_PROVIDER_CATALOG.filter(
+      (p) => p.secretKey === undefined,
+    );
     for (const provider of managed) {
       expect(provider.envVar).toBeUndefined();
       expect(provider.secretKey).toBeUndefined();
@@ -75,9 +77,8 @@ describe("search-provider-catalog", () => {
     expect(SEARCH_PROVIDER_FALLBACK_ORDER).toEqual(sorted);
   });
 
-  test("cadet is a cloud provider outside the BYOK fallback chain", () => {
-    expect(getSearchProvider("cadet")?.kind).toBe("managed");
-    expect(BYOK_SEARCH_PROVIDERS.map((p) => p.id)).not.toContain("cadet");
+  test("the retired cadet cloud search provider is no longer in the catalog", () => {
+    expect(getSearchProvider("cadet")).toBeUndefined();
     expect(SEARCH_PROVIDER_FALLBACK_ORDER).not.toContain("cadet");
   });
 
@@ -89,7 +90,6 @@ describe("search-provider-catalog", () => {
 
   test("SearXNG is a keyless BYOK provider that requires an instance URL", () => {
     const searxng = getSearchProvider("searxng");
-    expect(searxng?.kind).toBe("byok");
     expect(searxng?.keyless).toBe(true);
     expect(searxng?.supportsApiBase).toBe(true);
     expect(searxng?.defaultApiBase).toBeUndefined();
@@ -98,7 +98,6 @@ describe("search-provider-catalog", () => {
 
   test("TinyFish is a keyed BYOK provider with a cloud API base", () => {
     const tinyfish = getSearchProvider("tinyfish");
-    expect(tinyfish?.kind).toBe("byok");
     expect(tinyfish?.keyless).toBeUndefined();
     expect(tinyfish?.supportsApiBase).toBe(true);
     expect(tinyfish?.defaultApiBase).toBe("https://api.search.tinyfish.ai");
@@ -107,7 +106,6 @@ describe("search-provider-catalog", () => {
 
   test("Exa is a keyed BYOK provider without a custom API base", () => {
     const exa = getSearchProvider("exa");
-    expect(exa?.kind).toBe("byok");
     expect(exa?.keyless).toBeUndefined();
     expect(exa?.supportsApiBase).toBeUndefined();
     expect(exa?.envVar).toBe("EXA_API_KEY");
@@ -115,7 +113,6 @@ describe("search-provider-catalog", () => {
 
   test("Serply is a keyed BYOK provider without a custom API base", () => {
     const serply = getSearchProvider("serply");
-    expect(serply?.kind).toBe("byok");
     expect(serply?.keyless).toBeUndefined();
     expect(serply?.supportsApiBase).toBeUndefined();
     expect(serply?.envVar).toBe("SERPLY_API_KEY");
