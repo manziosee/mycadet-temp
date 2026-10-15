@@ -1,34 +1,21 @@
 import { App } from "@capacitor/app";
 import { isNativePlatform } from "@app/runtime/native-platform";
 import { isOAuthFlowInFlight } from "@app/runtime/oauth-flow-state";
-import {
-  useAuthStore as webAuthStore,
-  subscribeCloudAccountLogout,
-  isCloudAccountOAuthInFlight,
-} from "@web/stores/auth-store";
-import { getSession, logoutAccountSession } from "@app/lib/auth/session-client";
+import { getSession } from "@app/lib/auth/session-client";
+import { logoutAccount } from "@app/lib/auth/logout-account";
 import { accountUserSnapshot } from "@app/stores/account-user-snapshot";
 import { createAccountSessionSource } from "@app/stores/account-session-source";
 
-/** App probes own account state; web actions preserve the current composed-client side effects. */
+/** Account session authority is independent of assistant runtime state. */
 export const accountAuthSource = createAccountSessionSource({
   getSession,
   snapshot: accountUserSnapshot,
-  synchronizeWeb: () => webAuthStore.getState().refreshSession(),
-  logout: () =>
-    webAuthStore
-      .getState()
-      .logout({ cloudAccount: { revokeSession: logoutAccountSession } }),
+  logout: logoutAccount,
 });
 
-const stopCloudLogoutListener = subscribeCloudAccountLogout(() =>
-  accountAuthSource.beginExternalLogout(),
-);
-if (import.meta.hot)
-  import.meta.hot.dispose(() => {
-    stopCloudLogoutListener();
-    cleanup?.();
-  });
+if (import.meta.hot) {
+  import.meta.hot.dispose(() => cleanup?.());
+}
 
 let readers = 0;
 let cleanup: (() => void) | undefined;
@@ -37,11 +24,7 @@ export function startAccountSessionListeners(): () => void {
   if (readers++ === 0) {
     let disposed = false;
     const refresh = () => {
-      if (
-        !disposed &&
-        !isOAuthFlowInFlight() &&
-        !isCloudAccountOAuthInFlight()
-      ) {
+      if (!disposed && !isOAuthFlowInFlight()) {
         void accountAuthSource
           .observeSession()
           .catch((error) =>

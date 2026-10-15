@@ -17,7 +17,6 @@ interface Dependencies {
     write(user: AccountUser): void;
     clear(): void;
   };
-  synchronizeWeb(): Promise<unknown>;
   logout(): Promise<void>;
   probeTimeoutMs?: number;
 }
@@ -27,7 +26,6 @@ export function createAccountSessionSource(
   deps: Dependencies,
 ): AccountAuthSource & {
   observeSession(): Promise<boolean>;
-  beginExternalLogout(): () => void;
 } {
   const listeners = new Set<() => void>();
   let initialization: Promise<void> | undefined;
@@ -141,8 +139,6 @@ export function createAccountSessionSource(
       const request = (async () => {
         await observeSession(true);
         if (current !== generation || logoutLocks > 0) return false;
-        // Web still owns consent hydration and post-auth assistant routing.
-        await deps.synchronizeWeb();
         return (
           current === generation && state.sessionStatus === "authenticated"
         );
@@ -172,6 +168,5 @@ export function createAccountSessionSource(
       };
     },
     observeSession,
-    beginExternalLogout: beginLogout,
   };
 }
