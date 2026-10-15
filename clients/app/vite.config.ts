@@ -1,11 +1,12 @@
 import path from "node:path";
+import { appPackage, packageDependencies } from "./vite/app-package";
 import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
 import { defineConfig, loadEnv } from "vite";
-import { injectPlatformToken } from "./vite/platform-proxy";
+import { injectCloudSessionToken } from "./vite/cloud-proxy";
 import {
   localModePlugin,
-  getDevPlatformToken,
+  getDevCloudSessionToken,
 } from "../web/vite-plugin-local-mode";
 
 const APP_SRC = path.resolve(import.meta.dirname, "src");
@@ -15,7 +16,8 @@ const DESIGN_SRC = path.resolve(
   "../../packages/design-library/src",
 );
 
-export default defineConfig(({ mode }) => {
+export default defineConfig(({ mode, command }) => {
+  const library = process.env.APP_BUILD_TARGET === "package";
   const env: Record<string, string> = {};
   for (const [key, value] of Object.entries(process.env)) {
     if (value !== undefined) {
@@ -28,21 +30,39 @@ export default defineConfig(({ mode }) => {
   );
   const platform = env.API_PROXY_TARGET || "http://localhost:8000";
   return {
-    base: "/assistant/",
-    define: { __INCLUDES_ACCOUNT__: "false" },
-    plugins: [tailwindcss(), react(), ...(cloud ? [] : [localModePlugin(env)])],
-    publicDir: "../web/public",
+    base: library ? "./" : "/",
+    define: {
+      __INCLUDES_ACCOUNT__: "false",
+      ...(library
+        ? { "process.env.NODE_ENV": JSON.stringify("production") }
+        : {}),
+    },
+    plugins: [
+      tailwindcss(),
+      react(),
+      ...(library ? [appPackage()] : cloud ? [] : [localModePlugin(env)]),
+    ],
+    publicDir: library ? false : "../web/public",
     resolve: {
       alias: [
+        ...(command === "serve"
+          ? [
+              {
+                find: "@mycadet/app/contracts",
+                replacement: path.resolve(APP_SRC, "contracts.ts"),
+              },
+              {
+                find: "@mycadet/app",
+                replacement: path.resolve(APP_SRC, "index.ts"),
+              },
+            ]
+          : []),
         { find: /^@design\//, replacement: DESIGN_SRC + "/" },
         { find: /^@app\//, replacement: APP_SRC + "/" },
         { find: /^@web\//, replacement: WEB_SRC + "/" },
         { find: /^@\//, replacement: WEB_SRC + "/" },
       ],
       dedupe: ["react", "react-dom"],
-    },
-    optimizeDeps: {
-      include: ["rehype-katex", "remark-math", "remark-parse", "unified"],
     },
     server: {
       port: Number(env.PORT || "3001"),
@@ -62,21 +82,36 @@ export default defineConfig(({ mode }) => {
           changeOrigin: true,
           ...(cloud
             ? {}
-            : { configure: injectPlatformToken(true, getDevPlatformToken) }),
+            : {
+                configure: injectCloudSessionToken(
+                  true,
+                  getDevCloudSessionToken,
+                ),
+              }),
         },
         "/_allauth": {
           target: platform,
           changeOrigin: true,
           ...(cloud
             ? {}
-            : { configure: injectPlatformToken(false, getDevPlatformToken) }),
+            : {
+                configure: injectCloudSessionToken(
+                  false,
+                  getDevCloudSessionToken,
+                ),
+              }),
         },
         "/accounts": {
           target: platform,
           changeOrigin: true,
           ...(cloud
             ? {}
-            : { configure: injectPlatformToken(false, getDevPlatformToken) }),
+            : {
+                configure: injectCloudSessionToken(
+                  false,
+                  getDevCloudSessionToken,
+                ),
+              }),
         },
         "/auth": {
           target: env.GATEWAY_PROXY_TARGET || "http://localhost:7830",
@@ -85,10 +120,28 @@ export default defineConfig(({ mode }) => {
       },
     },
     build: {
-      outDir: "dist",
+      outDir: library ? "dist/package" : "dist/standalone",
+      ...(library
+        ? {
+            lib: {
+              entry: {
+                index: path.resolve(APP_SRC, "index.ts"),
+                contracts: path.resolve(APP_SRC, "contracts.ts"),
+              },
+              formats: ["es"],
+              fileName: (_format: string, name: string) => `${name}.js`,
+            },
+            rolldownOptions: {
+              external: [
+                /^react(?:\/|$)/,
+                /^react-dom(?:\/|$)/,
+                ...Object.keys(packageDependencies),
+              ],
+            },
+          }
+        : {}),
       emptyOutDir: true,
-      sourcemap: !cloud,
-      ...(cloud ? {} : { minify: false as const }),
+      sourcemap: true,
     },
   };
 });

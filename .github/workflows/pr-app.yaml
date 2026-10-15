@@ -48,13 +48,19 @@ jobs:
         working-directory: clients/web
         run: bun run openapi-ts
 
+      - name: Build
+        working-directory: clients/app
+        run: bun run build
+
       - name: Type check
         working-directory: clients/app
         run: bun run typecheck
 
-      - name: Build
+      - name: Verify portable package
         working-directory: clients/app
-        run: bun run build
+        env:
+          NODE_ENV: production
+        run: node scripts/verify-package.mjs
 
       - name: Test
         working-directory: clients/app

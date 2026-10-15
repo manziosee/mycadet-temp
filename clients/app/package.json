@@ -4,7 +4,14 @@
   "version": "0.0.0",
   "type": "module",
   "exports": {
-    "./*": "./src/*"
+    ".": {
+      "types": "./dist/package/types/index.d.ts",
+      "default": "./dist/package/index.js"
+    },
+    "./contracts": {
+      "types": "./dist/package/types/contracts.d.ts",
+      "default": "./dist/package/contracts.js"
+    }
   },
   "dependencies": {
     "@capacitor/app": "8.1.0",
@@ -33,13 +40,14 @@
     "@types/react-dom": "19.2.3",
     "@vitejs/plugin-react": "6.0.1",
     "tailwindcss": "4.1.8",
+    "typescript": "5.9.3",
     "vite": "8.0.11"
   },
   "scripts": {
-    "predev": "cd ../web && bun run openapi-ts",
+    "predev": "bun run build",
     "dev": "bun --bun vite",
     "prebuild": "cd ../web && bun run openapi-ts && node ../web/scripts/copy-skill-assets.mjs",
-    "build": "bun --bun vite build",
+    "build": "bun scripts/build.ts",
     "preview": "bun --bun vite preview",
     "test": "bun test",
     "test:ci": "bun scripts/run-tests.ts",
