@@ -1,39 +1,11 @@
 import { useState } from "react";
-import {
-  createBrowserRouter,
-  Navigate,
-  Outlet,
-  useLocation,
-  useNavigate,
-} from "react-router";
-import { AppShell } from "@mycadet/app";
+import { createBrowserRouter, Navigate, Outlet } from "react-router";
 import { CreateAssistantDialog } from "@app/components/create-assistant-dialog";
 import { RouteErrorBoundary } from "@app/components/route-error-boundary";
 import { RootHydrateFallback } from "@app/components/root-hydrate-fallback";
 import { useCadetCommands } from "@app/runtime/cadet-commands";
-import { currentLocale, useTranslation } from "@app/i18n";
 import { accountRoute } from "@app/domains/account/account-route";
-import { readInjectedConfig } from "@app/lib/injected-config";
-
-function AssistantPage() {
-  useTranslation();
-  const config = readInjectedConfig();
-  const location = useLocation();
-  const navigate = useNavigate();
-  return (
-    <AppShell
-      apiBaseUrl={config.cloudUrl}
-      assistantId={config.assistantId}
-      organizationId={config.organizationId}
-      location={`${location.pathname}${location.search}${location.hash}`}
-      origin={window.location.origin}
-      locale={currentLocale()}
-      onNavigate={(path, options) => {
-        void navigate(path, options);
-      }}
-    />
-  );
-}
+import { AssistantPage } from "@app/shell/assistant-page";
 
 function DesktopChrome() {
   const [createOpen, setCreateOpen] = useState(false);

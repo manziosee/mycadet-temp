@@ -1,0 +1,96 @@
+import { useEffect, useState } from "react";
+import {
+  AssistantResolutionSchema,
+  type AssistantResolution,
+} from "./resolution-contract";
+import {
+  listAssistantChoices,
+  resolveAssistant,
+  type AssistantRequest,
+} from "./resolve-assistant";
+
+export type AssistantRequestState =
+  | AssistantResolution
+  | { status: "loading" | "error" };
+
+export function useAssistantRequest({
+  apiBaseUrl = "/",
+  origin,
+  organizationId,
+  assistantId,
+  listOnly = false,
+}: Omit<AssistantRequest, "signal"> & { listOnly?: boolean }) {
+  const [attempt, setAttempt] = useState(0);
+  const key = JSON.stringify([
+    apiBaseUrl,
+    origin,
+    organizationId,
+    assistantId,
+    listOnly,
+    attempt,
+  ]);
+  const [result, setResult] = useState<{
+    key: string;
+    state: AssistantRequestState;
+  }>();
+  useEffect(() => {
+    const controller = new AbortController();
+    const settle = (state: AssistantRequestState) => setResult({ key, state });
+    settle({ status: "loading" });
+    const timer = setTimeout(() => {
+      controller.abort();
+      settle({ status: "error" });
+    }, 10_000);
+    void Promise.resolve()
+      .then(() => {
+        if (controller.signal.aborted) {
+          return;
+        }
+        const request = {
+          apiBaseUrl,
+          origin,
+          organizationId,
+          assistantId,
+          signal: controller.signal,
+        };
+        return listOnly
+          ? listAssistantChoices(request)
+          : resolveAssistant(request);
+      })
+      .then(
+        (value) => {
+          if (controller.signal.aborted) {
+            return;
+          }
+          clearTimeout(timer);
+          const parsed = AssistantResolutionSchema.safeParse(value);
+          if (
+            !parsed.success ||
+            (parsed.data.status === "ready" &&
+              assistantId &&
+              parsed.data.assistant.id !== assistantId)
+          ) {
+            settle({ status: "error" });
+            return;
+          }
+          settle(parsed.data);
+        },
+        () => {
+          if (!controller.signal.aborted) {
+            clearTimeout(timer);
+            settle({ status: "error" });
+          }
+        },
+      );
+    return () => {
+      clearTimeout(timer);
+      controller.abort();
+    };
+  }, [apiBaseUrl, origin, organizationId, assistantId, listOnly, attempt, key]);
+  const state: AssistantRequestState =
+    result?.key === key ? result.state : { status: "loading" };
+  return {
+    state,
+    retry: () => setAttempt((value) => value + 1),
+  };
+}

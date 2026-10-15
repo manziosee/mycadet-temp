@@ -1,19 +1,19 @@
 "use client";
 
-import { useEffect, useState, type ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import {
-  AssistantResolutionSchema,
-  type AssistantResolution,
-} from "./assistant/resolution-contract";
-import { resolveAssistant } from "./assistant/resolve-assistant";
+  useAssistantRequest,
+  type AssistantRequestState,
+} from "./assistant/use-assistant-request";
 import { AppI18nProvider } from "./i18n/provider";
 import { useTranslation } from "./i18n/react";
 import type { SupportedLocale } from "./i18n/supported-locales";
 import { AssistantFrame } from "./shell/assistant-frame";
 
-export type AppShellStatus =
-  | { status: "loading" | "error" }
-  | Exclude<AssistantResolution, { status: "ready" }>;
+export type AppShellStatus = Exclude<
+  AssistantRequestState,
+  { status: "ready" }
+>;
 export interface AppShellProps {
   apiBaseUrl?: string;
   organizationId?: string;
@@ -48,14 +48,6 @@ function AssistantShell({
   title,
 }: AppShellProps) {
   const { t } = useTranslation("account");
-  const [result, setResult] = useState<{
-    state: AssistantResolution | AppShellStatus;
-    apiBaseUrl: string;
-    origin: string;
-    organizationId?: string;
-    assistantId?: string;
-    attempt: number;
-  }>();
   const [selection, select] = useState<{
     id: string;
     apiBaseUrl: string;
@@ -69,75 +61,12 @@ function AssistantShell({
     selection.organizationId === organizationId
       ? selection.id
       : undefined);
-  const [attempt, retry] = useState(0);
-  const reload = () => retry((value) => value + 1);
-  useEffect(() => {
-    const controller = new AbortController();
-    const setState = (state: AssistantResolution | AppShellStatus) =>
-      setResult({
-        state,
-        apiBaseUrl,
-        origin,
-        organizationId,
-        assistantId: selectedId,
-        attempt,
-      });
-    setState({ status: "loading" });
-    const timer = setTimeout(() => {
-      controller.abort();
-      setState({ status: "error" });
-    }, 10_000);
-    void Promise.resolve()
-      .then(() =>
-        controller.signal.aborted
-          ? undefined
-          : resolveAssistant({
-              apiBaseUrl,
-              origin,
-              organizationId,
-              assistantId: selectedId,
-              signal: controller.signal,
-            }),
-      )
-      .then(
-        (result) => {
-          if (controller.signal.aborted) {
-            return;
-          }
-          clearTimeout(timer);
-          const parsed = AssistantResolutionSchema.safeParse(result);
-          if (
-            !parsed.success ||
-            (parsed.data.status === "ready" &&
-              selectedId &&
-              parsed.data.assistant.id !== selectedId)
-          ) {
-            setState({ status: "error" });
-            return;
-          }
-          setState(parsed.data);
-        },
-        () => {
-          if (!controller.signal.aborted) {
-            clearTimeout(timer);
-            setState({ status: "error" });
-          }
-        },
-      );
-    return () => {
-      clearTimeout(timer);
-      controller.abort();
-    };
-  }, [apiBaseUrl, origin, organizationId, selectedId, attempt]);
-
-  const state: AssistantResolution | AppShellStatus =
-    result?.apiBaseUrl === apiBaseUrl &&
-    result.origin === origin &&
-    result.organizationId === organizationId &&
-    result.assistantId === selectedId &&
-    result.attempt === attempt
-      ? result.state
-      : { status: "loading" };
+  const { state, retry: reload } = useAssistantRequest({
+    apiBaseUrl,
+    origin,
+    organizationId,
+    assistantId: selectedId,
+  });
   if (state.status !== "ready") {
     return renderStatus && state.status !== "selection" ? (
       renderStatus(state, reload)

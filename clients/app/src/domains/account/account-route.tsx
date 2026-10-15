@@ -2,7 +2,6 @@ import { Navigate, useSearchParams } from "react-router";
 
 import { RouteErrorBoundary } from "@app/components/route-error-boundary";
 import { RootHydrateFallback } from "@app/components/root-hydrate-fallback";
-import { authMiddleware } from "@web/lib/auth/auth-middleware";
 import { routes } from "@app/utils/routes";
 
 import { AccountLayout } from "@app/domains/account/account-layout";
@@ -147,15 +146,11 @@ export const accountRoute = {
               ),
           },
         },
-        // Assistant selection: which assistant this device talks to. Was
-        // /assistant/select-assistant; account-level flows are shell
-        // territory, so it lives under /account now.
         {
           path: "select-assistant",
-          middleware: [authMiddleware],
           lazy: {
             Component: () =>
-              import("@web/domains/onboarding/pages/select-assistant-screen").then(
+              import("@app/domains/account/pages/select-assistant-screen").then(
                 (m) => m.SelectAssistantScreen,
               ),
           },
