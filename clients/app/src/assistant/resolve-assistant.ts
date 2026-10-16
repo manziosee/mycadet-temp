@@ -26,22 +26,22 @@ export interface AssistantRequest {
   signal: AbortSignal;
 }
 
-export async function resolveAssistant({
+const unauthenticated = Symbol("unauthenticated");
+const starting = Symbol("starting");
+const unavailable = Symbol("unavailable");
+
+function createClient({
   apiBaseUrl = "/",
   origin,
-  assistantId,
   organizationId,
   signal,
-}: AssistantRequest): Promise<AssistantResolution> {
+}: AssistantRequest) {
   const base = new URL(decode(PublicUrlSchema, apiBaseUrl), origin);
   base.pathname = base.pathname.replace(/\/*$/, "/");
   const headers = new Headers({ Accept: "application/json" });
   if (organizationId) {
     headers.set("Cadet-Organization-Id", organizationId);
   }
-  const unauthenticated = Symbol("unauthenticated");
-  const starting = Symbol("starting");
-  const unavailable = Symbol("unavailable");
   async function get(path: string, detail = false) {
     signal.throwIfAborted();
     const response = await fetch(new URL(path, base), {
@@ -66,31 +66,60 @@ export async function resolveAssistant({
     signal.throwIfAborted();
     return payload;
   }
-  if (!assistantId) {
-    const assistants: z.infer<typeof AssistantChoiceSchema>[] = [];
-    for (let page = 0; page < 20; page++) {
-      const payload = await get(
-        `v1/assistants/?limit=100&offset=${assistants.length}`,
-      );
-      if (payload === unauthenticated) {
-        return { status: "unauthenticated" };
-      }
-      const data = decode(PageSchema, payload);
-      assistants.push(...data.results);
-      if (!data.next) {
-        if (assistants.length === 0) {
-          return { status: "empty" };
-        }
-        if (assistants.length > 1) {
-          return { status: "selection", assistants };
-        }
-        assistantId = assistants[0].id;
-        break;
-      }
-      if (data.results.length === 0 || page === 19) {
-        throw new Error("Assistant list exceeded its page limit.");
-      }
+  return { base, get };
+}
+
+type AssistantList = Extract<
+  AssistantResolution,
+  { status: "selection" | "unauthenticated" }
+>;
+
+async function listChoices(
+  client: ReturnType<typeof createClient>,
+): Promise<AssistantList> {
+  const assistants: z.infer<typeof AssistantChoiceSchema>[] = [];
+  for (let page = 0; page < 20; page++) {
+    const payload = await client.get(
+      `v1/assistants/?limit=100&offset=${assistants.length}`,
+    );
+    if (payload === unauthenticated) {
+      return { status: "unauthenticated" };
     }
+    const data = decode(PageSchema, payload);
+    assistants.push(...data.results);
+    if (!data.next) {
+      return { status: "selection", assistants };
+    }
+    if (data.results.length === 0 || page === 19) {
+      throw new Error("Assistant list exceeded its page limit.");
+    }
+  }
+  throw new Error("Assistant list exceeded its page limit.");
+}
+
+export async function listAssistantChoices(
+  options: Omit<AssistantRequest, "assistantId">,
+): Promise<AssistantList> {
+  return listChoices(createClient(options));
+}
+
+export async function resolveAssistant(
+  options: AssistantRequest,
+): Promise<AssistantResolution> {
+  const { base, get } = createClient(options);
+  let assistantId = options.assistantId;
+  if (!assistantId) {
+    const result = await listChoices({ base, get });
+    if (result.status === "unauthenticated") {
+      return result;
+    }
+    if (result.assistants.length === 0) {
+      return { status: "empty" };
+    }
+    if (result.assistants.length > 1) {
+      return result;
+    }
+    assistantId = result.assistants[0].id;
   }
   if (!assistantId || [".", ".."].includes(assistantId)) {
     throw new Error("Invalid assistant identity.");
