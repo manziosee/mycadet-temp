@@ -8,13 +8,16 @@ import { cloudAssistantHubUrl } from "@mycadet/environments/seeds";
 
 // `server.url` is baked into native Capacitor config by `cap sync`, so
 // whatever URL resolves here at sync time is what the archived mobile build
-// ships with. Defaults to dev; set `CADET_ENVIRONMENT=production` before
-// syncing a production mobile build.
+// ships with. Defaults to local — the simulator shares the host's loopback,
+// so a locally-synced shell talks to the local dev server (`cadet client`)
+// and the assistant hatched beside it (`cadet-local hatch`). For a real
+// device, resync with an explicit `CADET_ENVIRONMENT` (the release workflows
+// always set it) or point `CADET_SERVER_URL` at an https origin.
 //
 // The environment-to-hub mapping (including the deliberate `/assistant`
 // suffix) is shared with the CLI's remote-web edge via
 // `@mycadet/environments`; see `cloudAssistantHubUrl` for the rationale.
-const env = process.env.CADET_ENVIRONMENT ?? "dev";
+const env = process.env.CADET_ENVIRONMENT ?? "local";
 
 const ENV_SERVER_URL = cloudAssistantHubUrl(env);
 
@@ -53,6 +56,7 @@ const SCHEME_NAMES: Record<string, string> = {
   production: "App",
   staging: "App Staging",
   dev: "App Dev",
+  local: "App Local",
 };
 
 const config: CapacitorConfig = {
