@@ -170,7 +170,6 @@ import { useVoiceInput } from "@/domains/chat/hooks/use-voice-input";
 import { useConversationListQuery } from "@/hooks/conversation-queries";
 import { useAssistantAvatar } from "@/hooks/use-assistant-avatar";
 import { useAssistantIdentityStore } from "@/stores/assistant-identity-store";
-import { useAssistantFeatureFlagStore } from "@/stores/assistant-feature-flag-store";
 import { useClientFeatureFlagStore } from "@/stores/client-feature-flag-store";
 import { shouldMintNewChatDraft } from "@/domains/chat/utils/conversation-selection";
 import { isNativeMobile } from "@/runtime/platform-detection";
@@ -714,7 +713,6 @@ export function ChatMainPanel({
     showOnboardingChoice,
     creditsExhausted: balanceStatus.isExhausted,
   });
-  const sessionGroupsEnabled = useAssistantFeatureFlagStore.use.sessionGroups();
 
   // --- Ref writes (connect hook outputs to ActiveChatView's debug refs) ---
   useEffect(() => {
@@ -1047,7 +1045,6 @@ export function ChatMainPanel({
   // Scroll coordination
   // -------------------------------------------------------------------------
   const scrollCoordinator = useTranscriptScroll({
-    sessionGroupsEnabled,
     isVisible: !(isMobile && documentRoute.showingDocument),
     transcriptRef,
     items: transcriptItems,
@@ -1293,7 +1290,6 @@ export function ChatMainPanel({
     conversationId: activeConversationId,
     modeSessionDescriptors: historyPagination.modeSessions,
     sessionDisclosureState,
-    sessionGroupsEnabled,
     sessionClockConnected:
       assistantState.kind === "active" &&
       !(isMobile && documentRoute.showingDocument),
