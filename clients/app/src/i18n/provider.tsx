@@ -8,20 +8,14 @@ import {
 import { createInstance, type i18n } from "i18next";
 import ICU from "i18next-icu";
 import { FALLBACK_CATALOGS, loadCatalogs } from "./catalogs";
+import { currentLocale } from "./i18n";
 import { i18nextInitOptions } from "./config";
-import { type SupportedLocale } from "./supported-locales";
 
 export const AppI18nContext: Context<i18n | undefined> = createContext<
   i18n | undefined
 >(undefined);
 
-export function AppI18nProvider({
-  locale = "en",
-  children,
-}: {
-  locale?: SupportedLocale;
-  children: ReactNode;
-}) {
+export function AppI18nProvider({ children }: { children: ReactNode }) {
   const instance = useMemo(() => {
     const i18n = createInstance();
     void i18n.use(new ICU()).init({
@@ -32,6 +26,7 @@ export function AppI18nProvider({
   }, []);
   useEffect(() => {
     let active = true;
+    const locale = currentLocale();
     void loadCatalogs(locale)
       .then((catalogs) => {
         if (!active) {
@@ -50,7 +45,7 @@ export function AppI18nProvider({
     return () => {
       active = false;
     };
-  }, [instance, locale]);
+  }, [instance]);
   return (
     <AppI18nContext.Provider value={instance}>
       {children}
