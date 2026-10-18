@@ -13,7 +13,6 @@
 
 import { beforeEach, describe, expect, mock, test } from "bun:test";
 
-import { setOverridesForTesting } from "../../__tests__/feature-flag-test-helpers.js";
 import type { TrustContext } from "../../daemon/trust-context-types.js";
 
 // ── Module mocks ─────────────────────────────────────────────────────
@@ -598,11 +597,8 @@ describe("runBackgroundJob", () => {
   });
 });
 
-// Runs last on purpose: it is the only block that turns the presence flag on,
-// so every test above reads the flag in its default off state.
-describe("runBackgroundJob presence suppression opt-in", () => {
+describe("runBackgroundJob presence suppression", () => {
   beforeEach(() => {
-    setOverridesForTesting({ "activity-presence-suppression": true });
     webConversationFocused = true;
   });
 
