@@ -2,9 +2,13 @@ import { describe, expect, test } from "bun:test";
 
 import {
   buildNgrokSpawnArgs,
+  confirmStopAnswer,
   isNgrokAuthError,
+  isNgrokEndpointOnlineError,
   isNgrokSessionLimitError,
   ngrokAgentConfigPath,
+  ngrokOnlineEndpoint,
+  staleTrackedNgrokAgent,
 } from "../lib/tunnels/ngrok.js";
 
 describe("buildNgrokSpawnArgs", () => {
@@ -89,5 +93,79 @@ describe("isNgrokAuthError", () => {
       ),
     ).toBe(true);
     expect(isNgrokSessionLimitError("connection refused")).toBe(false);
+  });
+});
+
+describe("isNgrokEndpointOnlineError", () => {
+  test("recognizes the free-plan domain collision", () => {
+    expect(
+      isNgrokEndpointOnlineError(
+        "ERROR: failed to start tunnel: The endpoint 'https://camping-trustful-fog.ngrok-free.dev' is already online. ERR_NGROK_334",
+      ),
+    ).toBe(true);
+  });
+
+  test("does not claim other startup failures are endpoint collisions", () => {
+    expect(
+      isNgrokEndpointOnlineError(
+        "creating tunnel session failed: dial tcp 3.219.x.x:443: connection refused",
+      ),
+    ).toBe(false);
+  });
+});
+
+describe("ngrokOnlineEndpoint", () => {
+  test("extracts the endpoint the incident refused", () => {
+    expect(
+      ngrokOnlineEndpoint(
+        "failed to start tunnel: The endpoint 'https://camping-trustful-fog.ngrok-free.dev' is already online.",
+      ),
+    ).toBe("https://camping-trustful-fog.ngrok-free.dev");
+  });
+
+  test("no endpoint named, no extraction", () => {
+    expect(
+      ngrokOnlineEndpoint("creating tunnel session failed: connection refused"),
+    ).toBeNull();
+  });
+});
+
+describe("confirmStopAnswer", () => {
+  test("Enter and y/yes confirm the stop", () => {
+    expect(confirmStopAnswer("")).toBe(true);
+    expect(confirmStopAnswer("y")).toBe(true);
+    expect(confirmStopAnswer("  YES\n")).toBe(true);
+  });
+
+  test("anything else declines", () => {
+    expect(confirmStopAnswer("n")).toBe(false);
+    expect(confirmStopAnswer("no")).toBe(false);
+    expect(confirmStopAnswer("wait")).toBe(false);
+  });
+});
+
+describe("staleTrackedNgrokAgent", () => {
+  const record = {
+    pid: 4242,
+    provider: "ngrok",
+    startedAt: new Date().toISOString(),
+  };
+
+  test("returns the record for a tracked, live ngrok agent", () => {
+    expect(staleTrackedNgrokAgent(record, () => true)).toEqual(record);
+  });
+
+  test("leaves agents recorded by other tunnel providers alone", () => {
+    expect(
+      staleTrackedNgrokAgent({ ...record, provider: "tailscale" }, () => true),
+    ).toBeNull();
+  });
+
+  test("leaves a pid that no longer verifies as ngrok alone (reuse guard)", () => {
+    expect(staleTrackedNgrokAgent(record, () => false)).toBeNull();
+  });
+
+  test("nothing recorded, nothing to stop", () => {
+    expect(staleTrackedNgrokAgent(undefined, () => true)).toBeNull();
   });
 });
