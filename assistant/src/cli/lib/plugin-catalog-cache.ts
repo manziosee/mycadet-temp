@@ -8,7 +8,6 @@
  */
 
 import { fetchPluginCatalogFromPlatform } from "./plugin-catalog-cloud.js";
-import { filterPluginCatalogByFeatureFlags } from "./plugin-catalog-visibility.js";
 import type { PluginCatalog, SearchPluginsDeps } from "./search-plugins.js";
 
 /** How long a fetched catalog is served before a refresh is attempted. */
@@ -24,13 +23,13 @@ type PluginCatalogLoadDeps = Pick<SearchPluginsDeps, "fetch">;
 const cache = new Map<string, CacheEntry>();
 
 /**
- * Resolve the full plugin catalog at {@link ref}.
+ * Resolve the full installable plugin catalog at {@link ref}.
  *
  * The catalog is fetched from the cloud and, on success, cached per ref for
  * the TTL; a fetch failure propagates so the caller can surface it (e.g. map
  * a rate-limit to 503) — no stale catalog is ever served.
  */
-async function loadPluginCatalog(
+export async function getPluginCatalog(
   ref: string,
   deps: PluginCatalogLoadDeps,
 ): Promise<PluginCatalog> {
@@ -44,23 +43,12 @@ async function loadPluginCatalog(
   return catalog;
 }
 
-/** Installable catalog with feature-flag visibility applied. */
-export async function getPluginCatalog(
-  ref: string,
-  deps: SearchPluginsDeps,
-): Promise<PluginCatalog> {
-  return filterPluginCatalogByFeatureFlags(
-    await loadPluginCatalog(ref, deps),
-    deps.featureFlagEnabled,
-  );
-}
-
-/** Category metadata for plugins already installed, including hidden entries. */
+/** Category metadata for plugins already installed. */
 export async function getPluginCatalogForInstalledMetadata(
   ref: string,
   deps: PluginCatalogLoadDeps,
 ): Promise<PluginCatalog> {
-  return loadPluginCatalog(ref, deps);
+  return getPluginCatalog(ref, deps);
 }
 
 /** Invalidate the cache (for testing or forced refresh). */

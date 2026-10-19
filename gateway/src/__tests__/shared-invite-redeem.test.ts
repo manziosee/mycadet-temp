@@ -62,12 +62,10 @@ mock.module("../ipc/assistant-client.js", () => ({
   },
 }));
 
-let trustedContactsEnabled = true;
 const actualFlagResolver = await import("../feature-flag-resolver.js");
 mock.module("../feature-flag-resolver.js", () => ({
   ...actualFlagResolver,
-  isFeatureFlagEnabled: (flag: string) =>
-    flag === "cadet-trusted-contacts" ? trustedContactsEnabled : false,
+  isFeatureFlagEnabled: () => false,
 }));
 
 // Token minting stays real; a test can make the next mint throw to fail a
@@ -115,6 +113,8 @@ const { handleGuardianRefresh } =
 const { tryIpcProxy } = await import("../http/routes/ipc-runtime-proxy.js");
 const { refreshRouteSchema } = await import("../ipc/route-schema-cache.js");
 const { trustVerdictRoutes } = await import("../ipc/trust-verdict-handlers.js");
+const { initAdmissionPolicyCache, resetAdmissionPolicyCache } =
+  await import("../risk/admission-policy-cache.js");
 const { seedContact } = await import("./helpers/contact-fixtures.js");
 
 const CLIENT_IP = "203.0.113.7";
@@ -215,9 +215,11 @@ async function resolveInboundTrust(principalId: string) {
 beforeAll(async () => {
   await initGatewayDb();
   await refreshRouteSchema();
+  initAdmissionPolicyCache();
 });
 
 afterAll(() => {
+  resetAdmissionPolicyCache();
   resetGatewayDb();
 });
 
@@ -236,7 +238,6 @@ beforeEach(() => {
   });
   seedContact({ id: CONTACT_ID, displayName: "Alice" });
   ipcCalls = [];
-  trustedContactsEnabled = true;
   failNextMint = false;
   resetSharedInviteRedeemRateLimiterForTests();
 });
@@ -430,16 +431,6 @@ describe("creating a cadet-shared invite", () => {
 });
 
 describe("request validation", () => {
-  test("returns 404 while the trusted-contacts flag is off", async () => {
-    const invite = await createInvite();
-    trustedContactsEnabled = false;
-
-    const res = await redeem({ code: invite.token, deviceId: DEVICE_ID });
-
-    expect(res.status).toBe(404);
-    expectInviteUnconsumed(invite.id);
-  });
-
   test("rejects a blank deviceId", async () => {
     const invite = await createInvite();
 

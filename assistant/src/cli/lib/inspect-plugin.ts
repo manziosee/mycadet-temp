@@ -30,7 +30,6 @@ import {
   readInstalledPlugin,
 } from "./list-installed-plugins.js";
 import { getPluginCatalog } from "./plugin-catalog-cache.js";
-import { isPluginCatalogEntryVisible } from "./plugin-catalog-visibility.js";
 import { DEFAULT_PLUGIN_REF } from "./plugin-constants.js";
 import {
   compareFingerprint,
@@ -288,10 +287,6 @@ export async function inspectPlugin(
   const installed = entry !== null;
   const local = entry ? readLocal(entry, readInstallMeta(entry.target)) : null;
   const surfaces = entry ? detectPluginSurfaces(entry.target) : null;
-
-  if (!installed && !isPluginCatalogEntryVisible(name)) {
-    throw new PluginInspectNotFoundError(name);
-  }
 
   let remote: PluginRemoteInfo | null = null;
   let remoteError: string | null = null;
