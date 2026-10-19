@@ -8,7 +8,6 @@ on:
       - "bun.lock"
       - "patches/**"
       - "clients/ios/**"
-      - "clients/app/capacitor.config.ts"
       - "clients/app/capacitor.config.base.ts"
       - "clients/app/package.json"
       - ".github/workflows/pr-ios.yaml"
@@ -55,6 +54,7 @@ jobs:
         run: |
           bun install --frozen-lockfile \
             --filter=@mycadet/app \
+            --filter=@mycadet/ios \
             --filter=@mycadet/assistant
 
       - name: Test filters
@@ -75,7 +75,6 @@ jobs:
             bun.lock \
             patches \
             clients/ios \
-            clients/app/capacitor.config.ts \
             clients/app/capacitor.config.base.ts \
             clients/app/package.json \
             .github/workflows/pr-ios.yaml |
@@ -88,10 +87,11 @@ jobs:
 
       - name: Capacitor sync
         if: steps.filters.outputs.ios_changed == 'true'
-        working-directory: clients/app
+        working-directory: clients/ios
         env:
-          # `capacitor.config.ts` derives `server.url` and the Xcode scheme
-          # name from this, so it has to agree with the scheme built below.
+          # The iOS Capacitor config (clients/ios/capacitor.config.ts)
+          # derives `server.url` and the Xcode scheme name from this, so it
+          # has to agree with the scheme built below.
           CADET_ENVIRONMENT: dev
         run: bunx cap sync ios
 
