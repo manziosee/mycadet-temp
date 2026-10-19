@@ -21,7 +21,6 @@ import {
 } from "@/runtime/notification-avatar";
 import { isPopoutWindowLifetime } from "@/runtime/popout-window";
 import { installSenderNotificationIdentityAdapter } from "@/runtime/sender-notification";
-import { useClientFeatureFlagStore } from "@/stores/client-feature-flag-store";
 import type {
   AvatarImageMeta,
   CharacterComponents,
@@ -92,12 +91,7 @@ export function useNotificationAvatarSync(
   accentHex: string | null,
   options?: NotificationAvatarSyncOptions,
 ): void {
-  const pushAvatarSender = useClientFeatureFlagStore.use.pushAvatarSender();
-  const localNotificationAvatar =
-    useClientFeatureFlagStore.use.localNotificationAvatar();
-  const prepareEnabled = pushAvatarSender || localNotificationAvatar;
-  const legacyEnabled =
-    pushAvatarSender && isElectron() && !isPopoutWindowLifetime();
+  const legacyEnabled = isElectron() && !isPopoutWindowLifetime();
   const scopeId = options
     ? options.scopeId
     : resolveNotificationIdentityScope({
@@ -173,7 +167,6 @@ export function useNotificationAvatarSync(
     identityKey,
     assistantName,
     pictureKey,
-    prepareEnabled,
     legacyEnabled,
   ]);
 
@@ -187,10 +180,8 @@ export function useNotificationAvatarSync(
   const [redraws, setRedraws] = useState(0);
 
   useEffect(() => {
-    if (localNotificationAvatar) {
-      installSenderNotificationIdentityAdapter();
-    }
-  }, [localNotificationAvatar]);
+    installSenderNotificationIdentityAdapter();
+  }, []);
 
   useEffect(
     () => () => {
@@ -206,7 +197,7 @@ export function useNotificationAvatarSync(
 
   useEffect(() => {
     const previous = currentPublication.current;
-    if (!prepareEnabled || !identity) {
+    if (!identity) {
       currentPublication.current = null;
       lastUpdateKey.current = null;
       inFlightPictureKey.current = null;
@@ -373,7 +364,6 @@ export function useNotificationAvatarSync(
       })
       .catch(giveUp);
   }, [
-    prepareEnabled,
     legacyEnabled,
     identity,
     identityKey,
