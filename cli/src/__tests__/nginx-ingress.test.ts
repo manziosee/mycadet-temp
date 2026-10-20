@@ -37,11 +37,26 @@ const execFileSyncMock = mock(childProcess.execFileSync);
 const spawnSyncMock = mock(childProcess.spawnSync);
 const spawnMock = mock(childProcess.spawn);
 
+/**
+ * A git rev-parse that fails like a git-less tree: the built-sha stamp's
+ * staleness probe stays inert and the per-test nginx fakes never see a git
+ * spawn.
+ */
+function gitStubSpawn(): childProcess.ChildProcess {
+  const child = new childProcess.ChildProcess();
+  Object.defineProperty(child, "stdout", { value: null });
+  setTimeout(() => child.emit("exit", 1), 0);
+  return child;
+}
+
 mock.module("node:child_process", () => ({
   ...childProcess,
   execFileSync: execFileSyncMock,
   spawnSync: spawnSyncMock,
-  spawn: spawnMock,
+  spawn: ((command: string, args: readonly string[], options?: SpawnOptions) =>
+    command === "git"
+      ? gitStubSpawn()
+      : spawnMock(command, args, options ?? {})) as typeof childProcess.spawn,
 }));
 
 const existsSyncMock = mock(fsModule.existsSync);
