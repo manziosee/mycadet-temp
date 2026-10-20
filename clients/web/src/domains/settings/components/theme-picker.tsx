@@ -1,8 +1,7 @@
-import { Heart, Monitor, Moon, Sun } from "lucide-react";
+import { Monitor, Moon, Sun } from "lucide-react";
 
 import { useThemePreference } from "@/hooks/use-theme-preference";
 import { useTranslation } from "@/i18n";
-import { useClientFeatureFlagStore } from "@/stores/client-feature-flag-store";
 import { type ThemePreference } from "@/utils/theme-preferences";
 import { SegmentControl } from "@mycadet/design-library/components/segment-control";
 
@@ -13,7 +12,6 @@ import { SegmentControl } from "@mycadet/design-library/components/segment-contr
  */
 export function ThemePicker() {
   const { t } = useTranslation("settings");
-  const velvet = useClientFeatureFlagStore.use.velvet();
   const { theme, setThemePreference } = useThemePreference();
 
   const themeItems = [
@@ -32,15 +30,6 @@ export function ThemePicker() {
       label: t("themePicker.dark"),
       icon: <Moon className="h-4 w-4" />,
     },
-    ...(velvet
-      ? [
-          {
-            value: "velvet" as const,
-            label: t("themePicker.velvet"),
-            icon: <Heart className="h-4 w-4" />,
-          },
-        ]
-      : []),
   ];
 
   return (
