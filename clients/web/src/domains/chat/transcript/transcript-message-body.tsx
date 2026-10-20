@@ -169,7 +169,6 @@ export function TranscriptMessageBody({
   assistantDisplayName,
   onSurfaceAction,
   onForkConversation,
-  onSummarizeUpToHere,
   onRetryLatestTurn,
   onInspectMessage,
   onOpenRuleEditor,
@@ -317,10 +316,6 @@ export function TranscriptMessageBody({
   const forkHandler =
     actionMessageId && onForkConversation
       ? () => onForkConversation(actionMessageId)
-      : undefined;
-  const summarizeHandler =
-    actionMessageId && onSummarizeUpToHere
-      ? () => onSummarizeUpToHere(actionMessageId)
       : undefined;
   const inspectMessageId = message.id;
   const inspectHandler =
@@ -1274,7 +1269,6 @@ export function TranscriptMessageBody({
           conversationId={conversationId}
           openInSlackUrl={slackMessageUrl}
           onFork={forkHandler}
-          onSummarizeUpToHere={summarizeHandler}
           onInspect={inspectHandler}
           onRetry={retryHandler}
           workSummary={
@@ -1331,7 +1325,6 @@ export function TranscriptMessageBody({
               conversationId={conversationId}
               openInSlackUrl={slackMessageUrl}
               onFork={forkHandler}
-              onSummarizeUpToHere={summarizeHandler}
               onInspect={inspectHandler}
               open={longPressOpen}
               onOpenChange={handleLongPressOpenChange}
@@ -1558,7 +1551,6 @@ export function TranscriptMessageBody({
             conversationId={conversationId}
             openInSlackUrl={slackMessageUrl}
             onFork={forkHandler}
-            onSummarizeUpToHere={summarizeHandler}
             onInspect={inspectHandler}
             open={longPressOpen}
             onOpenChange={handleLongPressOpenChange}

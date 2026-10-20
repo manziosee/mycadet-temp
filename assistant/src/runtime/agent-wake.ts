@@ -84,7 +84,6 @@ import {
 } from "../config/llm-resolver.js";
 import { getConfig } from "../config/loader.js";
 import type { LLMCallSite } from "../config/schemas/llm.js";
-import { isSidebarDoneEnabled } from "../config/sidebar-done-gate.js";
 import { conversationSupportsDynamicUi } from "../daemon/channel-ui-capability.js";
 import type { Conversation } from "../daemon/conversation.js";
 import type { QueueDrainReason } from "../daemon/conversation-queue-manager.js";
@@ -516,7 +515,7 @@ export interface WakeDeps {
   /**
    * Resolve the live {@link Conversation} for a wake invocation.
    * Returns `null` if the conversation doesn't exist, `"archived"` if it
-   * exists but is archived and the `sidebar-done` gate is off, or the
+   * exists but is archived, or the
    * `Conversation` to proceed with the wake.
    *
    * Receives the full {@link WakeOptions} so the default resolver can
@@ -557,12 +556,9 @@ async function defaultResolveTarget(
     if (!existing) {
       return null;
     }
-    // Under the `sidebar-done` gate an archived conversation is one the user
-    // marked Done, not one they half-deleted: its schedules, channel threads
-    // and background tools keep working, and the first message the wake
-    // produces for the user brings the conversation back to the list
-    // (`resurfaceArchivedConversation`).
-    if (existing.archivedAt != null && !isSidebarDoneEnabled()) {
+    // An archived conversation rejects every wake; only unarchiving makes it
+    // wakeable again.
+    if (existing.archivedAt != null) {
       log.info(
         { conversationId },
         "agent-wake: conversation is archived; rejecting wake",

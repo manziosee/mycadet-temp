@@ -610,15 +610,6 @@ export const routeTree = [
                     },
                   },
                   {
-                    path: "bookmarks",
-                    lazy: {
-                      Component: () =>
-                        import("@/domains/settings/pages/bookmarks-page").then(
-                          (m) => m.BookmarksPage,
-                        ),
-                    },
-                  },
-                  {
                     path: "usage",
                     lazy: {
                       Component: () =>
@@ -670,15 +661,6 @@ export const routeTree = [
                       Component: () =>
                         import("@/domains/settings/pages/debug-page").then(
                           (m) => m.DebugPage,
-                        ),
-                    },
-                  },
-                  {
-                    path: "personality",
-                    lazy: {
-                      Component: () =>
-                        import("@/domains/settings/pages/personality-page").then(
-                          (m) => m.SettingsPersonalityPage,
                         ),
                     },
                   },
@@ -791,6 +773,15 @@ export const routeTree = [
                   {
                     path: "conversations/:conversationId",
                     Component: ChatPage,
+                  },
+                  {
+                    path: "conversations/:conversationId/inspect",
+                    lazy: {
+                      Component: () =>
+                        import("@/domains/chat/inspector/inspect-page").then(
+                          (m) => m.InspectPage,
+                        ),
+                    },
                   },
                   // The app the viewer shows is part of the URL so browser Back
                   // closes it (see `useAppRouteSync`). Same component and the
@@ -1013,28 +1004,6 @@ export const routeTree = [
                           Component: () =>
                             import("@/domains/library/library-detail-page").then(
                               (m) => m.LibraryDetailPage,
-                            ),
-                        },
-                      },
-                      // All chats draws its own page chrome and keeps the
-                      // sidebar beside it, so it sits here rather than under
-                      // IntelligenceLayout: it is not an About Assistant
-                      // section.
-                      {
-                        path: "chats",
-                        lazy: {
-                          Component: () =>
-                            import("@/domains/chat/pages/all-chats-page-route").then(
-                              (m) => m.AllChatsPageRoute,
-                            ),
-                        },
-                      },
-                      {
-                        path: "conversations/:conversationId/inspect",
-                        lazy: {
-                          Component: () =>
-                            import("@/domains/chat/inspector/inspect-page").then(
-                              (m) => m.InspectPage,
                             ),
                         },
                       },

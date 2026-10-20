@@ -52,7 +52,6 @@ import { useConversationGroupActions } from "@/domains/chat/hooks/use-conversati
 import { useConversationListDeepLink } from "@/domains/chat/hooks/use-conversation-list-deep-link";
 import { useMaterializedDraftReconcile } from "@/domains/chat/hooks/use-materialized-draft-reconcile";
 import { useGroupNameRequestStore } from "@/domains/chat/group-name-request-store";
-import { useCanUseInternalThreadActions } from "@/lib/auth/internal-thread-actions";
 import {
   keptAppId,
   navigateToConversation,
@@ -340,7 +339,6 @@ export function ChatLayout({
   const headerSupplements = useChatLayoutSlotsStore.use.headerSupplements();
   const topBarRightSlot = useChatLayoutSlotsStore.use.topBarRightSlot();
   const mobileTopBar = useChatLayoutSlotsStore.use.mobileTopBar();
-  const showInternalActions = useCanUseInternalThreadActions();
   const isNative = useIsNativePlatform();
   const electron = isElectron();
 
@@ -689,7 +687,6 @@ export function ChatLayout({
         assistantId={assistantId}
         activeConversation={activeConversation}
         headerSupplements={headerSupplements}
-        showInternalActions={showInternalActions}
         onArchive={handleArchiveConversation}
         onUnarchive={handleUnarchiveConversation}
         onDelete={requestDelete}
@@ -916,8 +913,7 @@ export function ChatLayout({
       onMarkAllReadInGroup={handleMarkAllReadInGroup}
       onArchiveAllInGroup={requestArchiveAll}
       onOpenInNewWindow={isNative ? undefined : handleOpenInNewWindow}
-      onInspect={showInternalActions ? handleInspectConversation : undefined}
-      showInternalActions={showInternalActions}
+      onInspect={handleInspectConversation}
       onMoveToGroup={handleMoveToGroup}
       onCreateGroupInto={handleRequestCreateGroup}
       onRemoveFromGroup={handleRemoveFromGroup}
