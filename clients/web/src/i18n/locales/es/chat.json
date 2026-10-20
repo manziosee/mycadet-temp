@@ -961,7 +961,6 @@
     "unpinAria": "Dejar de fijar {name}"
   },
   "preferencesMenu": {
-    "admin": "Admin",
     "preferences": "Preferencias",
     "settings": "Ajustes",
     "shareFeedback": "Compartir comentarios"

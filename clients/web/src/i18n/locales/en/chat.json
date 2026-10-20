@@ -1006,7 +1006,6 @@
     "unpinAria": "Unpin {name}"
   },
   "preferencesMenu": {
-    "admin": "Admin",
     "preferences": "Preferences",
     "settings": "Settings",
     "shareFeedback": "Share Feedback"
