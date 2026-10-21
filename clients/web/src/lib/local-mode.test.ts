@@ -977,9 +977,7 @@ describe("primeLocalGatewayConnection", () => {
     globalThis.fetch = fetchSpy as unknown as typeof fetch;
     await primeLocalGatewayConnection(pairedEntry);
 
-    expect(fetchSpy).toHaveBeenCalledWith(
-      "/assistant/__gateway/paired-a/readyz",
-    );
+    expect(fetchSpy).toHaveBeenCalledWith("/v1/assistants/paired-a/readyz");
     expect(fetchGuardianTokenHost).not.toHaveBeenCalled();
     expect(getGatewayToken()).toBeNull();
     // The connection rides the same-origin scoped data plane (`/v1`, routed
