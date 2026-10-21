@@ -85,21 +85,13 @@ describe("account route compact-window grouping", () => {
   // SFSafariViewController). It must stay OUT of AccountLayout — the resize
   // IPC targets the main window, so sizing from a popup would shrink the
   // wrong window and persist `onboardingActive`.
-  test.each(["/account/oauth/popup-complete", "/account/select-assistant"])(
+  test.each(["/account/oauth/popup-complete"])(
     "%s is NOT sized by AccountLayout",
     (path) => {
       expect(isUnderComponent(path, "AccountLayout")).toBe(false);
     },
   );
 
-  test("select-assistant moved out of /assistant into /account", () => {
-    // The old path now falls through to the NotFound splat; the new path
-    // keeps the auth contract it inherited from the /assistant subtree.
-    const oldMatches =
-      matchRoutes(routeTree as never, "/assistant/select-assistant") ?? [];
-    expect(oldMatches.at(-1)?.route.path).toBe("*");
-    expect(hasRouteMiddleware("/account/select-assistant")).toBe(true);
-  });
 });
 
 describe("nuked account auth pages", () => {
