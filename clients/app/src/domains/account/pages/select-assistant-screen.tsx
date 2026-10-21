@@ -18,8 +18,8 @@ import {
   type RememberedOrigin,
 } from "@app/stores/remembered-origins-store";
 import { Button } from "@mycadet/design-library/components/button";
+import { CloudOff } from "lucide-react";
 import { useTranslation } from "@app/i18n";
-import { readInjectedConfig } from "@app/lib/injected-config";
 import { useAssistantChoices } from "@app/assistant/use-assistant-choices";
 import { retireCloudAssistant } from "@app/assistant/retire-cloud-assistant";
 import { assistantSelectionState } from "@app/assistant/assistant-selection";
@@ -79,7 +79,6 @@ function DashedActionButton({
 
 export function SelectAssistantScreen() {
   const { t } = useTranslation("account");
-  const config = readInjectedConfig();
   const navigate = useNavigate();
   const [creating, setCreating] = useState(false);
   const [retireTarget, setRetireTarget] = useState<{
@@ -98,7 +97,6 @@ export function SelectAssistantScreen() {
     null,
   );
   const { state, retry } = useAssistantChoices({
-    apiBaseUrl: config?.cloudUrl,
     origin: window.location.origin,
   });
   const status =
@@ -215,6 +213,19 @@ export function SelectAssistantScreen() {
               }}
             />
           ))}
+        {status === "error" && (
+          <ChooserCard
+            icon={
+              <CloudOff
+                size={22}
+                aria-hidden="true"
+                className="text-[var(--content-tertiary)]"
+              />
+            }
+            title={t("appShell.error")}
+            disabled
+          />
+        )}
         {originEntries.map((origin, index) => {
           // Selecting a remembered origin leaves the app for that
           // deployment; the one already serving this bundle just re-enters
@@ -263,7 +274,7 @@ export function SelectAssistantScreen() {
           disabled={false}
           onClick={() => setAddOriginOpen(true)}
         />
-        {status !== "selection" && (
+        {(status === "unauthenticated" || status === "empty") && (
           <p role="status">{t(`appShell.${status}`)}</p>
         )}
         {status === "unauthenticated" && (
