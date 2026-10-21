@@ -278,7 +278,6 @@ export const routes = {
     notifications: r("/assistant/settings/notifications"),
     voice: r("/assistant/settings/voice"),
     sounds: r("/assistant/settings/sounds"),
-    privacy: r("/assistant/settings/privacy"),
     usage: SETTINGS_USAGE_PATH,
     usageForSchedule: (scheduleId: string) => {
       const params = new URLSearchParams({

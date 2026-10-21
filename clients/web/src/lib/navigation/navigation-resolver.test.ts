@@ -28,8 +28,11 @@ const base: NavigationState = {
   cloudSession: "present",
   tosAccepted: true,
   privacyConsent: true,
-  analyticsConsentCurrent: true,
-  diagnosticsConsentCurrent: true,
+  // A settled consent record by default — the base models a user who consented
+  // at some point, so acceptance-flag overrides below read as STALE versions
+  // (a re-review), not as a never-consented user. The first-consent cases
+  // override this to false explicitly.
+  hasConsentRecord: true,
   // Hydrated by default so the cases below describe settled-state behavior;
   // the hydration-gating cases override these explicitly.
   consentHydrated: true,
@@ -358,10 +361,7 @@ describe("resolveNavigation", () => {
     // every other platform surface.
     test("sends a stale-consent platform user off select-assistant to review-terms", () => {
       expect(
-        guard(
-          s({ isLocalClient: false, analyticsConsentCurrent: false }),
-          CHOOSER,
-        ),
+        guard(s({ isLocalClient: false, privacyConsent: false }), CHOOSER),
       ).toEqual({
         action: "redirect",
         to: "/assistant/review-terms?returnTo=%2Faccount%2Fselect-assistant",
@@ -398,7 +398,7 @@ describe("resolveNavigation", () => {
     // still gate the chooser for a zero-assistant user.
     test("keeps consent binding on select-assistant with no assistants", () => {
       expect(
-        guard(s({ ...NO_ASSISTANTS, analyticsConsentCurrent: false }), CHOOSER),
+        guard(s({ ...NO_ASSISTANTS, privacyConsent: false }), CHOOSER),
       ).toEqual({
         action: "redirect",
         to: "/assistant/review-terms?returnTo=%2Faccount%2Fselect-assistant",
@@ -418,7 +418,7 @@ describe("resolveNavigation", () => {
         guard(
           s({
             ...NO_ASSISTANTS,
-            analyticsConsentCurrent: false,
+            privacyConsent: false,
             consentHydrated: false,
           }),
           CHOOSER,
@@ -435,7 +435,7 @@ describe("resolveNavigation", () => {
           s({
             isLocalClient: true,
             cloudSession: "present",
-            analyticsConsentCurrent: false,
+            privacyConsent: false,
           }),
           CHOOSER,
         ),
@@ -498,7 +498,11 @@ describe("resolveNavigation", () => {
     test("redirects user from hatching to privacy when consent missing", () => {
       expect(
         guard(
-          s({ tosAccepted: false, privacyConsent: false }),
+          s({
+            tosAccepted: false,
+            privacyConsent: false,
+            hasConsentRecord: false,
+          }),
           "/assistant/onboarding/hatching",
         ),
       ).toEqual({ action: "redirect", to: "/assistant/onboarding/privacy" });
@@ -516,7 +520,11 @@ describe("resolveNavigation", () => {
     test("redirects user from hatching to privacy with partial consent", () => {
       expect(
         guard(
-          s({ tosAccepted: true, privacyConsent: false }),
+          s({
+            tosAccepted: true,
+            privacyConsent: false,
+            hasConsentRecord: false,
+          }),
           "/assistant/onboarding/hatching",
         ),
       ).toEqual({ action: "redirect", to: "/assistant/onboarding/privacy" });
@@ -529,6 +537,7 @@ describe("resolveNavigation", () => {
             hasAssistants: false,
             tosAccepted: false,
             privacyConsent: false,
+            hasConsentRecord: false,
           }),
           "/assistant/onboarding/hatching",
         ),
@@ -538,7 +547,12 @@ describe("resolveNavigation", () => {
     test("redirects from hatching without consent in local mode", () => {
       expect(
         guard(
-          s({ isLocalClient: true, tosAccepted: false, privacyConsent: false }),
+          s({
+            isLocalClient: true,
+            tosAccepted: false,
+            privacyConsent: false,
+            hasConsentRecord: false,
+          }),
           "/assistant/onboarding/hatching",
         ),
       ).toEqual({ action: "redirect", to: "/assistant/welcome" });
@@ -633,6 +647,7 @@ describe("resolveNavigation", () => {
             tosAccepted: false,
             privacyConsent: false,
             hasAssistants: false,
+            hasConsentRecord: false,
           }),
         ),
       ).toEqual({ action: "redirect", to: "/assistant/onboarding/privacy" });
@@ -649,8 +664,6 @@ describe("resolveNavigation", () => {
             hasAssistants: false,
             tosAccepted: false,
             privacyConsent: false,
-            analyticsConsentCurrent: false,
-            diagnosticsConsentCurrent: false,
             assistantsHydrated: false,
             consentHydrated: false,
           }),
@@ -679,6 +692,7 @@ describe("resolveNavigation", () => {
             hasAssistants: false,
             tosAccepted: false,
             privacyConsent: false,
+            hasConsentRecord: false,
             assistantsHydrated: true,
             consentHydrated: true,
           }),
@@ -691,7 +705,7 @@ describe("resolveNavigation", () => {
         guard(
           s({
             hasAssistants: true,
-            analyticsConsentCurrent: false,
+            privacyConsent: false,
             consentHydrated: false,
           }),
         ),
@@ -703,7 +717,7 @@ describe("resolveNavigation", () => {
         guard(
           s({
             hasAssistants: true,
-            analyticsConsentCurrent: false,
+            privacyConsent: false,
             consentHydrated: true,
           }),
         ),
@@ -747,19 +761,17 @@ describe("resolveNavigation", () => {
 
     // -- stale consent toggles --------------------------------------------
 
-    test("redirects platform user with current tos/ai but stale analytics toggle to review-terms", () => {
-      expect(
-        guard(s({ isLocalClient: false, analyticsConsentCurrent: false })),
-      ).toEqual({
-        action: "redirect",
-        to: "/assistant/review-terms?returnTo=%2Fassistant",
-      });
+    test("redirects platform user with stale privacy acceptance to review-terms", () => {
+      expect(guard(s({ isLocalClient: false, privacyConsent: false }))).toEqual(
+        {
+          action: "redirect",
+          to: "/assistant/review-terms?returnTo=%2Fassistant",
+        },
+      );
     });
 
-    test("redirects platform user with stale diagnostics toggle to review-terms", () => {
-      expect(
-        guard(s({ isLocalClient: false, diagnosticsConsentCurrent: false })),
-      ).toEqual({
+    test("redirects platform user with stale tos acceptance to review-terms", () => {
+      expect(guard(s({ isLocalClient: false, tosAccepted: false }))).toEqual({
         action: "redirect",
         to: "/assistant/review-terms?returnTo=%2Fassistant",
       });
@@ -772,8 +784,6 @@ describe("resolveNavigation", () => {
             isLocalClient: false,
             tosAccepted: true,
             privacyConsent: true,
-            analyticsConsentCurrent: true,
-            diagnosticsConsentCurrent: true,
           }),
         ),
       ).toEqual(ALLOW);
@@ -806,8 +816,6 @@ describe("resolveNavigation", () => {
             cloudSession: "absent",
             tosAccepted: false,
             privacyConsent: false,
-            analyticsConsentCurrent: false,
-            diagnosticsConsentCurrent: false,
           }),
         ),
       ).toEqual(ALLOW);
@@ -842,19 +850,19 @@ describe("resolveNavigation", () => {
       });
     });
 
-    test("redirects consented platform user with stale analytics toggle and no assistant to review-terms, not hatching", () => {
-      expect(
-        guard(s({ hasAssistants: false, analyticsConsentCurrent: false })),
-      ).toEqual({
-        action: "redirect",
-        to: "/assistant/review-terms?returnTo=%2Fassistant",
-      });
+    test("redirects consented platform user with stale privacy acceptance and no assistant to review-terms, not hatching", () => {
+      expect(guard(s({ hasAssistants: false, privacyConsent: false }))).toEqual(
+        {
+          action: "redirect",
+          to: "/assistant/review-terms?returnTo=%2Fassistant",
+        },
+      );
     });
 
-    test("redirects consented platform user with stale diagnostics toggle and no assistant to review-terms", () => {
+    test("redirects consented platform user with stale tos acceptance and no assistant to review-terms", () => {
       expect(
         guard(
-          s({ hasAssistants: false, diagnosticsConsentCurrent: false }),
+          s({ hasAssistants: false, tosAccepted: false }),
           "/assistant/identity",
         ),
       ).toEqual({
@@ -879,7 +887,7 @@ describe("resolveNavigation", () => {
     test("routes a stale-consent no-assistant user off /assistant/checkout to review-terms", () => {
       expect(
         guard(
-          s({ hasAssistants: false, analyticsConsentCurrent: false }),
+          s({ hasAssistants: false, privacyConsent: false }),
           "/assistant/checkout?package=super",
         ),
       ).toEqual({
@@ -1062,7 +1070,12 @@ describe("resolveNavigation", () => {
       });
       expect(
         guard(
-          s({ ...EMPTY_ORG, tosAccepted: false, privacyConsent: false }),
+          s({
+            ...EMPTY_ORG,
+            tosAccepted: false,
+            privacyConsent: false,
+            hasConsentRecord: false,
+          }),
           "/assistant/settings/billing",
         ),
       ).toEqual({ action: "redirect", to: "/assistant/onboarding/privacy" });
@@ -1126,14 +1139,13 @@ describe("resolveNavigation", () => {
       ).toEqual(MANAGED_FUNNEL);
     });
 
-    const UNCONSENTED = { tosAccepted: false, privacyConsent: false } as const;
+    const UNCONSENTED = {
+      tosAccepted: false,
+      privacyConsent: false,
+      hasConsentRecord: false,
+    } as const;
 
-    // Either toggle going stale forces the same re-review, so the cases below
-    // assert against both.
-    const STALE_TOGGLES = [
-      { analyticsConsentCurrent: false },
-      { diagnosticsConsentCurrent: false },
-    ] as const;
+    const STALE_TOGGLES = [{ privacyConsent: false }] as const;
 
     // Consent is enforced at the destination, not skipped: both funnel entries
     // are onboarding paths, and re-resolving one bounces an unconsented user on.
@@ -1303,8 +1315,7 @@ describe("resolveNavigation", () => {
         guard(
           s({
             ...EMPTY_ORG,
-            analyticsConsentCurrent: false,
-            diagnosticsConsentCurrent: false,
+            privacyConsent: false,
             consentHydrated: true,
             consentHydrationTimedOut: true,
           }),
@@ -1478,8 +1489,7 @@ describe("resolveNavigation", () => {
             hasAssistants: false,
             tosAccepted: false,
             privacyConsent: false,
-            analyticsConsentCurrent: false,
-            diagnosticsConsentCurrent: false,
+            hasConsentRecord: false,
           }),
         ),
       ).toEqual({ action: "redirect", to: "/assistant/onboarding/privacy" });
@@ -1528,8 +1538,7 @@ describe("resolveNavigation", () => {
       expect(
         intercept(
           s({
-            analyticsConsentCurrent: false,
-            diagnosticsConsentCurrent: false,
+            privacyConsent: false,
           }),
           "/assistant",
         ),
@@ -1562,6 +1571,7 @@ describe("resolveNavigation", () => {
             hasAssistants: false,
             tosAccepted: false,
             privacyConsent: false,
+            hasConsentRecord: false,
           }),
           "/assistant",
         ),
@@ -1571,7 +1581,11 @@ describe("resolveNavigation", () => {
     test("redirects to privacy in platform mode", () => {
       expect(
         intercept(
-          s({ tosAccepted: false, privacyConsent: false }),
+          s({
+            tosAccepted: false,
+            privacyConsent: false,
+            hasConsentRecord: false,
+          }),
           "/assistant",
         ),
       ).toEqual({
@@ -1583,7 +1597,11 @@ describe("resolveNavigation", () => {
     test("handles absolute URL destinations", () => {
       expect(
         intercept(
-          s({ tosAccepted: false, privacyConsent: false }),
+          s({
+            tosAccepted: false,
+            privacyConsent: false,
+            hasConsentRecord: false,
+          }),
           "https://mycadet.ai/assistant",
         ),
       ).toEqual({ action: "redirect", to: "/assistant/onboarding/privacy" });
@@ -1592,7 +1610,11 @@ describe("resolveNavigation", () => {
     test("handles protocol-relative URL destinations", () => {
       expect(
         intercept(
-          s({ tosAccepted: false, privacyConsent: false }),
+          s({
+            tosAccepted: false,
+            privacyConsent: false,
+            hasConsentRecord: false,
+          }),
           "//mycadet.ai/assistant",
         ),
       ).toEqual({ action: "redirect", to: "/assistant/onboarding/privacy" });
@@ -1636,6 +1658,7 @@ describe("resolveNavigation", () => {
             isLocalClient: true,
             tosAccepted: false,
             privacyConsent: false,
+            hasConsentRecord: false,
           }),
         ),
       ).toEqual({
@@ -1645,14 +1668,30 @@ describe("resolveNavigation", () => {
     });
 
     test("redirects when missing consent", () => {
-      expect(hatch(s({ tosAccepted: false, privacyConsent: false }))).toEqual({
+      expect(
+        hatch(
+          s({
+            tosAccepted: false,
+            privacyConsent: false,
+            hasConsentRecord: false,
+          }),
+        ),
+      ).toEqual({
         action: "redirect",
         to: "/assistant/onboarding/privacy",
       });
     });
 
     test("redirects when missing ai data consent only", () => {
-      expect(hatch(s({ tosAccepted: true, privacyConsent: false }))).toEqual({
+      expect(
+        hatch(
+          s({
+            tosAccepted: true,
+            privacyConsent: false,
+            hasConsentRecord: false,
+          }),
+        ),
+      ).toEqual({
         action: "redirect",
         to: "/assistant/onboarding/privacy",
       });
@@ -1661,7 +1700,12 @@ describe("resolveNavigation", () => {
     test("redirects to welcome in local mode when missing consent", () => {
       expect(
         hatch(
-          s({ isLocalClient: true, tosAccepted: false, privacyConsent: false }),
+          s({
+            isLocalClient: true,
+            tosAccepted: false,
+            privacyConsent: false,
+            hasConsentRecord: false,
+          }),
         ),
       ).toEqual({ action: "redirect", to: "/assistant/welcome" });
     });
@@ -1672,15 +1716,15 @@ describe("resolveNavigation", () => {
       );
     });
 
-    test("redirects platform user with stale analytics toggle to review-terms", () => {
-      expect(hatch(s({ analyticsConsentCurrent: false }))).toEqual({
+    test("redirects platform user with stale privacy acceptance to review-terms", () => {
+      expect(hatch(s({ privacyConsent: false }))).toEqual({
         action: "redirect",
         to: "/assistant/review-terms",
       });
     });
 
-    test("redirects platform user with stale diagnostics toggle to review-terms", () => {
-      expect(hatch(s({ diagnosticsConsentCurrent: false }))).toEqual({
+    test("redirects platform user with stale tos acceptance to review-terms", () => {
+      expect(hatch(s({ tosAccepted: false }))).toEqual({
         action: "redirect",
         to: "/assistant/review-terms",
       });
@@ -1691,8 +1735,7 @@ describe("resolveNavigation", () => {
         hatch(
           s({
             isLocalClient: true,
-            analyticsConsentCurrent: false,
-            diagnosticsConsentCurrent: false,
+            privacyConsent: false,
           }),
         ),
       ).toEqual(ALLOW);
