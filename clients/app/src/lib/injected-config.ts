@@ -14,7 +14,9 @@ export type Remote = "local" | "docker" | "custom" | "cloud";
  * for a local assistant: the shell resolves assistants same-origin, and the
  * serving origin routes `/v1` to the right control plane (the tunnel edge
  * proxies it to the local gateway; the desktop protocol forwards it; the
- * cloud takeover proxies it). `hubUrl` is the cloud hub SPA the
+ * cloud takeover proxies it). The native boot bundle is the one host with
+ * no `/v1` router at its origin, so it resolves assistants against
+ * `cloudUrl` directly. `hubUrl` is the cloud hub SPA the
  * pairing/settings pages link back to. The platform login base is
  * deliberately absent: the loopback handoff reads it from the build's
  * environment seed (see startLoopbackAuth), keeping this config to the
