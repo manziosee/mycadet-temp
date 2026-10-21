@@ -74,7 +74,7 @@ async function fetchAndPersistPairedCloudId(
   const current = getLockfileAssistant(assistantId);
   if (
     !current ||
-    current.cloud !== "paired" ||
+    current.paired !== true ||
     current.runtimeUrl !== entry.runtimeUrl
   ) {
     return null;

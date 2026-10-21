@@ -11,7 +11,8 @@ const UUID = "0f7c8b3e-2a41-4c1d-9b6e-1d2f3a4b5c6d";
 
 const pairedEntry: LockfileAssistant = {
   assistantId: "paired-remote",
-  cloud: "paired",
+  cloud: "local",
+  paired: true,
   runtimeUrl: "https://remote.example",
   hatchedAt: "2024-01-01T00:00:00Z",
 };
@@ -136,7 +137,7 @@ describe("resolvePairedAssistantCloudId", () => {
     ["removed", () => (lockfileEntry = undefined)],
     [
       "no longer paired",
-      () => (lockfileEntry = { ...pairedEntry, cloud: "local" }),
+      () => (lockfileEntry = { ...pairedEntry, paired: false }),
     ],
     [
       "retargeted",
