@@ -3,7 +3,7 @@
  *
  * Print the pairing link for another device, and the same link rendered as a
  * QR code. Runs on the machine hosting the assistant: it mints a remote-web
- * pairing challenge through the gateway CLI (`gateway pairing mint <url>` —
+ * pairing challenge through the gateway CLI (`gateway pairing mint` —
  * locally, or docker-exec'd into the gateway container) which approves it
  * immediately, so running this command IS the local-presence proof and one
  * scan (or one paste into `cadet connect import`) completes the pairing.
@@ -33,37 +33,25 @@ import { extractFlag } from "../lib/arg-utils.js";
 import { parseAssistantTargetArg } from "../lib/assistant-target-args.js";
 import {
   formatAssistantLookupError,
-  formatAssistantReference,
+  getAssistantDisplayName,
   lookupAssistantByIdentifier,
   resolveAssistant,
   type AssistantEntry,
 } from "../lib/assistant-config.js";
-import { GATEWAY_PORT } from "../lib/constants.js";
+import { readIngressPublicBaseUrl } from "../lib/ingress-config.js";
 import { getCurrentEnvironment } from "../lib/environments/resolve.js";
+import { getGatewayUrl } from "../lib/runtime-url.js";
 import { loopbackSafeFetch } from "../lib/loopback-fetch.js";
 import { dockerResourceNames } from "../lib/docker.js";
 import { gatewayCliInvocation } from "../lib/local.js";
 import { formatWebApproveFailure, parseGatewayErrorCode } from "../lib/pair.js";
 import { STALE_CLI_UPDATE_HINT } from "../lib/stale-cli-hint.js";
 import { execOutput } from "../lib/step-runner.js";
+import { toLocalTunnelTarget } from "../lib/tunnel.js";
 
 function assistantDisplayName(entry: AssistantEntry): string {
   return entry.name || entry.assistantId;
 }
-
-/**
- * Options this command used to have, and what replaced them. Named explicitly
- * so a scripted or copy-pasted invocation gets the migration instead of the
- * generic unknown-option error's out-of-date-CLI advice.
- */
-const RETIRED_FLAGS = new Map<string, string>([
-  [
-    "--web",
-    "the device being paired mints its own code. Run " +
-      "`cadet connect import <assistant-url>` there, then approve the code " +
-      "it prints with `cadet pair --web-approve <code>`.",
-  ],
-]);
 
 function printUsage(): void {
   console.log(`cadet pair - Print a pairing link and QR code for another device
@@ -78,10 +66,10 @@ then prints the pairing link and the same link as a QR code.
 Scanning the QR, opening the link, or passing it to 'cadet connect import'
 on the other device completes the pairing in one step.
 
-The link needs a public https address: --url, else the address 'cadet tunnel'
-recorded for this assistant, else the assistant's runtime URL. Loopback,
-private-network, plain-http, and tunnel-provider website addresses are refused
-before anything is minted.
+The link needs a public https address: the one 'cadet tunnel start' recorded
+for this assistant. Run 'cadet tunnel start' first if none is saved yet.
+Loopback, private-network, plain-http, and tunnel-provider website addresses
+are refused before anything is minted.
 
 The challenge lives on the assistant's gateway and expires (10 minutes); the
 link carries only a one-time device code, no tokens. Each paired device is
@@ -91,9 +79,6 @@ ARGUMENTS:
     [assistant]     Assistant display name or ID (default: the active assistant)
 
 OPTIONS:
-    --url <url>     Public https base URL to advertise, e.g.
-                    https://your-assistant.ts.net. Overrides the address saved
-                    by 'cadet tunnel'.
     --label <name>  Name for this pairing. Shown in the output, and used as the
                     assistant's name in the --app link.
     --app           Encode the QR as a <scheme>://connect link that opens the
@@ -114,7 +99,6 @@ OPTIONS:
 
 EXAMPLES:
     cadet pair
-    cadet pair "My Assistant" --url https://your-assistant.ts.net
     cadet pair --app --label "Phone"
     cadet pair --web-approve ABCD-EFGH
 `);
@@ -199,7 +183,7 @@ async function exitOnHttpError(response: Response): Promise<Response> {
 
 /**
  * Mint (and approve) a remote-web pairing challenge. `local` and `docker`
- * remotes mint through the gateway CLI — `gateway pairing mint <url>` run on
+ * remotes mint through the gateway CLI — `gateway pairing mint` run on
  * the assistant's host (locally, or docker-exec'd into the gateway container)
  * — replacing the old loopback HTTP mint whose loopback-peer gate
  * containerized gateways could never satisfy (published-port NAT rewrites
@@ -231,7 +215,6 @@ async function mintPairingChallengeOrExit(
           "src/cli/index.ts",
           "pairing",
           "mint",
-          publicBaseUrl,
         ],
         { timeoutMs: 30_000 },
       );
@@ -239,7 +222,7 @@ async function mintPairingChallengeOrExit(
       const invocation = gatewayCliInvocation(entry.resources);
       stdout = await execOutput(
         invocation.command,
-        [...invocation.args, "pairing", "mint", publicBaseUrl],
+        [...invocation.args, "pairing", "mint"],
         {
           cwd: invocation.cwd,
           env: invocation.env,
@@ -285,14 +268,11 @@ async function mintPairingChallengeOverLoopbackOrExit(
   entry: AssistantEntry,
   publicBaseUrl: string,
 ): Promise<RemoteWebPairingChallengeResponse> {
-  // Mint over loopback (localUrl avoids mDNS for same-machine calls), then
-  // approve immediately: running this CLI on the host IS the local-presence
-  // proof, so the other device completes pairing in one step from the link.
-  const mintUrl = (
-    entry.localUrl ||
-    entry.runtimeUrl ||
-    `http://127.0.0.1:${GATEWAY_PORT}`
-  ).replace(/\/+$/, "");
+  // Mint over loopback (the derived port avoids mDNS for same-machine calls),
+  // then approve immediately: running this CLI on the host IS the
+  // local-presence proof, so the other device completes pairing in one step
+  // from the link.
+  const mintUrl = getGatewayUrl(entry);
   const response = await gatewayPostOrExit(
     mintUrl,
     "/v1/remote-web/pairing-challenge",
@@ -332,15 +312,6 @@ export const pair = Object.assign(
     return;
   }
 
-  const retiredFlag = rawArgs.find((a) => RETIRED_FLAGS.has(a));
-  if (retiredFlag) {
-    console.error(
-      `Error: ${retiredFlag} is no longer an option: ${RETIRED_FLAGS.get(retiredFlag)}`,
-    );
-    console.error("Run `cadet pair --help` to see available options.");
-    process.exit(1);
-  }
-
   const jsonOutput = rawArgs.includes("--json");
   const webApproval = rawArgs.includes("--web-approve");
   const appVariant = rawArgs.includes("--app");
@@ -356,9 +327,8 @@ export const pair = Object.assign(
     afterLabel,
     "--web-approve",
   );
-  const [urlOverride, afterUrl] = extractFlag(afterWebApprove, "--url");
   const [appSchemeOverride, afterAppScheme] = extractFlag(
-    afterUrl,
+    afterWebApprove,
     "--app-scheme",
   );
   args = afterAppScheme;
@@ -425,20 +395,11 @@ export const pair = Object.assign(
   // machine only knows through `connect import` has no host presence here
   // at all, and its mint fails on the loopback gate below.
 
-  // Mint over loopback (localUrl avoids mDNS for same-machine calls), but
-  // advertise a REACHABLE url in the link, since the loopback url would point
-  // the other device at its own localhost. An explicit --url wins, else the
-  // runtime (LAN/tunnel) url.
-  const mintUrl = (
-    entry.localUrl ||
-    entry.runtimeUrl ||
-    `http://127.0.0.1:${GATEWAY_PORT}`
-  ).replace(/\/+$/, "");
-  const advertisedUrl = (
-    urlOverride ||
-    entry.runtimeUrl ||
-    mintUrl
-  ).replace(/\/+$/, "");
+  // Mint over loopback (the derived port avoids mDNS for same-machine calls),
+  // but advertise a REACHABLE url in the link, since the loopback url would
+  // point the other device at its own localhost: the public https address
+  // `cadet tunnel start` recorded for this assistant.
+  const mintUrl = getGatewayUrl(entry);
 
   if (webApproveCode) {
     // Rejections are diagnosed here rather than by exitOnHttpError: a
@@ -449,7 +410,7 @@ export const pair = Object.assign(
       const errorBody = await response.text().catch(() => "");
       const diagnostic = formatWebApproveFailure(
         mintUrl,
-        formatAssistantReference(entry),
+        getAssistantDisplayName(entry),
         getCurrentEnvironment().name,
         parseGatewayErrorCode(errorBody),
       );
@@ -470,6 +431,23 @@ export const pair = Object.assign(
     return;
   }
 
+  // The advertised address is the one `cadet tunnel start` recorded — pairing
+  // refuses without one rather than falling back to an unreachable guess.
+  const target = toLocalTunnelTarget(entry);
+  const savedPublicUrl = target
+    ? readIngressPublicBaseUrl(target.workspaceDir)
+    : null;
+  if (!savedPublicUrl) {
+    console.error(
+      "Error: pairing needs a public https address the other device can open.",
+    );
+    console.error(
+      "No public URL is recorded for this assistant. Run `cadet tunnel start` first.",
+    );
+    process.exit(1);
+  }
+  const advertisedUrl = savedPublicUrl.replace(/\/+$/, "");
+
   // Validate the public URL before any network call: a link that encodes a
   // loopback or plain-http address is unusable from another device.
   const resolved = resolvePublicBaseUrl(advertisedUrl);
@@ -487,13 +465,7 @@ export const pair = Object.assign(
       "Error: pairing needs a public https URL the other device can open: " +
         `${detailByReason[resolved.reason]}.`,
     );
-    console.error(
-      "Re-run with your assistant's public URL, e.g.:\n" +
-        "  cadet pair --url https://your-assistant.ts.net",
-    );
-    console.error(
-      "No public URL yet? Run `cadet tunnel --provider tailscale` first.",
-    );
+    console.error("Re-record a valid address: run `cadet tunnel start` again.");
     process.exit(1);
   }
   const publicBaseUrl = resolved.url;

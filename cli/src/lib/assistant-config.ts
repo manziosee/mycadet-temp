@@ -285,13 +285,6 @@ export function getAssistantDisplayName(entry: AssistantEntry): string {
   return entry.name?.trim() || entry.assistantId;
 }
 
-export function formatAssistantReference(entry: AssistantEntry): string {
-  const displayName = getAssistantDisplayName(entry);
-  return displayName === entry.assistantId
-    ? entry.assistantId
-    : `${displayName} (${entry.assistantId})`;
-}
-
 function getAssistantDisplayNameCandidates(entry: AssistantEntry): string[] {
   const name = entry.name?.trim();
   return name ? [name] : [];
@@ -325,7 +318,9 @@ export function formatAssistantLookupError(
 ): string {
   if (result.status === "ambiguous") {
     const matches = result.matches
-      .map((entry) => formatAssistantReference(entry))
+      .map(
+        (entry) => `${getAssistantDisplayName(entry)} (${entry.assistantId})`,
+      )
       .join(", ");
     return `Multiple assistants match '${identifier}': ${matches}. Use the assistant ID to disambiguate.`;
   }
@@ -487,15 +482,15 @@ export function resolveTargetAssistant(nameArg?: string): AssistantEntry {
 }
 
 /**
- * Extract the hostname from a URL string. Falls back to stripping the scheme
- * and taking the hostname portion if URL parsing fails.
+ * Extract the ssh host for a remote-managed entry: the hostname of the
+ * entry's recorded runtime URL. One seam so the runtimeUrl death (a later
+ * PR) rewires a single site instead of every ssh flow.
  */
-export function extractHostFromUrl(url: string): string {
+export function extractHostFromEntry(entry: AssistantEntry): string {
   try {
-    const parsed = new URL(url);
-    return parsed.hostname;
+    return new URL(entry.runtimeUrl).hostname;
   } catch {
-    return url.replace(/^https?:\/\//, "").split(":")[0];
+    return entry.runtimeUrl.replace(/^https?:\/\//, "").split(":")[0];
   }
 }
 

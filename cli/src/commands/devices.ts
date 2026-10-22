@@ -17,7 +17,6 @@ import type { DeviceRecord } from "@mycadet/local-mode";
 
 import {
   type AssistantEntry,
-  formatAssistantReference,
   getAssistantDisplayName,
   resolveTargetAssistant,
 } from "../lib/assistant-config";
@@ -39,6 +38,7 @@ import { GATEWAY_INTERNAL_PORT } from "../lib/environments/paths.js";
 import { execOutput } from "../lib/step-runner.js";
 import { dockerResourceNames } from "../lib/docker.js";
 import { loopbackSafeFetch } from "../lib/loopback-fetch.js";
+import { getGatewayUrl } from "../lib/runtime-url.js";
 
 const dockerGatewayResponseSchema = z.object({
   status: z.number().int().min(200).max(599),
@@ -81,19 +81,18 @@ function resolveLoopbackBase(entry: AssistantEntry): string {
   if (entry.cloud === "docker")
     return `http://127.0.0.1:${GATEWAY_INTERNAL_PORT}`;
 
-  const base =
-    entry.localUrl ||
-    (entry.resources?.gatewayPort
-      ? `http://127.0.0.1:${entry.resources.gatewayPort}`
-      : undefined);
-  if (!base) {
+  const base = getGatewayUrl(entry);
+  if (
+    !base.startsWith("http://127.0.0.1:") &&
+    !base.startsWith("http://localhost:")
+  ) {
     console.error(
       `Error: no local gateway found for '${displayName}'. \`cadet devices\` runs on the machine hosting the assistant.`,
     );
     process.exit(1);
   }
 
-  return base.replace(/\/+$/, "");
+  return base;
 }
 
 /** Docker host management enters the gateway network namespace before calling loopback-only routes. */
@@ -219,7 +218,7 @@ async function listDevices(
     return;
   }
 
-  console.log(`Devices paired to ${formatAssistantReference(entry)}:`);
+  console.log(`Devices paired to ${getAssistantDisplayName(entry)}:`);
   console.log("");
   for (const device of devices) {
     console.log(`  ${device.hashedDeviceId}`);
@@ -265,7 +264,7 @@ async function revokeDevice(
   // it goes to stderr so stdout stays a single JSON document.
   const printIdentity = jsonOutput ? console.error : console.log;
   printIdentity("Device to revoke:");
-  printIdentity(`  Assistant: ${formatAssistantReference(entry)}`);
+  printIdentity(`  Assistant: ${getAssistantDisplayName(entry)}`);
   printIdentity(`  Device:    ${hashedDeviceId}`);
   printIdentity("");
 

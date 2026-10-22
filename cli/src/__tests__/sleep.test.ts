@@ -266,8 +266,15 @@ describe("sleep command", () => {
   });
 
   describe("--wait", () => {
-    test("runs the drain phase against localUrl before stopping", async () => {
-      writeLockfile({ localUrl: "http://127.0.0.1:9999" });
+    test("runs the drain phase against the recorded gateway port before stopping", async () => {
+      writeLockfile({
+        resources: {
+          instanceDir: testDir,
+          daemonPort: 8501,
+          gatewayPort: 9999,
+          qdrantPort: DEFAULT_QDRANT_PORT,
+        },
+      });
       isProcessAliveMock.mockReturnValue({ alive: true, pid: 4321 });
       process.argv = ["bun", "cadet", "sleep", "sleep-test", "--wait"];
 

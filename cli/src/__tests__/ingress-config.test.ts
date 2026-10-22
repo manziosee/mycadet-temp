@@ -8,12 +8,9 @@ import {
   TUNNEL_PROVIDERS,
 } from "@mycadet/service-contracts/ingress";
 
-import type { AssistantEntry } from "../lib/assistant-config.js";
-
 import {
   clearIngressUrl,
   readIngressPublicBaseUrl,
-  parseGatewayPortFromEntryUrls,
   saveIngressUrl,
   savePairingTunnel,
 } from "../lib/ingress-config.js";
@@ -197,36 +194,5 @@ describe("pairing-tunnel record", () => {
       provider: "tailscale",
       publicBaseUrl: "https://host.example.ts.net",
     });
-  });
-});
-
-describe("parseGatewayPortFromEntryUrls", () => {
-  test("prefers the loopback localUrl over runtimeUrl", () => {
-    expect(
-      parseGatewayPortFromEntryUrls({
-        assistantId: "a",
-        localUrl: "http://127.0.0.1:7830",
-        runtimeUrl: "https://stale-tunnel.ngrok-free.dev",
-      } as AssistantEntry),
-    ).toBe(7830);
-  });
-
-  test("falls back to runtimeUrl when localUrl is absent", () => {
-    expect(
-      parseGatewayPortFromEntryUrls({
-        assistantId: "a",
-        runtimeUrl: "http://localhost:9123",
-      } as AssistantEntry),
-    ).toBe(9123);
-  });
-
-  test("is undefined when neither URL carries an explicit port", () => {
-    expect(
-      parseGatewayPortFromEntryUrls({
-        assistantId: "a",
-        runtimeUrl: "https://runtime.example.com/a",
-      } as AssistantEntry),
-    ).toBeUndefined();
-    expect(parseGatewayPortFromEntryUrls(undefined)).toBeUndefined();
   });
 });
