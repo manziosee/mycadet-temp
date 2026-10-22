@@ -43,7 +43,6 @@ import {
   primeLocalGatewayConnectionWithRepair,
 } from "@/lib/local-mode";
 import { recordLifecycleDiagnostic } from "@/lib/diagnostics";
-import { captureError } from "@/lib/error-reporting/capture-error";
 import {
   getSelfHostedActorToken,
   getSelfHostedIngressUrl,
@@ -611,10 +610,9 @@ async function recoverLocalGatewaySessionInPlace(): Promise<boolean> {
     // the verdict on an assistant nobody is connected to any more, so it
     // says nothing about the one that is: routing to the chooser would act
     // on a session this never touched.
-    recordLifecycleDiagnostic("gw_401_recovery", { outcome: "failed" });
-    captureError(err, {
-      context: "gw_401_recovery",
-      tags: { outcome: "failed" },
+    recordLifecycleDiagnostic("gw_401_recovery", {
+      outcome: "failed",
+      error: err instanceof Error ? err.message : String(err),
     });
     return false;
   }

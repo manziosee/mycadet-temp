@@ -5,27 +5,27 @@ import { useState } from "react";
 import { exportLocalDebugBundle } from "./diagnostic-export";
 import { assistantsDebugBundleUploadUrlCreate } from "@/generated/api/sdk.gen";
 import { useTranslation } from "@/i18n";
-import { getLocalGatewayUrl, getSelectedAssistant } from "@/lib/local-mode";
+import { hasLocalGateway, getSelectedAssistant } from "@/lib/local-mode";
 import { Button } from "@mycadet/design-library/components/button";
 import { toast } from "@mycadet/design-library/components/toast";
 
 export function DebugBundleExport({ assistantId }: { assistantId: string }) {
   const { t } = useTranslation("settings");
   const [sentAt, setSentAt] = useState<Date | null>(null);
-  const local = getSelectedAssistant();
-  const hasLocalDaemon = local !== null && getLocalGatewayUrl(local) !== null;
+  const selectedAssistant = getSelectedAssistant();
+  const hasLocalDaemon = hasLocalGateway(selectedAssistant);
   const canExport = hasLocalDaemon;
 
   const exportBundle = useMutation({
     mutationFn: async () => {
-      if (!local) {
+      if (!selectedAssistant) {
         throw new Error("no local assistant");
       }
       const { data } = await assistantsDebugBundleUploadUrlCreate({
         path: { id: assistantId },
         throwOnError: true,
       });
-      await exportLocalDebugBundle(local, data.url);
+      await exportLocalDebugBundle(selectedAssistant, data.url);
     },
     onSuccess: () => {
       setSentAt(new Date());

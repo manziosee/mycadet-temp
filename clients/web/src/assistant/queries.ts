@@ -40,8 +40,8 @@ import {
   isLocalClient,
   isServedGatewayRuntime,
   getSelectedAssistant,
-  getAuthGatewayIngressUrl,
-  getPairedGatewayUrl,
+  hasLocalGateway,
+  expectsPairedGateway,
 } from "@/lib/local-mode";
 import { getActiveOrganizationIdForRequests } from "@/stores/organization-store";
 
@@ -141,9 +141,15 @@ export function applyGatewayAuthBoot(): void {
     ingressUrl = getRemoteGatewayIngressUrl();
   } else {
     const assistant = getSelectedAssistant();
-    if (getAuthGatewayIngressUrl(assistant) != null) {
-      resolvedAssistantId = assistant?.assistantId ?? resolvedAssistantId;
-      if (getPairedGatewayUrl(assistant) != null) {
+    // The unscoped gateway proxies died with the same-origin fold: a local
+    // gateway entry or a paired entry both ride the scoped plane, and the
+    // paired arm additionally holds no renderer token.
+    if (
+      assistant != null &&
+      (hasLocalGateway(assistant) || expectsPairedGateway(assistant))
+    ) {
+      resolvedAssistantId = assistant.assistantId;
+      if (expectsPairedGateway(assistant)) {
         rendererToken = null;
       }
     }
