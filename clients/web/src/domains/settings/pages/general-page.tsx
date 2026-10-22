@@ -20,7 +20,6 @@ import {
 import { NativeAppCard } from "@/domains/settings/components/native-app-card";
 import { PairDeviceCard } from "@/domains/settings/pair-device/pair-device-card";
 import { PreferencesModal } from "@/domains/settings/components/preferences-modal";
-import { ResizeCard } from "@/domains/settings/components/resize-card";
 import { RetireAssistant } from "@/domains/settings/components/retire-assistant";
 import { TimezoneSection } from "@/domains/settings/components/timezone-section";
 import { ThisDeviceSection } from "@/domains/settings/components/this-device-section";
@@ -51,15 +50,8 @@ import { routes } from "@/utils/routes";
 
 export function GeneralPage() {
   const { t } = useTranslation("settings");
-  const {
-    assistant,
-    healthz,
-    healthzLoading,
-    healthzFetching,
-    healthzPolling,
-    refetch,
-    refetchUntilResized,
-  } = useAssistantWithHealthz();
+  const { assistant, healthz, healthzLoading, refetch } =
+    useAssistantWithHealthz();
   const isAuthenticated = useIsAuthenticated();
   const isNativeMobile = useIsNativeMobile();
   // The card supersedes the in-page picker so the two never render together.
@@ -247,17 +239,6 @@ export function GeneralPage() {
         />
       )}
 
-      {infraGate === "full" && assistant && (
-        <ResizeCard
-          assistant={assistant}
-          healthz={healthz}
-          healthzLoading={healthzLoading}
-          healthzFetching={healthzFetching}
-          healthzPolling={healthzPolling}
-          refetch={refetch}
-          refetchUntilResized={refetchUntilResized}
-        />
-      )}
       {infraGate === "disabled" && (
         <DetailCard
           id="storage-resources"

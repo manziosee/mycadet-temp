@@ -5,7 +5,6 @@ import {
   describe,
   expect,
   mock,
-  spyOn,
   test,
 } from "bun:test";
 import { cleanup, renderHook, act } from "@testing-library/react";
@@ -14,8 +13,6 @@ import type { NavigateOptions, To } from "react-router";
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
-import { organizationsBillingSummaryRetrieveOptions } from "@/generated/api/@tanstack/react-query.gen";
-import { cloudAccountBillingUrl } from "@/lib/cloud-runtime-url";
 import { consumePendingComposerFocus } from "@/domains/chat/composer-focus";
 import { useSubagentStore } from "@/domains/chat/subagent-store";
 import { useWorkflowStore } from "@/domains/chat/workflow-store";
@@ -475,80 +472,6 @@ describe("deeplink.sendToThread with proven provenance", () => {
     const parked = usePendingDeepLinkStore.getState().pendingThreadSend;
     expect(parked?.threadId).toBe("def-456");
     expect(parked?.message).toBe("second");
-  });
-});
-
-describe("deeplink.billingCheckoutComplete", () => {
-  test("subscription success navigates to billing carrying the session id so the wizard opens", () => {
-    renderConsumer();
-
-    act(() => {
-      publish("deeplink.billingCheckoutComplete", {
-        status: "success",
-        sessionId: "cs_test_a1B2",
-        flow: "subscription",
-      });
-    });
-
-    expect(navigateMock).toHaveBeenCalledWith("/assistant/settings/usage");
-    expect(toastSuccessMock).not.toHaveBeenCalled();
-    expect(ensureMainWindowVisibleMock).toHaveBeenCalledTimes(1);
-  });
-
-  test("subscription cancel hands off to the cloud's billing page: no session id, no wizard", () => {
-    renderConsumer();
-
-    act(() => {
-      publish("deeplink.billingCheckoutComplete", {
-        status: "cancel",
-        sessionId: null,
-        flow: "subscription",
-      });
-    });
-
-    expect(openExternalUrlMock).toHaveBeenCalledWith(cloudAccountBillingUrl());
-    expect(ensureMainWindowVisibleMock).toHaveBeenCalledTimes(1);
-  });
-
-  test("top_up success toasts + refetches the billing summary, with no forced navigation", () => {
-    const invalidateSpy = spyOn(queryClient, "invalidateQueries");
-    renderConsumer();
-
-    act(() => {
-      publish("deeplink.billingCheckoutComplete", {
-        status: "success",
-        sessionId: "cs_test_a1B2",
-        flow: "top_up",
-      });
-    });
-
-    // Same copy the web return path's `BillingStatusHandler` toasts.
-    expect(toastSuccessMock).toHaveBeenCalledWith(
-      "Payment received! Your credit balance will update shortly.",
-      { id: "billing-status" },
-    );
-    expect(invalidateSpy).toHaveBeenCalledWith({
-      queryKey: organizationsBillingSummaryRetrieveOptions().queryKey,
-    });
-    // The user stays wherever they were: a top-up has no wizard to open.
-    expect(navigateMock).not.toHaveBeenCalled();
-    expect(ensureMainWindowVisibleMock).toHaveBeenCalledTimes(1);
-  });
-
-  test("top_up cancel lands on billing with billing_status=cancel, the offer flow's single owner", () => {
-    renderConsumer();
-
-    act(() => {
-      publish("deeplink.billingCheckoutComplete", {
-        status: "cancel",
-        sessionId: null,
-        flow: "top_up",
-      });
-    });
-
-    expect(navigateMock).toHaveBeenCalledWith("/assistant/settings/usage");
-    expect(toastSuccessMock).not.toHaveBeenCalled();
-    expect(ensureMainWindowVisibleMock).toHaveBeenCalledTimes(1);
   });
 });
 

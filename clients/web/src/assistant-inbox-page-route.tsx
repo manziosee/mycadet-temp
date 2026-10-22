@@ -10,14 +10,10 @@ import { toast } from "@mycadet/design-library/components/toast";
 
 import { useActiveAssistantId } from "@/assistant/use-active-assistant-id";
 import { AssistantInboxPage } from "@/domains/assistant-inbox/components/assistant-inbox-page";
-import { useAssistantHandleModal } from "@/components/assistant-handle-modal";
 import { AssistantInboxSetupCard } from "@/domains/assistant-inbox/components/assistant-inbox-setup-card";
 import { AssistantInboxSetupSuccess } from "@/domains/assistant-inbox/components/assistant-inbox-setup-success";
 import { AssistantInboxShell } from "@/domains/assistant-inbox/components/assistant-inbox-shell";
-import { AssistantInboxUpgradeState } from "@/domains/assistant-inbox/components/assistant-inbox-upgrade-state";
 import { useAssistantInboxState } from "@/domains/assistant-inbox/hooks/use-assistant-inbox-state";
-import { cloudAccountBillingUrl } from "@/lib/cloud-runtime-url";
-import { openExternalUrl } from "@/runtime/browser";
 import { EmailSettingsModal } from "@/domains/channels/components/email-settings-modal";
 import { useDeletedEmails } from "@/domains/assistant-inbox/hooks/use-deleted-emails";
 import { useInboxMail } from "@/domains/assistant-inbox/hooks/use-inbox-mail";
@@ -75,7 +71,6 @@ interface MailboxProps {
   assistantName: string;
   address: string;
   addressId: string;
-  handle: string;
   rootDomain: string;
   /** Leaves the page. */
   onBack: () => void;
@@ -88,7 +83,6 @@ function Mailbox({
   assistantName,
   address,
   addressId,
-  handle,
   rootDomain,
   onBack,
 }: MailboxProps) {
@@ -205,7 +199,6 @@ function Mailbox({
         assistantId={cloudAssistantId}
         localAssistantId={assistantId}
         assistantName={assistantName}
-        assistantHandle={handle}
         emailRootDomain={rootDomain}
       />
     </>
@@ -232,10 +225,6 @@ export function AssistantInboxPageRoute() {
   /* The address just created, shown on the success screen until the user
      goes on to the mailbox. */
   const [justCreated, setJustCreated] = useState<string | null>(null);
-  /* The upgrade pitch's "Change handle": the same modal the assistant page
-     opens from its @handle line. */
-  const handleModal = useAssistantHandleModal(assistantId);
-
   /* The way back from the inbox's pages. "/" is the account screen, not
      the app, so back goes where the user came from when there is an entry
      behind this one, and to the assistant's profile (which holds the Email
@@ -389,28 +378,12 @@ export function AssistantInboxPageRoute() {
       return <Navigate to="/" replace />;
     case "loading":
       return <InboxLoading label={t("assistantInboxRoute.loading")} />;
-    case "upgrade":
-      return (
-        <>
-          <AssistantInboxUpgradeState
-            assistantId={assistantId}
-            assistantName={state.assistantName}
-            handle={state.handle}
-            rootDomain={state.rootDomain}
-            onEditHandle={handleModal.openModal ?? undefined}
-            onUpgrade={() => void openExternalUrl(cloudAccountBillingUrl())}
-            onSeePlans={() => void openExternalUrl(cloudAccountBillingUrl())}
-            onBack={leave}
-          />
-          {handleModal.modal}
-        </>
-      );
     case "setup":
       return (
         <AssistantInboxSetupCard
           assistantId={assistantId}
-          handle={state.handle}
           rootDomain={state.rootDomain}
+          handle={state.handle}
           handleEditable={!state.hasDomain}
           checkHandle={checkHandle}
           error={setupError}
@@ -439,7 +412,6 @@ export function AssistantInboxPageRoute() {
           assistantName={state.assistantName}
           address={state.address ?? ""}
           addressId={state.addressId ?? ""}
-          handle={state.handle}
           rootDomain={state.rootDomain}
           onBack={leave}
         />
