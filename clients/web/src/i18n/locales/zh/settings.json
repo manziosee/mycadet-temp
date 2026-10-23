@@ -352,7 +352,7 @@
     "noAssistant": "未找到助手。孵化一个助手以访问调试控制。",
     "restartDescription": "重启助手机器。重启期间它将暂时不可用。",
     "restartTitle": "重启助手",
-    "subtitle": "管理备份、重启您的助手，或进入恢复模式以连接到调试终端。",
+    "subtitle": "管理备份并重启您的助手。",
     "title": "通用"
   },
   "doctorChatBlocks": {
@@ -1017,17 +1017,6 @@
     "runAtAria": "运行于 {time}",
     "skipped": "已跳过",
     "title": "最近运行"
-  },
-  "recoveryModeControls": {
-    "activeDescription": "活动中 - 已连接到调试终端",
-    "enter": "进入恢复模式",
-    "enterError": "进入恢复模式失败。请重试。",
-    "exitError": "退出恢复模式失败。请重试。",
-    "inactiveDescription": "暂停助手并通过调试终端直接连接到其工作区",
-    "loginNoticeEnter": "登录 Cadet 平台以进入恢复模式。",
-    "loginNoticeExit": "登录 Cadet 平台以退出恢复模式。",
-    "resumeAssistant": "恢复助手",
-    "title": "恢复模式"
   },
   "restartAssistant": {
     "button": "重启",

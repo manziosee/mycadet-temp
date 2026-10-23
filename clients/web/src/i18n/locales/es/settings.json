@@ -352,7 +352,7 @@
     "noAssistant": "No se encontró ningún asistente. Crea un asistente para acceder a los controles de depuración.",
     "restartDescription": "Reinicia la máquina del asistente. Estará brevemente no disponible durante el reinicio.",
     "restartTitle": "Reiniciar asistente",
-    "subtitle": "Administra copias de seguridad, reinicia tu asistente o entra en modo de recuperación para conectar al terminal de depuración.",
+    "subtitle": "Administra copias de seguridad y reinicia tu asistente.",
     "title": "General"
   },
   "doctorChatBlocks": {
@@ -1039,17 +1039,6 @@
     "runAtAria": "Ejecución a las {time}",
     "skipped": "Saltada",
     "title": "Ejecuciones recientes"
-  },
-  "recoveryModeControls": {
-    "activeDescription": "Activo: conectado al terminal de depuración",
-    "enter": "Entrar en modo de recuperación",
-    "enterError": "No se pudo entrar en el modo de recuperación. Inténtalo de nuevo.",
-    "exitError": "No se pudo salir del modo de recuperación. Inténtalo de nuevo.",
-    "inactiveDescription": "Pausa el asistente y conéctate directamente a su espacio de trabajo mediante el terminal de depuración",
-    "loginNoticeEnter": "Inicia sesión en la plataforma Cadet para entrar en el modo de recuperación.",
-    "loginNoticeExit": "Inicia sesión en la plataforma Cadet para salir del modo de recuperación.",
-    "resumeAssistant": "Reanudar asistente",
-    "title": "Modo de recuperación"
   },
   "restartAssistant": {
     "button": "Reiniciar",
