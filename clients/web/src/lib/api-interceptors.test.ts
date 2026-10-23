@@ -150,8 +150,8 @@ import {
   rewriteForSelfHostedIngress,
 } from "@/lib/api-interceptors";
 import { subscribe } from "@/lib/event-bus";
+import { isGatewaySessionLive } from "@/lib/local-mode";
 import { ApiError } from "@/utils/api-errors";
-import { isGatewayAuthMode } from "@/lib/auth/gateway-session";
 import {
   getSelfHostedActorToken,
   getSelfHostedIngressUrl,
@@ -417,7 +417,7 @@ describe("api-interceptors / self-hosted rewriting", () => {
   });
 
   test("prepends the ingress path prefix when the ingress URL has a path", async () => {
-    const prefixedIngress = "http://localhost:3000/__gateway/20100";
+    const prefixedIngress = "http://localhost:3000/web/20100";
     setSelfHostedConnection({ url: prefixedIngress, token: ACTOR_TOKEN });
     const input = new Request(
       `https://platform.test/v1/assistants/self/conversations`,
@@ -425,9 +425,7 @@ describe("api-interceptors / self-hosted rewriting", () => {
     const output = await requestInterceptor(input);
     const outUrl = new URL(output.url);
     expect(outUrl.origin).toBe("http://localhost:3000");
-    expect(outUrl.pathname).toBe(
-      "/__gateway/20100/v1/assistants/self/conversations",
-    );
+    expect(outUrl.pathname).toBe("/web/20100/v1/assistants/self/conversations");
   });
 
   test("strips platform-only headers from the rewritten request", async () => {
@@ -752,7 +750,7 @@ describe("api-interceptors / self-hosted contact-family flattening", () => {
 
   test("prepends the ingress path prefix to flattened paths", async () => {
     setSelfHostedConnection({
-      url: "http://localhost:3000/__gateway/20100",
+      url: "http://localhost:3000/web/20100",
       token: ACTOR_TOKEN,
     });
     const input = new Request(
@@ -762,7 +760,7 @@ describe("api-interceptors / self-hosted contact-family flattening", () => {
     const output = await daemonRequestInterceptor(input);
     const outUrl = new URL(output.url);
     expect(outUrl.origin).toBe("http://localhost:3000");
-    expect(outUrl.pathname).toBe("/__gateway/20100/v1/contacts");
+    expect(outUrl.pathname).toBe("/web/20100/v1/contacts");
   });
 
   test("non-contact segments keep the scoped path", async () => {
@@ -1352,10 +1350,10 @@ describe("api-interceptors / localGatewayAuthRecoveryInterceptor", () => {
     expect(result).toBe(response);
   });
 
-  test("the connection stays primed and gateway-auth mode reads true across the recovery", async () => {
+  test("the connection stays primed and the session predicate reads true across the recovery", async () => {
     /**
      * A recovery must not unprime the slot while the prime is in flight:
-     * `isGatewayAuthMode()` reads it, and a session refresh or a lifecycle
+     * `isGatewaySessionLive()` reads it, and a session refresh or a lifecycle
      * pass landing in that window would take the cloud branch and could
      * log a local-gateway user out. The renderer holds no bearer in this
      * mode — the trusted host mints and injects — so the slot's null token
@@ -1369,7 +1367,7 @@ describe("api-interceptors / localGatewayAuthRecoveryInterceptor", () => {
     let authModeDuringPrime: boolean | undefined;
     primeGatewayWithRepairImpl = async () => {
       ingressDuringPrime = getSelfHostedIngressUrl();
-      authModeDuringPrime = isGatewayAuthMode();
+      authModeDuringPrime = isGatewaySessionLive();
       setSelfHostedConnection({ url: GATEWAY_URL, token: null });
     };
 
