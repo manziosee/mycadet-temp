@@ -8,8 +8,7 @@ export const routes = {
     privacy: "/assistant/onboarding/privacy",
     research: "/assistant/onboarding/research",
   },
-  // The local client's front door — ported from web's `/assistant/welcome`
-  // (web's copy is deleted; this path renders the app-owned screen).
+  // The local client's front door, rendered by the app's onboarding screens.
   welcome: "/account/onboarding/welcome",
   account: {
     root: "/account",

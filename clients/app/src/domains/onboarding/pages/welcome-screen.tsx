@@ -7,8 +7,7 @@ import { useLocalLockfileStore } from "@app/stores/local-lockfile-store";
 import { routes } from "@app/utils/routes";
 
 /**
- * `/account/onboarding/welcome` — the local client's front door. Ported from
- * web's `/assistant/welcome` (bucket D of the unbundling plan): shares its
+ * `/account/onboarding/welcome` — the local client's front door. Shares its
  * screen with `/account/login`; the account this build doesn't require is what
  * makes the difference, so the second button walks past the login entirely.
  */

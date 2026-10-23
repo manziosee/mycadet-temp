@@ -135,21 +135,6 @@ function extractPathname(destination: string): string {
 }
 
 // ---------------------------------------------------------------------------
-// Login return-to
-// ---------------------------------------------------------------------------
-
-export function resolveLoginReturnTo(
-  state: NavigationState,
-  fromPath: string,
-): string {
-  // The welcome fork is gone: the local front door moved to the app bundle
-  // (`/account/onboarding/welcome`), so web never hosts it and its login
-  // return-to fork died with the route. The app's post-auth destination owns
-  // that fork now.
-  return fromPath;
-}
-
-// ---------------------------------------------------------------------------
 // Core resolver
 // ---------------------------------------------------------------------------
 
