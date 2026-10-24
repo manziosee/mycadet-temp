@@ -77,8 +77,6 @@ export default defineConfig(({ mode, command }) => {
           : []),
         { find: /^@design\//, replacement: DESIGN_SRC + "/" },
         { find: /^@app\//, replacement: APP_SRC + "/" },
-        { find: /^@web\//, replacement: WEB_SRC + "/" },
-        { find: /^@\//, replacement: WEB_SRC + "/" },
         // The compiled web sources import @mycadet/avatar-catalog (the
         // bundled avatar SVG data); resolve it from the repo layout directly
         // so the build never depends on which workspace member's node_modules
