@@ -56,7 +56,10 @@ export type Remote = z.infer<typeof RemoteSchema>;
  * from the renderer-facing schema below; the CLI's extended type is the only
  * place they are modeled.
  */
-export const SENSITIVE_KEYS = ["bearerToken", "guardianBootstrapSecret"] as const;
+export const SENSITIVE_KEYS = [
+  "bearerToken",
+  "guardianBootstrapSecret",
+] as const;
 
 /**
  * Strip every `SENSITIVE_KEYS` field from a parsed lockfile, in place: from
@@ -186,11 +189,10 @@ export function getLoopbackGatewayPort(entry: {
 
 /**
  * Per-instance resources for a local assistant: the renderer-facing ports,
- * the instance directory, and the local runtime install metadata, plus the
- * host-only ports and the persisted signing key the CLI read-modify-writes.
- * Strict: every field the CLI round-trips is modeled, so nothing is dropped
- * by the parse. The secrets are stripped from renderer reads by
- * {@link stripSensitiveFields} before the parse ever sees them.
+ * the instance directory, the local runtime install metadata, and the
+ * host-only ports. Strict: every field the CLI round-trips is modeled, so
+ * nothing is dropped by the parse. The secrets are stripped from renderer
+ * reads by {@link stripSensitiveFields} before the parse ever sees them.
  */
 export const LocalAssistantResourcesSchema = z.object({
   instanceDir: z.string().optional(),

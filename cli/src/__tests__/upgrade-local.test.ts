@@ -8,12 +8,7 @@ import {
   spyOn,
   test,
 } from "bun:test";
-import {
-  mkdirSync,
-  mkdtempSync,
-  rmSync,
-  writeFileSync,
-} from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -112,7 +107,7 @@ mock.module("../lib/guardian-token.js", () => ({
   seedGuardianTokenFromSiblingEnv: seedGuardianTokenFromSiblingEnvMock,
 }));
 
-const generateLocalSigningKeyMock = mock<typeof local.generateLocalSigningKey>(
+const generateLocalSecretMock = mock<typeof local.generateLocalSecret>(
   () => "generated-local-secret",
 );
 const ensureLocalRuntimeMock = mock<typeof local.ensureLocalRuntime>(
@@ -134,7 +129,7 @@ const startCesMock = mock<typeof local.startCes>(async () => {});
 
 mock.module("../lib/local.js", () => ({
   ...realLocal,
-  generateLocalSigningKey: generateLocalSigningKeyMock,
+  generateLocalSigningKey: generateLocalSecretMock,
   ensureLocalRuntime: ensureLocalRuntimeMock,
   startLocalDaemon: startLocalDaemonMock,
   startGateway: startGatewayMock,
@@ -265,8 +260,8 @@ beforeEach(() => {
   resetGuardianBootstrapMock.mockResolvedValue(undefined);
   seedGuardianTokenFromSiblingEnvMock.mockReset();
   seedGuardianTokenFromSiblingEnvMock.mockReturnValue(false);
-  generateLocalSigningKeyMock.mockReset();
-  generateLocalSigningKeyMock.mockReturnValue("generated-local-secret");
+  generateLocalSecretMock.mockReset();
+  generateLocalSecretMock.mockReturnValue("generated-local-secret");
   ensureLocalRuntimeMock.mockReset();
   ensureLocalRuntimeMock.mockImplementation((resources, version) => ({
     version,
@@ -323,18 +318,6 @@ afterAll(() => {
 });
 
 describe("cadet upgrade local", () => {
-  test("missing identity refuses without backup, installation, restart or repair", async () => {
-    rmSync(join(tempDir, "gateway-security", "actor-token-signing-key"));
-    await expect(upgrade()).rejects.toThrow("process.exit(1)");
-    expect(createBackupMock).not.toHaveBeenCalled();
-    expect(ensureLocalRuntimeMock).not.toHaveBeenCalled();
-    expect(startLocalDaemonMock).not.toHaveBeenCalled();
-    expect(startGatewayMock).not.toHaveBeenCalled();
-    expect(generateLocalSigningKeyMock).not.toHaveBeenCalled();
-    expect(resetGuardianBootstrapMock).not.toHaveBeenCalled();
-    expect(saveLockfileAssistantMock).not.toHaveBeenCalled();
-  });
-
   test("uses explicit target versions as-is", async () => {
     const resolveLatest = mock(async () => "v0.9.9");
 
@@ -414,7 +397,6 @@ describe("cadet upgrade local", () => {
         instanceDir: tempDir,
         runtimeVersion: cliPkg.version ? `v${cliPkg.version}` : "v0.8.12",
       }),
-      { signingKey: "ab".repeat(32) },
     );
     expect(startGatewayMock).toHaveBeenCalledWith(
       false,
@@ -423,7 +405,6 @@ describe("cadet upgrade local", () => {
         runtimeVersion: cliPkg.version ? `v${cliPkg.version}` : "v0.8.12",
       }),
       {
-        signingKey: "ab".repeat(32),
         bootstrapSecret: "existing-bootstrap-secret",
       },
     );

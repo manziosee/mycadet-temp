@@ -460,7 +460,6 @@ describe("lockfile IPC handlers", () => {
     expect(() => readLockfile()).toThrow();
   });
 
-
   test("renameLockfileAssistant persists the rename and refreshes the watcher", () => {
     seedLockfileAssistant(
       {
@@ -1112,19 +1111,15 @@ describe("cadet:localMode:pairing handlers", () => {
 });
 
 describe("cadet:localMode:wake handler", () => {
-  test("forwards repairGuardian to runWake, appending --repair-guardian", async () => {
+  test("forwards repairGuardian to runWake — the repair rides the wake", async () => {
     const pending = wake("asst-1", { repairGuardian: true });
     await tick();
     expect(spawnArgs[0]).toEqual([
       "bun",
-      [
-        "run",
-        path.join("/repo", "cli", "src", "index.ts"),
-        "wake",
-        "asst-1",
-        "--repair-guardian",
-      ],
+      ["run", path.join("/repo", "cli", "src", "index.ts"), "wake", "asst-1"],
     ]);
+    lastChild.emit("close", 0);
+    await tick(); // the chain spawns the gateway's own re-lease
     lastChild.emit("close", 0);
     expect(await pending).toEqual({ ok: true });
   });
