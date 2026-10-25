@@ -103,11 +103,10 @@ import { useSyncExternalStore } from "react";
 import { authMiddleware } from "./auth-middleware";
 import { useOnboardingStore } from "@/domains/onboarding/onboarding-store";
 import { useResolvedAssistantsStore } from "@/stores/resolved-assistants-store";
-import { useAuthStore, type AuthUser } from "@/stores/auth-store";
+import { useAuthStore } from "@/stores/auth-store";
 import { routes } from "@/utils/routes";
 
 const initialAuthState = useAuthStore.getState();
-const fakeUser = { id: "user-123" } as AuthUser;
 
 const localAssistant: LockfileAssistant = {
   assistantId: "local-a",
@@ -156,27 +155,6 @@ async function runMiddlewareOutcome(
   }
 }
 
-async function runMiddleware(pathname: string): Promise<Response> {
-  const args = {
-    request: new Request(`http://localhost${pathname}`),
-    context: { set: () => {}, get: () => null },
-  } as unknown as Parameters<typeof authMiddleware>[0];
-  const next = (async () => new Response()) as Parameters<
-    typeof authMiddleware
-  >[1];
-  // The middleware signals an unauthenticated/onboarding redirect by *throwing*
-  // a Response, so surface that as the resolved value for assertions.
-  try {
-    await authMiddleware(args, next);
-  } catch (thrown) {
-    if (thrown instanceof Response) {
-      return thrown;
-    }
-    throw thrown;
-  }
-  throw new Error("expected a redirect to be thrown");
-}
-
 const tick = (): Promise<void> => new Promise((r) => setTimeout(r, 0));
 
 beforeEach(() => {
@@ -209,7 +187,6 @@ describe("authMiddleware — local-mode onboarding fork", () => {
   test("waits for the cloud-session probe before choosing hosting vs welcome", async () => {
     useAuthStore.setState({
       sessionStatus: "authenticated",
-      user: fakeUser,
       cloudSession: "unknown",
     });
 
@@ -239,7 +216,6 @@ describe("authMiddleware — local-mode onboarding fork", () => {
     // absent is admitted here and the shell steers the onboarding fork.
     useAuthStore.setState({
       sessionStatus: "authenticated",
-      user: fakeUser,
       cloudSession: "absent",
     });
 
@@ -256,7 +232,6 @@ describe("authMiddleware — local-mode onboarding fork", () => {
     // next is the app bundle's call, not web's redirect.
     useAuthStore.setState({
       sessionStatus: "authenticated",
-      user: fakeUser,
       cloudSession: "unknown",
     });
 
@@ -270,7 +245,6 @@ describe("authMiddleware — local-mode onboarding fork", () => {
   test("routes to hosting when a resolved platform session exists", async () => {
     useAuthStore.setState({
       sessionStatus: "authenticated",
-      user: fakeUser,
       cloudSession: "present",
     });
 
@@ -302,7 +276,6 @@ describe("authMiddleware — app-access admit gate", () => {
     // though the cloud probe settled absent.
     useAuthStore.setState({
       sessionStatus: "authenticated",
-      user: null,
       cloudSession: "absent",
     });
 
@@ -315,7 +288,6 @@ describe("authMiddleware — app-access admit gate", () => {
     // Start admitted as a local user.
     useAuthStore.setState({
       sessionStatus: "authenticated",
-      user: null,
       cloudSession: "present",
     });
     expect((await runMiddlewareOutcome(routes.identity)).admitted).toBe(true);
@@ -339,7 +311,6 @@ describe("authMiddleware — app-access admit gate", () => {
     mockGatewayTokenPresent = false;
     useAuthStore.setState({
       sessionStatus: "unauthenticated",
-      user: null,
       cloudSession: "absent",
     });
 
@@ -359,7 +330,6 @@ describe("authMiddleware — hydration timeout", () => {
     isLocalClientMock.mockImplementation(() => false);
     useAuthStore.setState({
       sessionStatus: "authenticated",
-      user: fakeUser,
       cloudSession: "present",
     });
     // Simulate consent/assistants fetches that hang: neither store ever
@@ -377,10 +347,13 @@ describe("authMiddleware — hydration timeout", () => {
       // Must settle (the consent prefs are pinned current above, so with the
       // hydration flags forced after the timeout, requireAssistant lands on
       // the consented no-assistant branch) — pre-guard this recursed into the
-      // identical wait forever.
-      const res = await runMiddleware(routes.identity);
-      expect(res.status).toBe(302);
-      expect(res.headers.get("Location")).toBe(routes.onboarding.hatching);
+      // identical wait forever. Hatching is app-owned (#532), so the ride is
+      // a full-page navigation and the middleware admits into it.
+      const outcome = await runMiddlewareOutcome(routes.identity);
+      expect(outcome.admitted).toBe(true);
+      expect(window.location.href.endsWith(routes.onboarding.hatching)).toBe(
+        true,
+      );
     } finally {
       useOnboardingStore.setState({ consentHydrated: priorConsentHydrated });
       useResolvedAssistantsStore.setState({
@@ -399,7 +372,6 @@ describe("authMiddleware — hydration timeout", () => {
     isLocalClientMock.mockImplementation(() => false);
     useAuthStore.setState({
       sessionStatus: "authenticated",
-      user: fakeUser,
       cloudSession: "present",
     });
     // The boot state a cold deep link sees: nothing read back from the server
@@ -428,7 +400,6 @@ describe("authMiddleware — hydration timeout", () => {
     isLocalClientMock.mockImplementation(() => false);
     useAuthStore.setState({
       sessionStatus: "authenticated",
-      user: fakeUser,
       cloudSession: "present",
     });
     consentPrefs.tos = false;
@@ -459,7 +430,6 @@ describe("authMiddleware — hydration timeout", () => {
     isLocalClientMock.mockImplementation(() => false);
     useAuthStore.setState({
       sessionStatus: "authenticated",
-      user: fakeUser,
       cloudSession: "present",
     });
     consentPrefs.tos = false;
@@ -500,7 +470,6 @@ describe("authMiddleware — hydration timeout", () => {
     isLocalClientMock.mockImplementation(() => false);
     useAuthStore.setState({
       sessionStatus: "authenticated",
-      user: fakeUser,
       cloudSession: "present",
     });
     consentPrefs.tos = false;
@@ -539,7 +508,6 @@ describe("authMiddleware — hydration timeout", () => {
     isLocalClientMock.mockImplementation(() => false);
     useAuthStore.setState({
       sessionStatus: "authenticated",
-      user: fakeUser,
       cloudSession: "present",
     });
     consentPrefs.tos = false;
