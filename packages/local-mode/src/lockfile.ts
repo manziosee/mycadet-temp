@@ -5,21 +5,54 @@ import {
   isLoopbackGatewayCloud,
   isUsableRuntimeUrl,
   LockfileAssistantSchema,
+  LockfileSchema,
   parseLockfile,
   type Lockfile,
 } from "./lockfile-contract";
 import { isCloudHome } from "./lockfile-contract";
+import { resolveLockfilePaths } from "./config";
 import { z } from "zod";
 
 import { isLoopbackPublicUrl } from "@mycadet/service-contracts/remote-web-pairing";
 import { withLockfileLock } from "./lockfile-lock";
 import { stripSensitiveFields } from "./util";
 
+/**
+ * The one lockfile read: the first existing candidate file parsed against the
+ * contract, degrading to the empty registry when no file parses. Takes no
+ * input — the paths resolve from the process's environment (the same
+ * `CADET_ENVIRONMENT` / persisted-default resolution every host and the CLI
+ * share), so every consumer of a lockfile answers the same question about the
+ * same bytes.
+ */
+export function readLockfile(): Lockfile {
+  for (const lockfilePath of resolveLockfilePaths(process.env)) {
+    if (!fs.existsSync(lockfilePath)) continue;
+    try {
+      const parsed = LockfileSchema.safeParse(
+        JSON.parse(fs.readFileSync(lockfilePath, "utf-8")),
+      );
+      if (parsed.success) {
+        return parsed.data;
+      }
+    } catch {
+      // Malformed lockfile; try next
+    }
+  }
+  return LockfileSchema.parse({});
+}
+
 /** `raw` is the authoritative file's parsed JSON (unknown fields intact). */
 export type LockfileResult =
   | { ok: true; data: Lockfile; raw: Record<string, unknown> }
   | { ok: false; status: number; error?: string };
 
+/**
+ * The raw-preserving read: the HTTP lockfile API and the instance-dir
+ * resolution need the unknown-field-intact record alongside the wire view, so
+ * this stays package-internal (never re-exported from the index) — everything
+ * else reads through {@link readLockfile}.
+ */
 export function getLockfileData(lockfilePaths: string[]): LockfileResult {
   let raw: string | undefined;
   for (const candidate of lockfilePaths) {
@@ -394,3 +427,4 @@ export function replaceCloudAssistants(
   });
   return locked.ok ? locked.value : lockFailure(locked.error);
 }
+

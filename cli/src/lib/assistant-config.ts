@@ -1,18 +1,15 @@
 import { randomBytes } from "crypto";
-import {
-  existsSync,
-  mkdirSync,
-  readFileSync,
-  renameSync,
-  unlinkSync,
-  writeFileSync,
-} from "fs";
+import { mkdirSync, renameSync, unlinkSync, writeFileSync } from "fs";
 import { dirname, join } from "path";
 
 import { SEEDS, type EnvironmentDefinition } from "@mycadet/environments";
-import { withLockfileLock } from "@mycadet/local-mode";
 import {
-  LockfileSchema,
+  readLockfile,
+  readRawLockfile,
+  withLockfileLock,
+} from "@mycadet/local-mode";
+import {
+  parseLockfile,
   type AppProcessRecord,
   type LocalAssistantResources,
   type Lockfile,
@@ -75,23 +72,6 @@ export function getLocalInstanceDir(
 
 export function getDaemonPidPath(resources?: LocalAssistantResources): string {
   return join(getLocalInstanceDir(resources), "workspace", "cadet.pid");
-}
-
-function readLockfile(): Lockfile {
-  for (const lockfilePath of getLockfilePaths(getCurrentEnvironment())) {
-    if (!existsSync(lockfilePath)) continue;
-    try {
-      const parsed = LockfileSchema.safeParse(
-        JSON.parse(readFileSync(lockfilePath, "utf-8")),
-      );
-      if (parsed.success) {
-        return parsed.data;
-      }
-    } catch {
-      // Malformed lockfile; try next
-    }
-  }
-  return LockfileSchema.parse({});
 }
 
 function writeLockfileUnlocked(data: Lockfile): void {
@@ -319,32 +299,6 @@ export function removeLockfileAssistant(assistantId: string): void {
 }
 
 /**
- * Read the first existing lockfile for an explicitly-provided environment,
- * without applying legacy migrations. This is the cross-env read path used by
- * {@link loadAllAssistantsAcrossEnvs}: it deliberately bypasses
- * {@link readLockfile} (which always resolves the *current* env) so callers
- * can enumerate state from every env without flipping `process.env` or the
- * persisted default. Migrations are skipped because we never want to write
- * to another env's lockfile from the current env's process.
- */
-function readLockfileForEnv(env: EnvironmentDefinition): Lockfile {
-  for (const lockfilePath of getLockfilePaths(env)) {
-    if (!existsSync(lockfilePath)) continue;
-    try {
-      const parsed = LockfileSchema.safeParse(
-        JSON.parse(readFileSync(lockfilePath, "utf-8")),
-      );
-      if (parsed.success) {
-        return parsed.data;
-      }
-    } catch {
-      // Malformed; try next candidate
-    }
-  }
-  return LockfileSchema.parse({});
-}
-
-/**
  * Load assistant entries from every known environment's lockfile.
  *
  * Each {@link SEEDS} entry has its own on-host data layout (config dir,
@@ -364,7 +318,9 @@ export function loadAllAssistantsAcrossEnvs(
   const envList = envs ?? Object.values(SEEDS).map((env) => ({ ...env }));
   const all: LockfileAssistant[] = [];
   for (const env of envList) {
-    all.push(...readLockfileForEnv(env).assistants);
+    all.push(
+      ...parseLockfile(readRawLockfile(getLockfilePaths(env))).assistants,
+    );
   }
   return all;
 }
@@ -571,3 +527,4 @@ export function getLockfilePlatformBaseUrl(): string | undefined {
   if (typeof url === "string" && url.trim()) return url.trim();
   return undefined;
 }
+

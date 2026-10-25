@@ -31,9 +31,7 @@ const presence: CapabilityModule<DesktopCapabilityRegistry> = {
     installIdentityIpc();
     installPowerEvents();
     installStatusIpc();
-    const retryProbe = installConnectivityProbe(
-      resolveLockfilePaths(process.env),
-    );
+    const retryProbe = installConnectivityProbe();
     installConnectivityIpc(retryProbe);
     configureLockfileWatcher(() => resolveLockfilePaths(process.env));
     const stopLockfileWatcher = installLockfileWatcher();
@@ -43,3 +41,4 @@ const presence: CapabilityModule<DesktopCapabilityRegistry> = {
 };
 
 export default presence;
+

@@ -8,7 +8,8 @@ import {
   renameLockfileAssistantIfPresent,
   stampLockfileAssistantOnboardedIfPresent,
   PAIRED_GUARDIAN_TOKEN_HOST_ONLY_ERROR,
-  getLockfileData,
+  readLockfile,
+  stripSensitiveFields,
   getLocalAssistantStatus,
   readLockfileAssistantAvatar,
   replaceCloudAssistants,
@@ -416,13 +417,9 @@ export const installLocalMode = (): void => {
   );
 
   ipc("cadet:localMode:readLockfile", z.tuple([]), () => {
-    const result = getLockfileData(lockfilePaths);
-    if (result.ok) {
-      return result.data;
-    }
-    throw new Error(
-      result.error ?? `Failed to read lockfile (status ${result.status})`,
-    );
+    const lockfile = readLockfile();
+    stripSensitiveFields(lockfile);
+    return lockfile;
   });
 
 // Rename-if-present: refuses missing entries and unreadable files instead
@@ -641,3 +638,4 @@ export const installLocalMode = (): void => {
     },
   );
 };
+

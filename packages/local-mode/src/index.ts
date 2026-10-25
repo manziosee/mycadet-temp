@@ -42,7 +42,7 @@ export {
   resolveEnvironmentName,
 } from "./environment";
 export {
-  getLockfileData,
+  readLockfile,
   renameLockfileAssistantIfPresent,
   stampLockfileAssistantOnboardedIfPresent,
   saveLockfileAssistant,
@@ -58,7 +58,7 @@ export {
   LockfileAssistantSchema,
   parseLockfile,
 } from "./lockfile-contract";
-export { readRawLockfileStrict } from "./lockfile";
+export { readRawLockfile, readRawLockfileStrict } from "./lockfile";
 export type {
   Lockfile,
   LockfileAssistant,
@@ -148,3 +148,4 @@ export type {
   PairedForwardAuthorizationResult,
   PairedGuardianTokenProvider,
 } from "./gateway-proxy";
+

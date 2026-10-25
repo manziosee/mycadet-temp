@@ -11,7 +11,8 @@ import {
   headerHostIsLoopback,
   originIsAllowed,
   hasSameOriginCredentialProof,
-  getLockfileData,
+  readLockfile,
+  stripSensitiveFields,
   getLocalAssistantStatus,
   readLockfileAssistantAvatar,
   renameLockfileAssistantIfPresent,
@@ -61,12 +62,8 @@ function requestPathname(req: http.IncomingMessage): string {
   return (req.url ?? "").split("?")[0]!;
 }
 
-function lockfileEntryFor(lockfilePaths: string[], assistantId: string) {
-  const result = getLockfileData(lockfilePaths);
-  if (!result.ok) {
-    return undefined;
-  }
-  return result.data.assistants.find((a) => a.assistantId === assistantId);
+function lockfileEntryFor(assistantId: string) {
+  return readLockfile().assistants.find((a) => a.assistantId === assistantId);
 }
 
 /**
@@ -81,7 +78,7 @@ function isHostManagedEntry(
   lockfilePaths: string[],
   assistantId: string,
 ): boolean {
-  const entry = lockfileEntryFor(lockfilePaths, assistantId);
+  const entry = lockfileEntryFor(assistantId);
   return (
     entry != null &&
     entry.cloud !== "cloud" &&
@@ -355,14 +352,10 @@ function lockfileMiddleware(
     }
 
     if (req.method === "GET") {
-      const result = getLockfileData(lockfilePaths);
-      if (result.ok) {
-        res.setHeader("Content-Type", "application/json");
-        res.end(JSON.stringify(result.data));
-      } else {
-        res.statusCode = result.status;
-        res.end();
-      }
+      res.setHeader("Content-Type", "application/json");
+      const lockfile = readLockfile();
+      stripSensitiveFields(lockfile);
+      res.end(JSON.stringify(lockfile));
     } else if (req.method === "POST") {
       const chunks: Buffer[] = [];
       req.on("data", (chunk: Buffer) => chunks.push(chunk));
@@ -568,7 +561,7 @@ function unpairMiddleware(
     }
 
     const assistantId = decodeURIComponent(match[1]!);
-    if (lockfileEntryFor(lockfilePaths, assistantId) == null) {
+    if (lockfileEntryFor(assistantId) == null) {
       // Not an entry on this machine — the id-keyed proxy resolves the rest
       // (the conductor's routes for a cloud id).
       return next();
@@ -1295,3 +1288,4 @@ function pipeGatewayProxyWithBearerRetry(
   };
   send(injectedBearer, false);
 }
+
