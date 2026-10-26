@@ -1,4 +1,5 @@
 import { isCloudHome } from "../lib/cloud-values.js";
+import { getGatewayUrl } from "@mycadet/local-mode/contract";
 import { cliCommand } from "../lib/cli-name.js";
 import {
   existsSync,
@@ -30,10 +31,9 @@ import {
   platformUploadToSignedUrl,
   platformImportPreflightFromGcs,
   platformImportBundleFromGcs,
-  platformPollJobStatus,
+  cloudPollJobStatus,
 } from "../lib/cloud-client.js";
 import { restoreRootBackup, validateRootArchive } from "../lib/root-backup.js";
-import { getGatewayUrl } from "../lib/runtime-url.js";
 
 function printUsage(): void {
   console.log(
@@ -363,9 +363,9 @@ async function restorePlatform(
     while (Date.now() < deadline) {
       await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL_MS));
 
-      let status: Awaited<ReturnType<typeof platformPollJobStatus>>;
+      let status: Awaited<ReturnType<typeof cloudPollJobStatus>>;
       try {
-        status = await platformPollJobStatus(jobId, token, getGatewayUrl(entry));
+        status = await cloudPollJobStatus(jobId, token, getGatewayUrl(entry));
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
         if (msg.includes("not found")) {

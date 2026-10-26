@@ -1,4 +1,5 @@
 import { cliCommand } from "../lib/cli-name.js";
+import { getGatewayUrl } from "@mycadet/local-mode/contract";
 import { isCloudHome } from "../lib/cloud-values.js";
 import { spawnSync } from "child_process";
 import { join } from "path";
@@ -71,7 +72,6 @@ import {
 } from "../lib/version-compat.js";
 import { fetchCurrentVersion } from "../lib/http-client.js";
 import { loopbackSafeFetch } from "../lib/loopback-fetch.js";
-import { getGatewayUrl } from "../lib/runtime-url.js";
 import {
   generateLocalSecret,
   ensureLocalRuntime,
@@ -759,7 +759,7 @@ async function ensureGuardianTokenAfterLocalUpgrade(
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     try {
       await resetGuardianBootstrap(loopbackUrl, bootstrapSecret);
-      await leaseGuardianToken(loopbackUrl, entry.assistantId, bootstrapSecret);
+      await leaseGuardianToken(entry);
       console.log("   Re-provisioned guardian token.");
       return;
     } catch (err) {
@@ -1142,9 +1142,7 @@ async function upgradeCloud(
 
   // Target the same platform as the detail/health/POST calls — the entry's
   // platform may differ from the active lockfile default.
-  const releases = await fetchReleases({
-    cloudUrl: getGatewayUrl(entry),
-  });
+  const releases = await fetchReleases();
 
   const resolution = resolveUpgradeTarget({
     explicitVersion: version,

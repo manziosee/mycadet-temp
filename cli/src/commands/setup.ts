@@ -1,6 +1,6 @@
 import { resolveAssistant } from "../lib/assistant-config.js";
+import { getGatewayUrl } from "@mycadet/local-mode/contract";
 import { cliCommand } from "../lib/cli-name.js";
-import { getGatewayUrl } from "../lib/runtime-url.js";
 import {
   leaseGuardianToken,
   loadGuardianToken,
@@ -120,15 +120,7 @@ async function resolveSetupBearerToken(
     entry.cloud === "local" || entry.cloud === "docker";
   if (canLeaseGuardianToken) {
     try {
-      const bootstrapSecret =
-        typeof entry.guardianBootstrapSecret === "string"
-          ? entry.guardianBootstrapSecret
-          : undefined;
-      const leasedToken = await leaseGuardianToken(
-        gatewayUrl,
-        entry.assistantId,
-        bootstrapSecret,
-      );
+      const leasedToken = await leaseGuardianToken(entry);
       if (isGuardianAccessTokenUsable(leasedToken)) {
         return leasedToken.accessToken;
       }
