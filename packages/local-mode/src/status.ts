@@ -210,11 +210,8 @@ function parsePortFromUrl(url: unknown): number | undefined {
   }
 }
 
-function defaultPorts(env: Record<string, string | undefined>): {
-  daemon: number;
-  gateway: number;
-} {
-  const envName = resolveEnvironmentName(env);
+function defaultPorts(): { daemon: number; gateway: number } {
+  const envName = resolveEnvironmentName();
   const seed = SEEDS[envName] ?? SEEDS[PRODUCTION_ENVIRONMENT_NAME];
   return {
     daemon: seed?.portsOverride?.daemon ?? DEFAULT_PORTS.daemon,
@@ -277,7 +274,6 @@ export type LockfileInstanceDirResult =
 export function resolveLockfileInstanceDir(
   lockfilePaths: string[],
   assistantId: string,
-  env: Record<string, string | undefined>,
 ): LockfileInstanceDirResult {
   const result = getLockfileData(lockfilePaths);
   if (!result.ok) {
@@ -295,7 +291,7 @@ export function resolveLockfileInstanceDir(
       ok: true,
       instanceDir:
         lockfileInstanceDir(entry, rawEntry) ??
-        resolveInstanceDir(env, assistantId),
+        resolveInstanceDir(assistantId),
     };
   } catch {
     return { ok: true };
@@ -305,15 +301,14 @@ export function resolveLockfileInstanceDir(
 function resolveStatusResources(
   entry: LockfileAssistant,
   rawEntry: Record<string, unknown> | null,
-  env: Record<string, string | undefined>,
 ): StatusResources {
   const rawResources = isRecord(rawEntry?.resources)
     ? rawEntry.resources
     : undefined;
-  const ports = defaultPorts(env);
+  const ports = defaultPorts();
   const instanceDir =
     lockfileInstanceDir(entry, rawEntry) ??
-    resolveInstanceDir(env, entry.assistantId);
+    resolveInstanceDir(entry.assistantId);
   return {
     instanceDir,
     daemonPort:
@@ -329,9 +324,8 @@ function resolveStatusResources(
 async function runtimeStatusForEntry(
   entry: LockfileAssistant,
   rawEntry: Record<string, unknown> | null,
-  env: Record<string, string | undefined>,
 ): Promise<LocalAssistantStatusResult> {
-  const resources = resolveStatusResources(entry, rawEntry, env);
+  const resources = resolveStatusResources(entry, rawEntry);
   const observedAtMs = Date.now();
 
   const assistantPid = readPidState(getDaemonPidPath(resources.instanceDir));
@@ -426,7 +420,6 @@ async function runtimeStatusForEntry(
 export async function getLocalAssistantStatus(
   lockfilePaths: string[],
   assistantId: string,
-  env: Record<string, string | undefined> = process.env,
 ): Promise<LocalAssistantStatusResult> {
   try {
     assertSafePathSegment(assistantId, "assistant ID");
@@ -454,6 +447,5 @@ export async function getLocalAssistantStatus(
   return runtimeStatusForEntry(
     entry,
     findRawAssistant(result.raw, assistantId),
-    env,
   );
 }
