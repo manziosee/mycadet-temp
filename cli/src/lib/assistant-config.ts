@@ -9,6 +9,7 @@ import {
   readLockfile,
   readRawLockfile,
   resolveConfigHomes,
+  saveLockfileAssistant,
   withLockfileLock,
 } from "@mycadet/local-mode";
 import {
@@ -206,14 +207,6 @@ export function loadAllAssistants(): LockfileAssistant[] {
   return readLockfile().assistants;
 }
 
-function writeAssistants(entries: LockfileAssistant[]): void {
-  withCliLockfileLock(() => {
-    const data = readLockfile();
-    data.assistants = entries;
-    writeLockfileUnlocked(data);
-  });
-}
-
 export function loadLatestAssistant(): LockfileAssistant | null {
   const entries = loadAllAssistants();
   if (entries.length === 0) {
@@ -304,13 +297,11 @@ export function removeLockfileAssistant(assistantId: string): void {
  * Per-env lockfile paths for enumerating OTHER environments' lockfiles —
  * the ambient resolvers read the current environment, so a caller walking
  * every seed composes each env's paths from the exported naming primitives.
- * `lockfileDirOverride` on the definition (the curated-test-list seam, and
- * `CADET_LOCKFILE_DIR` lifted by resolve.ts) still wins, matching the
- * ambient resolver's override handling.
+ * `lockfileDirOverride` on the definition (the curated-test-list seam)
+ * still wins, matching the ambient resolver's handling.
  */
 function lockfilePathsForEnv(env: EnvironmentDefinition): string[] {
-  const lockfileDir =
-    env.lockfileDirOverride ?? process.env.CADET_LOCKFILE_DIR?.trim();
+  const lockfileDir = env.lockfileDirOverride;
   if (lockfileDir) {
     return [joinLocalPath(lockfileDir, "lockfile.json")];
   }
@@ -447,16 +438,6 @@ export function extractHostFromEntry(entry: LockfileAssistant): string {
   }
 }
 
-export function saveLockfileAssistant(entry: LockfileAssistant): void {
-  withCliLockfileLock(() => {
-    const entries = loadAllAssistants().filter(
-      (e) => e.assistantId !== entry.assistantId,
-    );
-    entries.unshift(entry);
-    writeAssistants(entries);
-  });
-}
-
 /**
  * The client-minted uuid this CLI addresses the assistant's chat
  * conversation by (web's temp-client-id pattern: clients/web
@@ -552,4 +533,3 @@ export function getLockfilePlatformBaseUrl(): string | undefined {
   if (typeof url === "string" && url.trim()) return url.trim();
   return undefined;
 }
-
