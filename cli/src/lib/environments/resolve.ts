@@ -1,7 +1,5 @@
 import { SEEDS, type EnvironmentDefinition } from "@mycadet/environments";
-
-// Direct import — bun embeds this at compile time so it works in compiled binaries.
-import cliPkg from "../../../package.json";
+import { ownVersion } from "@mycadet/local-mode";
 import {
   isDevVersion,
   isLocalVersion,
@@ -119,7 +117,7 @@ export function resolveEnvironmentSource(override?: string): {
     return { name: envVar, source: "env" };
   }
   return {
-    name: environmentFromVersion(cliPkg.version ?? ""),
+    name: environmentFromVersion(ownVersion()),
     source: "version",
   };
 }

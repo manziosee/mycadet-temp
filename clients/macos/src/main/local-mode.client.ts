@@ -10,7 +10,7 @@ import {
 import {
   resolveConfigDir,
   resolveEnvironmentName,
-  resolveLockfilePaths,
+  resolveLockfilePath,
   type CliInvocation,
 } from "@mycadet/local-mode";
 
@@ -20,7 +20,7 @@ import {
   getCliBinPath,
 } from "./cli-installer";
 import { handle } from "./ipc";
-import { refreshLockfileNow } from "./lockfile-watcher.client";
+import { refreshLockfileNow } from "@mycadet/electron-desktop/lockfile-watcher";
 import { getSessionToken } from "./session-token-store.client";
 
 export const resolveCliInvocation = async (): Promise<CliInvocation> => {
@@ -45,7 +45,7 @@ configureLocalMode({
   paths: {
     configDir: resolveConfigDir(),
     environment: resolveEnvironmentName(),
-    lockfilePaths: resolveLockfilePaths(),
+    lockfilePath: resolveLockfilePath(),
   },
   refreshLockfile: refreshLockfileNow,
   session: { getToken: getSessionToken },

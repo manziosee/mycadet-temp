@@ -102,15 +102,11 @@ const leaseGuardianTokenMock = mock<typeof guardianToken.leaseGuardianToken>(
 const resetGuardianBootstrapMock = mock<
   typeof guardianToken.resetGuardianBootstrap
 >(async () => {});
-const seedGuardianTokenFromSiblingEnvMock = mock<
-  typeof guardianToken.seedGuardianTokenFromSiblingEnv
->(() => false);
 
 mock.module("../lib/guardian-token.js", () => ({
   ...realGuardianToken,
   leaseGuardianToken: leaseGuardianTokenMock,
   resetGuardianBootstrap: resetGuardianBootstrapMock,
-  seedGuardianTokenFromSiblingEnv: seedGuardianTokenFromSiblingEnvMock,
 }));
 
 const generateLocalSecretMock = mock<typeof local.generateLocalSecret>(
@@ -268,8 +264,6 @@ beforeEach(() => {
   leaseGuardianTokenMock.mockResolvedValue(makeGuardianToken({ isNew: true }));
   resetGuardianBootstrapMock.mockReset();
   resetGuardianBootstrapMock.mockResolvedValue(undefined);
-  seedGuardianTokenFromSiblingEnvMock.mockReset();
-  seedGuardianTokenFromSiblingEnvMock.mockReturnValue(false);
   generateLocalSecretMock.mockReset();
   generateLocalSecretMock.mockReturnValue("generated-local-secret");
   ensureLocalRuntimeMock.mockReset();
@@ -418,9 +412,6 @@ describe("cadet upgrade local", () => {
       {
         bootstrapSecret: "existing-bootstrap-secret",
       },
-    );
-    expect(seedGuardianTokenFromSiblingEnvMock).toHaveBeenCalledWith(
-      "local-assistant",
     );
     expect(resetGuardianBootstrapMock).toHaveBeenCalledWith(
       "http://127.0.0.1:7830",

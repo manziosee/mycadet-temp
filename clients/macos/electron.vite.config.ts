@@ -79,10 +79,6 @@ const BUILD_DEFINES = {
     process.env.CADET_ENVIRONMENT || "local",
   ),
   __CADET_LOCAL_CLI_ENTRY__: JSON.stringify(LOCAL_CLI_ENTRY),
-  __CADET_VERSION_DISPLAY__: JSON.stringify(resolveVersion()),
-  // The channel version the bundled @mycadet/local-mode resolver classifies
-  // — same value as the display stamp, so the app's advertised version and
-  // the environments its paths resolve to can't disagree.
   __CADET_OWN_VERSION__: JSON.stringify(resolveVersion()),
   __CADET_BUN_VERSION__: JSON.stringify(resolveBunVersion()),
   __CADET_ENABLE_CHROME_DEVTOOLS__: JSON.stringify(

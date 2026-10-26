@@ -16,7 +16,6 @@ import { installQuickInput } from "@mycadet/electron-desktop/quick-input-window"
 import { planAppProtocolAssetRequest } from "@mycadet/electron-utils/app-protocol";
 import {
   resolveLocalConfigFromEnv,
-  resolveLockfilePaths,
 } from "@mycadet/local-mode";
 
 import { getVersionInfo, installAbout, openAboutWindow } from "./about.client";
@@ -69,7 +68,7 @@ import { installImageContextMenu } from "@mycadet/electron-desktop/image-context
 import { installTextContextMenu } from "@mycadet/electron-desktop/text-context-menu";
 import { installLocalMode, resolveCliInvocation } from "./local-mode.client";
 import { installLoginItem, installLoginItemIpc } from "./login-item.client";
-import { installLockfileWatcher } from "./lockfile-watcher.client";
+import { installLockfileWatcher } from "@mycadet/electron-desktop/lockfile-watcher";
 import { installHostProxyBridge } from "./host-proxy-adapter";
 import log from "./logger";
 import {
