@@ -241,7 +241,6 @@ function makeLocalEntry(): LockfileAssistant {
   );
   return {
     assistantId: "local-assistant",
-    runtimeUrl: "http://127.0.0.1:7830",
     cloud: "local",
     resources: {
       instanceDir: tempDir,
@@ -646,8 +645,8 @@ describe("cadet wake — app server restore", () => {
     process.env.CADET_WORKSPACE_DIR = defaultWorkspace;
     resolveTargetAssistantMock.mockReturnValue({
       assistantId: "docker-1",
-      runtimeUrl: "http://localhost:7930",
       cloud: "docker",
+      resources: { gatewayPort: 7930, daemonPort: 7821 },
     });
     loadRawConfigMock.mockReturnValue(enabledConfig);
     stampRecordedAppServer("docker-1");
@@ -682,7 +681,6 @@ describe("cadet wake — app server restore", () => {
     process.env.CADET_WORKSPACE_DIR = defaultWorkspace;
     const migratedEntry = {
       assistantId: "docker-1",
-      runtimeUrl: "http://localhost:7930",
       cloud: "docker" as const,
       containerInfo: {
         assistantImage: "mycadet/mycadet-assistant:v0.12.7",
@@ -724,8 +722,8 @@ describe("cadet wake — app server restore", () => {
     process.env.CADET_WORKSPACE_DIR = defaultWorkspace;
     resolveTargetAssistantMock.mockReturnValue({
       assistantId: "docker-1",
-      runtimeUrl: "http://localhost:7930",
       cloud: "docker",
+      resources: { gatewayPort: 7930, daemonPort: 7821 },
     });
     loadRawConfigMock.mockReturnValue(enabledConfig);
     isIngressRunningMock.mockReturnValue(true);
@@ -756,8 +754,8 @@ describe("cadet wake — app server restore", () => {
     process.env.CADET_WORKSPACE_DIR = defaultWorkspace;
     resolveTargetAssistantMock.mockReturnValue({
       assistantId: "docker-1",
-      runtimeUrl: "http://localhost:7930",
       cloud: "docker",
+      resources: { gatewayPort: 7930, daemonPort: 7821 },
     });
     loadRawConfigMock.mockReturnValue(enabledConfig);
     stampRecordedAppServer("docker-1");
@@ -797,8 +795,8 @@ describe("cadet wake — app server restore", () => {
     process.env.CADET_WORKSPACE_DIR = defaultWorkspace;
     resolveTargetAssistantMock.mockReturnValue({
       assistantId: "docker-1",
-      runtimeUrl: "http://localhost:7930",
       cloud: "docker",
+      resources: { gatewayPort: 7930, daemonPort: 7821 },
     });
     loadRawConfigMock.mockReturnValue(enabledConfig);
     stampRecordedAppServer("docker-1");
@@ -833,13 +831,12 @@ describe("cadet wake — app server restore", () => {
     process.env.CADET_WORKSPACE_DIR = defaultWorkspace;
     resolveTargetAssistantMock.mockReturnValue({
       assistantId: "docker-1",
-      runtimeUrl: "http://localhost:7930",
       cloud: "docker",
+      resources: { gatewayPort: 7930, daemonPort: 7821 },
     });
     loadAllAssistantsMock.mockReturnValue([
       {
         assistantId: "docker-2",
-        runtimeUrl: "http://localhost:8030",
         cloud: "docker",
       },
     ]);
@@ -874,8 +871,8 @@ describe("cadet wake — app server restore", () => {
     process.env.CADET_WORKSPACE_DIR = defaultWorkspace;
     resolveTargetAssistantMock.mockReturnValue({
       assistantId: "docker-1",
-      runtimeUrl: "http://localhost:7930",
       cloud: "docker",
+      resources: { gatewayPort: 7930, daemonPort: 7821 },
     });
     loadRawConfigMock.mockReturnValue(enabledConfig);
     stampRecordedAppServer("docker-1");
@@ -902,8 +899,8 @@ describe("cadet wake — app server restore", () => {
     process.env.CADET_WORKSPACE_DIR = defaultWorkspace;
     resolveTargetAssistantMock.mockReturnValue({
       assistantId: "docker-1",
-      runtimeUrl: "http://localhost:7930",
       cloud: "docker",
+      resources: { gatewayPort: 7930, daemonPort: 7821 },
     });
     loadRawConfigMock.mockReturnValue(enabledConfig);
     stampRecordedAppServer("docker-1");
@@ -934,8 +931,8 @@ describe("cadet wake — app server restore", () => {
     process.env.CADET_WORKSPACE_DIR = defaultWorkspace;
     resolveTargetAssistantMock.mockReturnValue({
       assistantId: "docker-1",
-      runtimeUrl: "http://localhost:7930",
       cloud: "docker",
+      resources: { gatewayPort: 7930, daemonPort: 7821 },
     });
     process.argv = ["bun", "cadet", "wake", "docker-1"];
 
@@ -962,13 +959,12 @@ describe("cadet wake — app server restore", () => {
     // with no record naming its owner. The sole container still owns it.
     resolveTargetAssistantMock.mockReturnValue({
       assistantId: "docker-1",
-      runtimeUrl: "http://localhost:7930",
       cloud: "docker",
+      resources: { gatewayPort: 7930, daemonPort: 7821 },
     });
     loadAllAssistantsMock.mockReturnValue([
       {
         assistantId: "docker-1",
-        runtimeUrl: "http://localhost:7930",
         cloud: "docker",
       },
     ]);
@@ -997,8 +993,8 @@ describe("cadet wake — app server restore", () => {
     process.env.CADET_WORKSPACE_DIR = defaultWorkspace;
     resolveTargetAssistantMock.mockReturnValue({
       assistantId: "docker-1",
-      runtimeUrl: "http://localhost:7930",
       cloud: "docker",
+      resources: { gatewayPort: 7930, daemonPort: 7821 },
     });
     process.argv = ["bun", "cadet", "wake", "docker-1"];
 
@@ -1235,7 +1231,6 @@ describe("cadet wake — app server restore", () => {
       );
       return {
         assistantId,
-        runtimeUrl: "http://127.0.0.1:7830",
         cloud: "local",
         resources: {
           instanceDir,
@@ -1282,7 +1277,6 @@ describe("cadet wake — app server restore", () => {
         // Missing resources is a deliberate refusal for this entry.
         {
           assistantId: "wake-all-1",
-          runtimeUrl: "http://127.0.0.1:7830",
           cloud: "local",
         },
         makeAllEntry("wake-all-2", join(tempDir, "instance-2")),

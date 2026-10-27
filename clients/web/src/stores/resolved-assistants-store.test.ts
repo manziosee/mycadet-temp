@@ -197,7 +197,7 @@ describe("setFromLockfile", () => {
     // A custom remote is neither a loopback topology nor cloud-managed.
     expect(entry.isLocal).toBe(false);
     expect(entry.isCloudHosted).toBe(false);
-    expect(entry.runtimeUrl).toBe("http://desk.example.com:443");
+    expect(entry.runtimeUrl).toBe("https://desk.example.com");
   });
 
   it("treats a sole local entry as active when the lockfile active pointer is stale", () => {
@@ -283,7 +283,7 @@ describe("upsertFromApi", () => {
 
     const entry = useResolvedAssistantsStore.getState().assistants[0];
     expect(entry.isPaired).toBe(true);
-    expect(entry.runtimeUrl).toBe("http://desk.example.com:443");
+    expect(entry.runtimeUrl).toBe("https://desk.example.com");
     expect(entry.cloud).toBe("custom");
     // The API's is_local claim must not reclassify a paired entry.
     expect(entry.isLocal).toBe(false);
@@ -354,7 +354,7 @@ describe("upsertFromApi", () => {
 
     const entry = useResolvedAssistantsStore.getState().assistants[0];
     expect(entry.isPaired).toBe(true);
-    expect(entry.runtimeUrl).toBe("http://desk.example.com:443");
+    expect(entry.runtimeUrl).toBe("https://desk.example.com");
     expect(entry.cloud).toBe("custom");
     // The API's is_local claim must not reclassify a paired entry.
     expect(entry.isLocal).toBe(false);

@@ -30,22 +30,9 @@ import {
 } from "@/lib/local-mode";
 import {
   getGatewayUrl,
-  isUsableRuntimeUrl,
-  type LockfileAssistant,
+  isRemoteGatewayEntry,
 } from "@mycadet/local-mode/contract";
-import { isLoopbackPublicUrl } from "@mycadet/service-contracts/remote-web-pairing";
 
-/**
- * Whether the entry's gateway lives on another machine: a custom remote.
- * Mirrors the lib predicate so the store and the lib cannot drift.
- */
-function isRemoteGatewayEntry(entry: LockfileAssistant): boolean {
-  if (entry.cloud !== "custom") {
-    return false;
-  }
-  const gatewayUrl = getGatewayUrl(entry);
-  return isUsableRuntimeUrl(gatewayUrl) && !isLoopbackPublicUrl(gatewayUrl);
-}
 import {
   SELECTED_ASSISTANT_STORAGE_KEY,
   clearSelectedAssistantId,
@@ -199,7 +186,7 @@ const useResolvedAssistantsStoreBase = create<ResolvedAssistantsStore>(
         isLocal: isLocalAssistant(a),
         isCloudHosted: isCloudAssistant(a),
         isPaired: isRemoteGatewayEntry(a),
-        runtimeUrl: isRemoteGatewayEntry(a) ? getGatewayUrl(a) : a.runtimeUrl,
+        runtimeUrl: getGatewayUrl(a),
         organizationId: a.cloudOrganizationId,
         cloudAssistantId: a.cloudAssistantId,
       }));
@@ -405,10 +392,7 @@ function getLockfileFields(assistantId: string): {
     organizationId: entry?.cloudOrganizationId,
     onboardedAt: entry?.onboardedAt,
     runtimeVersion: entry?.resources?.runtimeVersion,
-    runtimeUrl:
-      entry && isRemoteGatewayEntry(entry)
-        ? getGatewayUrl(entry)
-        : entry?.runtimeUrl,
+    runtimeUrl: entry ? getGatewayUrl(entry) : undefined,
     cloudAssistantId: entry?.cloudAssistantId,
     isPaired: entry ? isRemoteGatewayEntry(entry) : undefined,
     isActiveLockfileAssistant: lockfile

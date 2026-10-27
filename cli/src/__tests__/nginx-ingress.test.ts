@@ -1725,7 +1725,6 @@ describe("ensureAppServer", () => {
             assistantId: ASSISTANT_ID,
             name: "Homelab",
             cloud: "local",
-            runtimeUrl: "http://127.0.0.1:7830",
             localUrl: "http://127.0.0.1:7830",
           },
         ],
@@ -1798,7 +1797,6 @@ describe("ensureAppServer", () => {
               assistantId: ASSISTANT_ID,
               name,
               cloud: "local",
-              runtimeUrl: "http://127.0.0.1:7830",
               localUrl: "http://127.0.0.1:7830",
             },
           ],
@@ -2020,8 +2018,8 @@ describe("stopContainerAppServer", () => {
   function containerEntry(port: number): LockfileAssistant {
     return {
       assistantId: "docker-1",
-      runtimeUrl: `http://localhost:${port}`,
       cloud: "docker",
+      resources: { gatewayPort: port, daemonPort: port + 1 },
     };
   }
 
@@ -2069,7 +2067,6 @@ describe("stopContainerAppServer", () => {
     expect(
       await stopContainerAppServer({
         assistantId: "docker-1",
-        runtimeUrl: "https://runtime.example.com/docker-1",
         cloud: "docker",
       }),
     ).toBe(false);

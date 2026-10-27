@@ -17,10 +17,10 @@ import { setSelectedAssistant } from "@/assistant/selection";
 import {
   getLocalAssistants,
   getLockfileAssistant,
-  isRemoteGatewayEntry,
   primeLocalGatewayConnection,
   primeLocalGatewayConnectionWithRepair,
 } from "@/lib/local-mode";
+import { isRemoteGatewayEntry } from "@mycadet/local-mode/contract";
 import {
   commitCloudSessionAnswer,
   probeCloudSessionForConnect,

@@ -23,14 +23,19 @@ const past = () => new Date(Date.now() - 60_000).toISOString();
 
 function seedEntry(kind: "paired" | "local"): void {
   // Paired-ness derives from the addressing (no stored flag): the paired
-  // shape is a loopback-cloud entry whose runtimeUrl points off-machine;
-  // the plain-local shape uses a loopback runtimeUrl.
-  saveLockfileAssistant({
-    assistantId: "px",
-    name: kind === "paired" ? "Paired" : "Local",
-    runtimeUrl: kind === "paired" ? RUNTIME : "http://127.0.0.1:7830",
-    cloud: "local",
-  });
+  // shape is a custom entry whose recorded host points off-machine; the
+  // plain-local shape is a loopback-topology entry.
+  saveLockfileAssistant(
+    kind === "paired"
+      ? {
+          assistantId: "px",
+          name: "Paired",
+          cloud: "custom",
+          ipAddress: "gw.example.com",
+          port: 443,
+        }
+      : { assistantId: "px", name: "Local", cloud: "local" },
+  );
 }
 
 function seedToken(

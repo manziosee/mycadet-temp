@@ -21,15 +21,16 @@ const past = () => new Date(Date.now() - 60_000).toISOString();
 const future = () => new Date(Date.now() + 60 * 60 * 1000).toISOString();
 
 /** Persist a lockfile entry so the refresh URL-binding check has a trusted
- *  runtimeUrl to compare against (refresh is bound to the persisted entry).
- *  The paired shape is a loopback-cloud entry whose runtimeUrl points
- *  off-machine — paired-ness derives from it, no stored flag. */
+ *  gateway address to compare against (refresh is bound to the persisted
+ *  entry). The paired shape is a custom entry whose recorded host points
+ *  off-machine — paired-ness derives from the addressing, no stored flag. */
 function seedEntry(): void {
   saveLockfileAssistant({
     assistantId: "px",
     name: "Paired",
-    runtimeUrl: RUNTIME,
-    cloud: "local",
+    cloud: "custom",
+    ipAddress: "gw.example.com",
+    port: 443,
   });
 }
 
@@ -101,7 +102,7 @@ describe("resolveFreshBearerToken", () => {
       RUNTIME,
       "px",
       "old-acc",
-      "local",
+      "custom",
     );
 
     expect(token).toBe("new-acc");
@@ -119,7 +120,7 @@ describe("resolveFreshBearerToken", () => {
       "http://attacker.example:7830",
       "px",
       "old-acc",
-      "local",
+      "custom",
     );
 
     expect(token).toBe("old-acc"); // unchanged
@@ -138,7 +139,7 @@ describe("resolveFreshBearerToken", () => {
       RUNTIME,
       "px",
       "old-acc",
-      "local",
+      "custom",
     );
 
     expect(token).toBe("old-acc");
@@ -154,7 +155,7 @@ describe("resolveFreshBearerToken", () => {
       RUNTIME,
       "px",
       "ephemeral-tok",
-      "local",
+      "custom",
     );
 
     expect(token).toBe("ephemeral-tok");
@@ -185,7 +186,7 @@ describe("resolveFreshBearerToken", () => {
       RUNTIME,
       "px",
       "old-acc",
-      "local",
+      "custom",
     );
 
     expect(token).toBe("old-acc");
@@ -199,7 +200,7 @@ describe("resolveFreshBearerToken", () => {
       RUNTIME,
       "px",
       "old-acc",
-      "local",
+      "custom",
     );
 
     expect(token).toBe("old-acc");

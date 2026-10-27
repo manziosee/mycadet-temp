@@ -471,7 +471,10 @@ export async function restoreHostTeleportTarget(
   };
   try {
     if (previous) {
-      await replaceContainers({ ...previous });
+      // The captured destination env replays wholesale — including this
+      // machine's ACTOR_TOKEN_SIGNING_KEY, which (env beats file) shadows
+      // the imported root's key. The signing-key-level disposition is open.
+      await replaceContainers(previous);
     }
     await restoreRootBackup(entry, archive, { resume: false });
     await startAndCheck(storageFor(entry));

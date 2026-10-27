@@ -1099,12 +1099,13 @@ describe("connectLocalAssistant", () => {
 });
 
 describe("connectPairedAssistant", () => {
-  // The modern connect import: cloud reads local; the off-machine runtimeUrl
-  // is what makes it a paired target.
+  // The modern connect import: the entry is a canonical custom remote — the
+  // contract classifier's paired shape.
   const pairedEntry = {
     assistantId: "paired-a",
-    cloud: "local",
-    runtimeUrl: "https://gw.example.com",
+    cloud: "custom",
+    ipAddress: "gw.example.com",
+    port: 443,
   };
 
   test("primes the host proxy before selecting", async () => {
@@ -1134,7 +1135,7 @@ describe("connectPairedAssistant", () => {
 
     expect(primeLocalGatewayConnectionMock).toHaveBeenCalledTimes(1);
     expect(primeLocalGatewayConnectionMock).toHaveBeenCalledWith(
-      expect.objectContaining({ assistantId: "paired-a", cloud: "local" }),
+      expect.objectContaining({ assistantId: "paired-a", cloud: "custom" }),
     );
     expect(primeLocalGatewayConnectionWithRepairMock).not.toHaveBeenCalled();
     expect(
