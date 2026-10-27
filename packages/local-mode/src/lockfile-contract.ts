@@ -137,18 +137,6 @@ export const FLATTENED_FIRST_SEGMENTS = new Set<string>([
 ]);
 
 /**
- * User-facing hosting label for a paired entry: "Paired · <hostname>" when
- * the entry is a custom remote, plain "Paired" otherwise. Shared by the
- * macOS tray switcher and the web chooser so their renderings cannot drift.
- */
-export function pairedHostLabel(entry: LockfileAssistant): string {
-  if (isRemoteGatewayEntry(entry)) {
-    return `Paired · ${new URL(getGatewayUrl(entry)).hostname}`;
-  }
-  return "Paired";
-}
-
-/**
  * Clouds whose gateway listens on a loopback port of this machine: the
  * on-machine daemon ("local") and local Docker instances ("docker").
  */
@@ -294,13 +282,12 @@ export const LockfileAssistantSchema = z.object({
   cloudAssistantId: z.string().optional(),
   /** Platform base URL used for a self-hosted local assistant registration. */
   cloudBaseUrl: z.string().optional(),
-  /** Platform organization UUID used for a self-hosted local assistant registration. */
-  cloudOrganizationId: z.string().optional(),
   /**
-   * Platform organization the entry's cloud row was synced under (set by the
-   * platform sync; org-scoped readers key on it).
+   * Platform organization the entry belongs to — set by the self-hosted
+   * registration and carried by the platform sync (org-scoped readers key
+   * on it).
    */
-  organizationId: z.string().optional(),
+  cloudOrganizationId: z.string().optional(),
   resources: LocalAssistantResourcesSchema.optional(),
   /** Helper token for cloud assistants' API bearer; host-only secret. */
   bearerToken: z.string().optional(),

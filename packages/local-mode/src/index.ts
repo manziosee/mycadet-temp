@@ -53,7 +53,6 @@ export {
   saveLockfileAssistant,
   replaceCloudAssistants,
   isActiveAssistant,
-  isPairedLockfileEntry,
 } from "./lockfile";
 export { servedConfigFromLockfile } from "./served-config";
 export type { LockfileResult, WriteResult } from "./lockfile";
@@ -64,7 +63,6 @@ export {
   LockfileAssistantSchema,
   parseLockfile,
 } from "./lockfile-contract";
-export { readRawLockfileStrict } from "./lockfile";
 export type {
   Lockfile,
   LockfileAssistant,
@@ -83,7 +81,6 @@ export {
   pairingStart,
   pairingPoll,
   pairingCancel,
-  connectImport,
 } from "./pair";
 export type {
   PairedAssistantCredentials,
@@ -96,8 +93,6 @@ export type {
   PairingStartResult,
   PairingPollOptions,
   PairingPollResult,
-  ConnectImportOptions,
-  ConnectImportResult,
 } from "./pair";
 export { runSleep } from "./sleep";
 export type { SleepResult } from "./sleep";

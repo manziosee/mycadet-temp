@@ -5,7 +5,6 @@ import {
   LockfileSchema,
   RemoteSchema,
   KNOWN_REMOTES,
-  pairedHostLabel,
   parseLockfile,
   stripSensitiveFields,
   SENSITIVE_KEYS,
@@ -346,33 +345,6 @@ describe("LockfileSchema defaults", () => {
       assistants: [],
       activeAssistant: null,
     });
-  });
-});
-
-describe("pairedHostLabel", () => {
-  test("names the remote host of a custom remote", () => {
-    expect(
-      pairedHostLabel({
-        assistantId: "a",
-        cloud: "custom",
-        ipAddress: "tunnel.example.com",
-        port: 443,
-      }),
-    ).toBe("Paired · tunnel.example.com");
-    expect(
-      pairedHostLabel({
-        assistantId: "a",
-        cloud: "custom",
-        ipAddress: "remote-host.example",
-        port: 8443,
-      }),
-    ).toBe("Paired · remote-host.example");
-  });
-
-  test("falls back to plain Paired for a loopback entry", () => {
-    expect(pairedHostLabel({ assistantId: "a", cloud: "local" })).toBe(
-      "Paired",
-    );
   });
 });
 

@@ -25,6 +25,7 @@ import {
 } from "@app/assistant/local-mode-host";
 import {
   getGatewayUrl,
+  isCloudHome,
   isLoopbackGatewayCloud,
   isRemoteGatewayEntry,
 } from "@mycadet/local-mode/contract";
@@ -427,10 +428,21 @@ export function SelectAssistantScreen() {
           />
         )}
         {lockfileEntries.map((entry, index) => {
-          // A connect import: its gateway lives on another machine, reached
-          // through the paired-gateway path.
+          // The classification asks the entry's own Remote-typed cloud (and
+          // the off-machine gateway test) directly — no intermediate kind to
+          // maintain. Every kind names its own gateway host — the actual
+          // remote.
           const paired = isRemoteGatewayEntry(entry);
           const label = entry.name ?? entry.assistantId;
+          const subtitle = paired
+            ? t("selectAssistantScreen.pairedWithHost", {
+                host: new URL(getGatewayUrl(entry)).hostname,
+              })
+            : isCloudHome(entry.cloud)
+              ? t("selectAssistantScreen.cloudHostedWithHost", {
+                  host: new URL(getGatewayUrl(entry)).hostname,
+                })
+              : t("selectAssistantScreen.localAssistant");
           return (
             <ChooserCard
               key={entry.assistantId}
@@ -438,13 +450,7 @@ export function SelectAssistantScreen() {
                 <ChooserAvatarChip avatarUrl={null} name={label} size={48} />
               }
               title={label}
-              subtitle={
-                paired
-                  ? t("selectAssistantScreen.pairedWithHost", {
-                      host: new URL(getGatewayUrl(entry)).hostname,
-                    })
-                  : t("selectAssistantScreen.localAssistant")
-              }
+              subtitle={subtitle}
               removeMenu={
                 paired ? (
                   <OriginCardMenu

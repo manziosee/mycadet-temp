@@ -2,7 +2,6 @@ import fs from "node:fs";
 import path from "node:path";
 
 import {
-  isRemoteGatewayEntry,
   LockfileSchema,
   parseLockfile,
   type Lockfile,
@@ -50,7 +49,8 @@ export type LockfileResult =
  * this stays package-internal (never re-exported from the index) — everything
  * else reads through {@link readLockfile}.
  */
-export function getLockfileData(lockfilePath: string): LockfileResult {
+export function getLockfileData(): LockfileResult {
+  const lockfilePath = resolveLockfilePath();
   let raw: string;
   try {
     raw = fs.readFileSync(lockfilePath, "utf-8");
@@ -72,25 +72,12 @@ export function getLockfileData(lockfilePath: string): LockfileResult {
   return { ok: true, data: parseLockfile(data), raw: data };
 }
 
-/**
- * Whether this assistant is a paired (connect-imported) entry — derived from
- * its remote addressing, never a stored flag. Paired entries have no local
- * daemon, so guardian-token failure guidance must say re-pair rather than
- * hatch/wake.
- */
-export function isPairedLockfileEntry(assistantId: string): boolean {
-  return readLockfile().assistants.some(
-    (assistant) =>
-      assistant.assistantId === assistantId && isRemoteGatewayEntry(assistant),
-  );
-}
-
 export type WriteResult =
   | { ok: true; lockfile: Lockfile }
   | { ok: false; status: number; error: string };
 
 /** 423 Locked: the cross-process advisory lock could not be acquired. */
-function lockFailure(error: string): WriteResult {
+export function lockFailure(error: string): WriteResult {
   return { ok: false, status: 423, error };
 }
 
@@ -104,9 +91,8 @@ export type RawLockfileReadResult =
  * empty registry. Use for writes that must never replace a registry they
  * could not actually read.
  */
-export function readRawLockfileStrict(
-  lockfilePath: string,
-): RawLockfileReadResult {
+function readRawLockfileStrict(): RawLockfileReadResult {
+  const lockfilePath = resolveLockfilePath();
   let raw: string;
   try {
     raw = fs.readFileSync(lockfilePath, "utf-8");
@@ -146,10 +132,9 @@ function toWireLockfile(lockfile: Record<string, unknown>): Lockfile {
  * validated, sensitive-field-stripped view of what was written.
  */
 export function writeRawLockfile(
-  lockfilePath: string,
   lockfile: Record<string, unknown>,
 ): WriteResult {
-  const writePath = lockfilePath;
+  const writePath = resolveLockfilePath();
   try {
     const dir = path.dirname(writePath);
     fs.mkdirSync(dir, { recursive: true });
@@ -178,14 +163,13 @@ export function writeRawLockfile(
  * refuses (423) without writing.
  */
 export function renameLockfileAssistantIfPresent(
-  lockfilePath: string,
   assistantId: string,
   name: string,
 ): WriteResult {
   if (typeof name !== "string" || name === "") {
     return { ok: false, status: 400, error: "Missing name" };
   }
-  return patchLockfileAssistantIfPresent(lockfilePath, assistantId, { name });
+  return patchLockfileAssistantIfPresent(assistantId, { name });
 }
 
 /**
@@ -195,7 +179,6 @@ export function renameLockfileAssistantIfPresent(
  * move it.
  */
 export function stampLockfileAssistantOnboardedIfPresent(
-  lockfilePath: string,
   assistantId: string,
   onboardedAt: string,
 ): WriteResult {
@@ -203,7 +186,6 @@ export function stampLockfileAssistantOnboardedIfPresent(
     return { ok: false, status: 400, error: "Missing onboardedAt" };
   }
   return patchLockfileAssistantIfPresent(
-    lockfilePath,
     assistantId,
     { onboardedAt },
     (entry) =>
@@ -217,7 +199,6 @@ export function stampLockfileAssistantOnboardedIfPresent(
  * a successful no-op for a field whose current value should win.
  */
 function patchLockfileAssistantIfPresent(
-  lockfilePath: string,
   assistantId: string,
   patch: Record<string, unknown>,
   skip?: (entry: Record<string, unknown>) => boolean,
@@ -226,8 +207,8 @@ function patchLockfileAssistantIfPresent(
     return { ok: false, status: 400, error: "Missing assistantId" };
   }
 
-  const locked = withLockfileLock(lockfilePath, (): WriteResult => {
-    const read = readRawLockfileStrict(lockfilePath);
+  const locked = withLockfileLock((): WriteResult => {
+    const read = readRawLockfileStrict();
     if (!read.ok) {
       return { ok: false, status: 409, error: read.error };
     }
@@ -252,7 +233,7 @@ function patchLockfileAssistantIfPresent(
     }
     assistants[idx] = { ...entry, ...patch };
     lockfile.assistants = assistants;
-    return writeRawLockfile(lockfilePath, lockfile);
+    return writeRawLockfile(lockfile);
   });
   return locked.ok ? locked.value : lockFailure(locked.error);
 }
@@ -269,9 +250,7 @@ export function saveLockfileAssistant(
   if (typeof assistantId !== "string") {
     throw new Error("Missing assistant.assistantId");
   }
-  const lockfilePath = resolveLockfilePath();
-
-  const locked = withLockfileLock(lockfilePath, (): WriteResult => {
+  const locked = withLockfileLock((): WriteResult => {
     const lockfile = readLockfile();
     const assistants = [...lockfile.assistants];
     const existingIdx = assistants.findIndex(
@@ -291,22 +270,18 @@ export function saveLockfileAssistant(
       lockfile.activeAssistant = activeAssistant;
     }
 
-    return writeRawLockfile(lockfilePath, lockfile);
+    return writeRawLockfile(lockfile);
   });
   if (!locked.ok) {
     throw new Error(locked.error);
   }
 }
 
-export function isActiveAssistant(
-  lockfilePath: string,
-  assistantId: string,
-): boolean {
+export function isActiveAssistant(assistantId: string): boolean {
   try {
-    const data = JSON.parse(fs.readFileSync(lockfilePath, "utf-8")) as Record<
-      string,
-      unknown
-    >;
+    const data = JSON.parse(
+      fs.readFileSync(resolveLockfilePath(), "utf-8"),
+    ) as Record<string, unknown>;
     if (data.activeAssistant === assistantId) return true;
     const assistants = data.assistants;
     if (!Array.isArray(assistants) || assistants.length !== 1) return false;
@@ -318,9 +293,8 @@ export function isActiveAssistant(
 }
 
 export function replaceCloudAssistants(
-  lockfilePath: string,
-  cloudAssistants: Array<Record<string, unknown>>,
-  organizationId?: string,
+  cloudAssistants: LockfileAssistant[],
+  cloudOrganizationId?: string,
 ): WriteResult {
   if (
     cloudAssistants.some(
@@ -337,7 +311,7 @@ export function replaceCloudAssistants(
     };
   }
 
-  const locked = withLockfileLock(lockfilePath, (): WriteResult => {
+  const locked = withLockfileLock((): WriteResult => {
     const lockfile = readLockfile();
     const existing = lockfile.assistants;
     const syncedIds = new Set(cloudAssistants.map((a) => a.assistantId));
@@ -345,7 +319,8 @@ export function replaceCloudAssistants(
     const preserved = existing.filter((a) => {
       if (!isCloudHome(a.cloud)) return true;
       if (syncedIds.has(a.assistantId)) return false;
-      return organizationId != null && a.organizationId !== organizationId;
+      return cloudOrganizationId != null &&
+        a.cloudOrganizationId !== cloudOrganizationId;
     });
     // `onboardedAt` is recorded by the client and unknown to the cloud, so
     // the replacement rows never carry it. Without this it is erased by every
@@ -360,7 +335,7 @@ export function replaceCloudAssistants(
     lockfile.assistants = [
       ...preserved,
       ...cloudAssistants.map((a) => {
-        const prior = priorOnboardedAt.get(a.assistantId as string);
+        const prior = priorOnboardedAt.get(a.assistantId);
         return a.onboardedAt == null && prior != null
           ? { ...a, onboardedAt: prior }
           : a;
@@ -375,7 +350,7 @@ export function replaceCloudAssistants(
       if (!stillExists) lockfile.activeAssistant = null;
     }
 
-    return writeRawLockfile(lockfilePath, lockfile);
+    return writeRawLockfile(lockfile);
   });
   return locked.ok ? locked.value : lockFailure(locked.error);
 }

@@ -9,13 +9,10 @@ import { guardianTokenPath } from "../config";
 import { saveLockfileAssistant } from "../lockfile";
 import {
   checkPairedAssistantName,
-  connectImport,
   pairAssistant,
   pairingCancel,
   pairingPoll,
   pairingStart,
-  type ConnectImportOptions,
-  type ConnectImportResult,
   type PairedAssistantCredentials,
   type PairOptions,
   type PairResult,
@@ -89,11 +86,8 @@ const readLockfileFromDisk = (): Record<string, unknown> =>
 
 const readGuardianToken = (assistantId: string): Record<string, unknown> =>
   JSON.parse(
-    fs.readFileSync(guardianTokenPath(configDir, assistantId), "utf-8"),
+    fs.readFileSync(guardianTokenPath(assistantId), "utf-8"),
   ) as Record<string, unknown>;
-
-const encodeBundle = (obj: Record<string, unknown>): string =>
-  Buffer.from(JSON.stringify(obj)).toString("base64");
 
 const credentials = (
   overrides: Partial<PairedAssistantCredentials> = {},
@@ -203,49 +197,52 @@ const sleep = (ms: number): Promise<void> =>
   new Promise((resolve) => setTimeout(resolve, ms));
 
 /**
- * The caller side of a pairing: register the exchanged entry through the
- * owning layer's save, exactly as the cli import command and the hosts do.
- * Pairing itself never touches the lockfile; the pre-check refused a
- * colliding id before the exchange spent its one-time code.
+ * The import side of a pairing, mirrored from the cli's connect-import
+ * command: the IMPORT defines the entry from the exchange's identity facts
+ * (the canonical custom encoding every reader derives from) and saves it
+ * through the owning layer. Pairing itself never defines or saves an entry.
  */
+function registerImportedPairing(result: {
+  assistantId: string;
+  name: string;
+  gatewayUrl: string;
+}): void {
+  const gateway = new URL(result.gatewayUrl);
+  saveLockfileAssistant({
+    assistantId: result.assistantId,
+    name: result.name,
+    cloud: "custom",
+    ipAddress: gateway.hostname,
+    port: Number(gateway.port) || (gateway.protocol === "https:" ? 443 : 80),
+  });
+}
+
+/** The import side of a pairing exchange: pair, then register. */
 function pairAndRegister(configDir: string, opts: PairOptions): PairResult {
-  const result = pairAssistant(configDir, opts);
+  const result = pairAssistant(opts);
   if (!result.ok) {
     return result;
   }
-  saveLockfileAssistant(result.entry);
+  registerImportedPairing(result);
   return result;
 }
 
-/** The caller side of a poll: register an imported pairing. */
+/** The import side of a poll: pair on import, then register. */
 async function pollAndRegister(
   configDir: string,
   opts: PairingPollOptions,
 ): Promise<PairingPollResult> {
-  const result = await pairingPoll(configDir, opts);
+  const result = await pairingPoll(opts);
   if (!result.ok || result.status !== "imported") {
     return result;
   }
-  saveLockfileAssistant(result.entry);
-  return result;
-}
-
-/** The caller side of a bundle import: register the exchanged entry. */
-function importAndRegister(
-  configDir: string,
-  opts: ConnectImportOptions,
-): ConnectImportResult {
-  const result = connectImport(configDir, opts);
-  if (!result.ok) {
-    return result;
-  }
-  saveLockfileAssistant(result.entry);
+  registerImportedPairing(result);
   return result;
 }
 
 describe("pairAssistant", () => {
-  test("writes the guardian token and returns the entry to register, with the exact CLI shapes and modes", () => {
-    const result = pairAssistant(configDir, {
+  test("writes the guardian token and returns the pairing's identity facts, defining no entry", () => {
+    const result = pairAssistant({
       credentials: credentials({ token: jwtWithExp, deviceId: "dev-aaa" }),
     });
 
@@ -255,27 +252,15 @@ describe("pairAssistant", () => {
     }
     expect(result.assistantId).toBe(DEFAULT_PAIRED_ID);
     expect(result.accessOnly).toBe(true);
-    // The entry comes back for the caller to register create-only; pairing
+    // The identity facts the importing caller defines the entry from; pairing
     // itself never touches the lockfile.
-    expect(result.entry).toEqual({
-      assistantId: DEFAULT_PAIRED_ID,
-      name: "paired (10.0.0.5:7830)",
-      cloud: "custom",
-      ipAddress: "10.0.0.5",
-      port: 7830,
-    });
-    expect(Object.keys(result.entry)).toEqual([
-      "assistantId",
-      "name",
-      "cloud",
-      "ipAddress",
-      "port",
-    ]);
+    expect(result.name).toBe("paired (10.0.0.5:7830)");
+    expect(result.gatewayUrl).toBe("http://10.0.0.5:7830");
     expect(fs.existsSync(lockfilePath)).toBe(false);
 
     // The guardian token matches what `cadet connect import` writes, field
     // for field and in the same key order.
-    const tokenPath = guardianTokenPath(configDir, DEFAULT_PAIRED_ID);
+    const tokenPath = guardianTokenPath(DEFAULT_PAIRED_ID);
     const raw = fs.readFileSync(tokenPath, "utf-8");
     expect(raw.endsWith("\n")).toBe(true);
     const token = JSON.parse(raw) as Record<string, unknown>;
@@ -311,7 +296,7 @@ describe("pairAssistant", () => {
 
   test("falls back to now+24h expiry for a non-JWT access token", () => {
     const before = Date.now();
-    const result = pairAssistant(configDir, {
+    const result = pairAssistant({
       credentials: credentials({ token: "opaque-token", deviceId: "dev-exp" }),
     });
     expect(result.ok).toBe(true);
@@ -327,7 +312,7 @@ describe("pairAssistant", () => {
   });
 
   test("persists the refresh credential and reports accessOnly: false", () => {
-    const result = pairAssistant(configDir, {
+    const result = pairAssistant({
       credentials: credentials({
         gatewayUrl: "https://gw.example.com",
         deviceId: "dev-refresh",
@@ -349,7 +334,7 @@ describe("pairAssistant", () => {
   });
 
   test("preserves a numeric (epoch-ms) refreshTokenExpiresAt", () => {
-    const result = pairAssistant(configDir, {
+    const result = pairAssistant({
       credentials: credentials({
         gatewayUrl: "https://gw.example.com",
         deviceId: "dev-num",
@@ -380,7 +365,7 @@ describe("pairAssistant", () => {
       "http://[0:0:0:0:0:ffff:127.0.0.1]:7830",
       "http://[::ffff:0.0.0.0]:7830",
     ]) {
-      const result = pairAssistant(configDir, {
+      const result = pairAssistant({
         credentials: credentials({ gatewayUrl, deviceId: "dev-loop" }),
       });
 
@@ -400,7 +385,7 @@ describe("pairAssistant", () => {
     // Private-network literals are refused before a pairing is ever minted, so
     // advice to retry with a LAN address would send the user into a guaranteed
     // second failure.
-    const result = pairAssistant(configDir, {
+    const result = pairAssistant({
       credentials: credentials({ gatewayUrl: "http://localhost:7830" }),
     });
 
@@ -416,7 +401,7 @@ describe("pairAssistant", () => {
     // refreshGuardianToken refuses to send the refresh token over plaintext
     // LAN URLs, so the pairing can never renew; report it access-only so the
     // expiry warning shows.
-    const result = pairAssistant(configDir, {
+    const result = pairAssistant({
       credentials: credentials({
         gatewayUrl: "http://10.0.0.5:7830",
         deviceId: "dev-lan",
@@ -433,7 +418,7 @@ describe("pairAssistant", () => {
   });
 
   test("a name is slugified into the id while the entry keeps the raw name", () => {
-    const result = pairAssistant(configDir, {
+    const result = pairAssistant({
       credentials: credentials(),
       name: "Desk Box",
     });
@@ -443,11 +428,11 @@ describe("pairAssistant", () => {
       return;
     }
     expect(result.assistantId).toBe("desk-box");
-    expect(result.entry.name).toBe("Desk Box");
+    expect(result.name).toBe("Desk Box");
   });
 
   test("a name with no alphanumerics is refused with a 400", () => {
-    const result = pairAssistant(configDir, {
+    const result = pairAssistant({
       credentials: credentials(),
       name: "!!!",
     });
@@ -461,7 +446,7 @@ describe("pairAssistant", () => {
   });
 
   test("the derived id is path-safe whatever the deviceId carries", () => {
-    const result = pairAssistant(configDir, {
+    const result = pairAssistant({
       credentials: credentials({ deviceId: "-/../../tmp/x" }),
     });
 
@@ -472,13 +457,11 @@ describe("pairAssistant", () => {
     // The id keys on the gateway host, so an untrusted deviceId never reaches
     // the token path at all.
     expect(result.assistantId).toBe(DEFAULT_PAIRED_ID);
-    expect(
-      fs.existsSync(guardianTokenPath(configDir, result.assistantId)),
-    ).toBe(true);
+    expect(fs.existsSync(guardianTokenPath(result.assistantId))).toBe(true);
   });
 
   test("a gatewayUrl with no host falls back to a random path-safe id", () => {
-    const result = pairAssistant(configDir, {
+    const result = pairAssistant({
       credentials: credentials({ gatewayUrl: "mailto:ops@example.com" }),
     });
 
@@ -582,7 +565,7 @@ describe("pairAssistant", () => {
     expect(slashed.assistantId).toBe(bare.assistantId);
   }),
     test("a --name still wins over the gateway-derived default", () => {
-      const result = pairAssistant(configDir, {
+      const result = pairAssistant({
         credentials: credentials(),
         name: "Desk",
       });
@@ -607,7 +590,7 @@ describe("pairAssistant", () => {
       activeAssistant: "desk",
     });
 
-    const result = pairAssistant(configDir, {
+    const result = pairAssistant({
       credentials: credentials(),
       name: "desk",
     });
@@ -627,7 +610,7 @@ describe("pairAssistant", () => {
         port: 7830,
       },
     ]);
-    expect(fs.existsSync(guardianTokenPath(configDir, "desk"))).toBe(false);
+    expect(fs.existsSync(guardianTokenPath("desk"))).toBe(false);
   });
 
   (test("re-importing under the same name is refused with the old address intact", () => {
@@ -660,15 +643,15 @@ describe("pairAssistant", () => {
     expect(readGuardianToken("desk").accessToken).toBe("t1");
   }),
     test("a guardian-token write failure surfaces as a 500 with nothing left behind", () => {
-      // A config dir whose parent is a regular file makes the token write
-      // fail deterministically (unlike chmod, which root ignores). The token
-      // is the only thing pairing writes.
+      // A config home that is a regular file makes the ambient token-path
+      // resolution fail deterministically (unlike chmod, which root ignores).
+      // The token is the only thing pairing writes.
       const notADir = path.join(tmpDir, "not-a-dir");
       fs.writeFileSync(notADir, "");
-      const unwritable = path.join(notADir, "config");
-      const tokenPath = guardianTokenPath(unwritable, DEFAULT_PAIRED_ID);
+      process.env.XDG_CONFIG_HOME = notADir;
+      const tokenPath = guardianTokenPath(DEFAULT_PAIRED_ID);
 
-      const result = pairAssistant(unwritable, {
+      const result = pairAssistant({
         credentials: credentials(),
       });
 
@@ -683,7 +666,7 @@ describe("pairAssistant", () => {
     }));
 
   test("an unparseable gatewayUrl is refused, not thrown", () => {
-    const result = pairAssistant(configDir, {
+    const result = pairAssistant({
       credentials: credentials({ gatewayUrl: "not a url" }),
     });
 
@@ -715,7 +698,7 @@ describe("checkPairedAssistantName", () => {
     expect(refusal!.status).toBe(409);
     expect(refusal!.assistantId).toBe("desk");
 
-    const real = pairAssistant(configDir, {
+    const real = pairAssistant({
       credentials: credentials(),
       name: "Desk",
     });
@@ -1023,7 +1006,7 @@ describe("loopback refusals agree across the pairing path", () => {
     expect(started.reason).toBe("invalid-address");
     expect(started.rejection).toBe("loopback");
 
-    const imported = pairAssistant(configDir, {
+    const imported = pairAssistant({
       credentials: credentials({ gatewayUrl: address }),
     });
     expect(imported.ok).toBe(false);
@@ -1056,14 +1039,9 @@ describe("pairingPoll", () => {
       ok: true,
       status: "imported",
       assistantId: expect.stringMatching(/^paired-/) as unknown as string,
+      name: "paired (gw.example.com)",
       accessOnly: false,
-      entry: {
-        assistantId: expect.stringMatching(/^paired-/) as unknown as string,
-        name: "paired (gw.example.com)",
-        cloud: "custom",
-        ipAddress: "gw.example.com",
-        port: 443,
-      },
+      gatewayUrl: "https://gw.example.com",
     });
     expect(fetchCalls).toHaveLength(1);
     expect(fetchCalls[0]!.url).toBe(
@@ -1096,7 +1074,7 @@ describe("pairingPoll", () => {
       });
     const handle = await startFromLink();
 
-    const result = await pairingPoll(configDir, {
+    const result = await pairingPoll({
       handle,
       name: "Desk Box",
     });
@@ -1105,14 +1083,9 @@ describe("pairingPoll", () => {
       ok: true,
       status: "imported",
       assistantId: "desk-box",
+      name: "Desk Box",
       accessOnly: true,
-      entry: {
-        assistantId: "desk-box",
-        name: "Desk Box",
-        cloud: "custom",
-        ipAddress: "gw.example.com",
-        port: 443,
-      },
+      gatewayUrl: "https://gw.example.com",
     });
     expect(readGuardianToken("desk-box").refreshToken).toBe("");
   });
@@ -1121,7 +1094,7 @@ describe("pairingPoll", () => {
     respond = () => json(202, pendingBody());
     const handle = await startFromLink();
 
-    const pending = await pairingPoll(configDir, { handle });
+    const pending = await pairingPoll({ handle });
     expect(pending).toEqual({
       ok: true,
       status: "pending",
@@ -1131,7 +1104,7 @@ describe("pairingPoll", () => {
     expect(fs.existsSync(lockfilePath)).toBe(false);
 
     respond = () => json(200, approvedBody());
-    const imported = await pairingPoll(configDir, { handle });
+    const imported = await pairingPoll({ handle });
     expect(imported.ok).toBe(true);
     if (!imported.ok) {
       return;
@@ -1158,7 +1131,7 @@ describe("pairingPoll", () => {
           expiresAt: new Date(Date.now() + 365 * 86_400_000).toISOString(),
         }),
       );
-    const extended = await pairingPoll(configDir, {
+    const extended = await pairingPoll({
       handle: started.handle,
     });
     expect(extended.ok).toBe(true);
@@ -1170,7 +1143,7 @@ describe("pairingPoll", () => {
     // Shortening is the gateway's to do: the code may be revoked early.
     const sooner = new Date(Date.now() + 30_000).toISOString();
     respond = () => json(202, pendingBody({ expiresAt: sooner }));
-    const shortened = await pairingPoll(configDir, {
+    const shortened = await pairingPoll({
       handle: started.handle,
     });
     expect(shortened.ok).toBe(true);
@@ -1197,7 +1170,7 @@ describe("pairingPoll", () => {
         );
       const handle = await startFromLink();
 
-      const pending = await pairingPoll(configDir, { handle });
+      const pending = await pairingPoll({ handle });
 
       expect(pending.ok).toBe(true);
       if (!pending.ok || pending.status !== "pending") {
@@ -1222,7 +1195,7 @@ describe("pairingPoll", () => {
     respond = () => json(200, approvedBody());
     const handle = await startFromLink();
 
-    const refused = await pairingPoll(configDir, {
+    const refused = await pairingPoll({
       handle,
       name: "desk",
     });
@@ -1241,7 +1214,7 @@ describe("pairingPoll", () => {
     expect(fetchCalls).toHaveLength(0);
 
     // The very same session completes once the caller picks a free name.
-    const imported = await pairingPoll(configDir, {
+    const imported = await pairingPoll({
       handle,
       name: "spare",
     });
@@ -1281,14 +1254,14 @@ describe("pairingPoll", () => {
       respond = () => json(202, pendingBody());
 
       const cliHandle = await startFromLink();
-      await pairingPoll(configDir, {
+      await pairingPoll({
         handle: cliHandle,
         platform: "cli",
       });
       expect(fetchCalls[0]!.body.platform).toBe("cli");
 
       const unknownHandle = await startFromLink();
-      await pairingPoll(configDir, {
+      await pairingPoll({
         handle: unknownHandle,
         platform: "toaster",
       });
@@ -1309,7 +1282,7 @@ describe("pairingPoll", () => {
       return;
     }
 
-    const result = await pairingPoll(configDir, {
+    const result = await pairingPoll({
       handle: started.handle,
     });
 
@@ -1328,7 +1301,7 @@ describe("pairingPoll", () => {
       json(401, { error: { code: "INVALID_OR_EXPIRED_DEVICE_CODE" } });
     const handle = await startFromLink();
 
-    const denied = await pairingPoll(configDir, { handle });
+    const denied = await pairingPoll({ handle });
     expect(denied.ok).toBe(false);
     if (denied.ok) {
       return;
@@ -1336,7 +1309,7 @@ describe("pairingPoll", () => {
     expect(denied.reason).toBe("expired");
 
     // The session is gone, so a further poll cannot replay the spent code.
-    const again = await pairingPoll(configDir, { handle });
+    const again = await pairingPoll({ handle });
     expect(again.ok).toBe(false);
     if (again.ok) {
       return;
@@ -1351,7 +1324,7 @@ describe("pairingPoll", () => {
     };
     const handle = await startFromLink();
 
-    const failed = await pairingPoll(configDir, { handle });
+    const failed = await pairingPoll({ handle });
     expect(failed.ok).toBe(false);
     if (failed.ok) {
       return;
@@ -1359,7 +1332,7 @@ describe("pairingPoll", () => {
     expect(failed.reason).toBe("unreachable");
 
     respond = () => json(200, approvedBody());
-    const imported = await pairingPoll(configDir, { handle });
+    const imported = await pairingPoll({ handle });
     expect(imported.ok).toBe(true);
   });
 
@@ -1367,7 +1340,7 @@ describe("pairingPoll", () => {
     respond = () => json(503, { error: { code: "GUARDIAN_REPAIR_REQUIRED" } });
     const handle = await startFromLink();
 
-    const refused = await pairingPoll(configDir, { handle });
+    const refused = await pairingPoll({ handle });
 
     expect(refused.ok).toBe(false);
     if (refused.ok) {
@@ -1383,7 +1356,7 @@ describe("pairingPoll", () => {
     // The same session exchanges the still-live code once the gateway is
     // repaired; the user never has to mint and approve another one.
     respond = () => json(200, approvedBody());
-    const imported = await pairingPoll(configDir, { handle });
+    const imported = await pairingPoll({ handle });
     expect(imported.ok).toBe(true);
     if (!imported.ok) {
       return;
@@ -1396,7 +1369,7 @@ describe("pairingPoll", () => {
     respond = () => json(200, { status: "approved" });
     const handle = await startFromLink();
 
-    const result = await pairingPoll(configDir, { handle });
+    const result = await pairingPoll({ handle });
 
     expect(result.ok).toBe(false);
     if (result.ok) {
@@ -1428,7 +1401,7 @@ describe("pairingPoll", () => {
       respond = () => json(200, approvedBody(overrides));
       const handle = await startFromLink();
 
-      const result = await pairingPoll(configDir, { handle });
+      const result = await pairingPoll({ handle });
 
       expect(result.ok).toBe(false);
       if (result.ok) {
@@ -1455,7 +1428,7 @@ describe("pairingPoll", () => {
       });
     const handle = await startFromLink();
 
-    const result = await pairingPoll(configDir, {
+    const result = await pairingPoll({
       handle,
       name: "Old Gateway",
     });
@@ -1464,14 +1437,9 @@ describe("pairingPoll", () => {
       ok: true,
       status: "imported",
       assistantId: "old-gateway",
+      name: "Old Gateway",
       accessOnly: true,
-      entry: {
-        assistantId: "old-gateway",
-        name: "Old Gateway",
-        cloud: "custom",
-        ipAddress: "gw.example.com",
-        port: 443,
-      },
+      gatewayUrl: "https://gw.example.com",
     });
     const token = readGuardianToken("old-gateway");
     expect(token.accessToken).toBe("acc-tok");
@@ -1486,7 +1454,7 @@ describe("pairingPoll", () => {
       json(200, approvedBody({ refreshTokenExpiresAt: expiresAtMs }));
     const handle = await startFromLink();
 
-    const result = await pairingPoll(configDir, {
+    const result = await pairingPoll({
       handle,
       name: "Numeric Expiry",
     });
@@ -1498,18 +1466,17 @@ describe("pairingPoll", () => {
   });
 
   test("a local write that fails after the exchange surfaces as an import failure", async () => {
-    // A config dir whose parent is a regular file makes the token write fail
-    // after the code has already been spent. That is the `import` reason:
-    // the session is gone and a retry needs a fresh code, which is exactly
-    // what the pre-check reason does NOT mean.
+    // A config home that is a regular file makes the ambient token write
+    // fail after the code has already been spent. That is the `import`
+    // reason: the session is gone and a retry needs a fresh code, which is
+    // exactly what the pre-check reason does NOT mean.
     const notADir = path.join(tmpDir, "not-a-dir");
     fs.writeFileSync(notADir, "");
+    process.env.XDG_CONFIG_HOME = notADir;
     respond = () => json(200, approvedBody());
     const handle = await startFromLink();
 
-    const result = await pairingPoll(path.join(notADir, "config"), {
-      handle,
-    });
+    const result = await pairingPoll({ handle });
 
     expect(result.ok).toBe(false);
     if (result.ok) {
@@ -1519,7 +1486,7 @@ describe("pairingPoll", () => {
     expect(pairingSessionSurvives(result.reason)).toBe(false);
     // The exchange did go out, so the code is spent and the session is gone.
     expect(fetchCalls).toHaveLength(1);
-    const again = await pairingPoll(configDir, { handle });
+    const again = await pairingPoll({ handle });
     expect(again.ok).toBe(false);
     if (again.ok) {
       return;
@@ -1531,7 +1498,7 @@ describe("pairingPoll", () => {
     respond = () => redirectTo("http://169.254.169.254/latest/meta-data/");
     const handle = await startFromLink();
 
-    const redirected = await pairingPoll(configDir, { handle });
+    const redirected = await pairingPoll({ handle });
 
     expect(redirected.ok).toBe(false);
     if (redirected.ok) {
@@ -1545,7 +1512,7 @@ describe("pairingPoll", () => {
     expect(fetchCalls[0]!.redirect).toBe("error");
 
     respond = () => json(200, approvedBody());
-    const retried = await pairingPoll(configDir, { handle });
+    const retried = await pairingPoll({ handle });
     expect(retried.ok).toBe(true);
   });
 
@@ -1557,7 +1524,7 @@ describe("pairingPoll", () => {
       });
     const handle = await startFromLink();
 
-    const result = await pairingPoll(configDir, { handle });
+    const result = await pairingPoll({ handle });
 
     expect(result.ok).toBe(false);
     if (result.ok) {
@@ -1572,7 +1539,7 @@ describe("pairingPoll", () => {
 
   test("an unknown handle is refused without a request", async () => {
     for (const handle of ["nope", "", undefined, 42]) {
-      const result = await pairingPoll(configDir, { handle });
+      const result = await pairingPoll({ handle });
       expect(result.ok).toBe(false);
       if (result.ok) {
         continue;
@@ -1598,7 +1565,7 @@ describe("pairingCancel", () => {
     // A second cancel is a no-op, and the handle is dead.
     expect(pairingCancel(started.handle)).toBe(false);
 
-    const result = await pairingPoll(configDir, {
+    const result = await pairingPoll({
       handle: started.handle,
     });
     expect(result.ok).toBe(false);
@@ -1638,7 +1605,7 @@ describe("pairingCancel", () => {
   test("a cancel while the exchange is in flight persists nothing", async () => {
     const approve = heldApproval();
     const handle = await startLinkSession();
-    const polled = pairingPoll(configDir, { handle });
+    const polled = pairingPoll({ handle });
     await requestsInFlight(1);
 
     expect(pairingCancel(handle)).toBe(true);
@@ -1665,7 +1632,7 @@ describe("pairingCancel", () => {
         });
       });
     const handle = await startLinkSession();
-    const polled = pairingPoll(configDir, { handle });
+    const polled = pairingPoll({ handle });
     await requestsInFlight(1);
 
     expect(pairingCancel(handle)).toBe(true);
@@ -1686,7 +1653,7 @@ describe("pairingCancel", () => {
   test("an exchange nobody cancels still imports", async () => {
     const approve = heldApproval();
     const handle = await startLinkSession();
-    const polled = pairingPoll(configDir, { handle });
+    const polled = pairingPoll({ handle });
     await requestsInFlight(1);
 
     approve();
@@ -1696,7 +1663,7 @@ describe("pairingCancel", () => {
     if (!result.ok || result.status !== "imported") {
       return;
     }
-    saveLockfileAssistant(result.entry);
+    registerImportedPairing(result);
     const entry = (
       readLockfileFromDisk().assistants as Array<Record<string, unknown>>
     )[0]!;
@@ -1738,7 +1705,7 @@ describe("pairingCancel", () => {
       return;
     }
 
-    const polled = pairingPoll(configDir, {
+    const polled = pairingPoll({
       handle: started.handle,
     });
     await requestsInFlight(2);
@@ -1759,182 +1726,5 @@ describe("pairingCancel", () => {
     expect(result.status).toBe(404);
     expect(fs.existsSync(lockfilePath)).toBe(false);
     expect(fs.existsSync(path.join(configDir, "assistants"))).toBe(false);
-  });
-});
-
-describe("connectImport", () => {
-  test("registers a valid bundle and returns the wire-shaped success", () => {
-    const result = importAndRegister(configDir, {
-      bundle: ` ${encodeBundle({
-        gatewayUrl: "https://gw.example.com",
-        token: "tok",
-        deviceId: "dev-ci",
-      })} `,
-      name: "Desk Box",
-    });
-
-    expect(result).toEqual({
-      ok: true,
-      assistantId: "desk-box",
-      accessOnly: true,
-      entry: {
-        assistantId: "desk-box",
-        name: "Desk Box",
-        cloud: "custom",
-        ipAddress: "gw.example.com",
-        port: 443,
-      },
-    });
-    expect(fs.existsSync(guardianTokenPath(configDir, "desk-box"))).toBe(true);
-    const entry = (
-      readLockfileFromDisk().assistants as Array<Record<string, unknown>>
-    )[0]!;
-    expect(entry).toMatchObject({
-      assistantId: "desk-box",
-      cloud: "custom",
-      ipAddress: "gw.example.com",
-      port: 443,
-    });
-  });
-
-  test("a legacy id naming another gateway is not adopted", () => {
-    // The device id is untrusted bundle input, so an entry that does not name
-    // the same gateway is left alone rather than repointed at another host.
-    writeLockfile({
-      assistants: [
-        {
-          assistantId: "paired-dev-legacy",
-          cloud: "custom",
-          ipAddress: "other.example.com",
-          port: 443,
-        },
-      ],
-    });
-
-    const result = importAndRegister(configDir, {
-      bundle: encodeBundle({
-        gatewayUrl: "https://gw.example.com",
-        token: "tok-1",
-        deviceId: "dev-legacy",
-      }),
-    });
-
-    expect(result).toMatchObject({ ok: true });
-    const entries = readLockfileFromDisk().assistants as Array<
-      Record<string, unknown>
-    >;
-    expect(entries).toHaveLength(2);
-    expect(
-      entries.find((e) => e.assistantId === "paired-dev-legacy"),
-    ).toMatchObject({ ipAddress: "other.example.com" });
-  });
-
-  test("a missing, empty, or non-string bundle is a 400", () => {
-    for (const value of [undefined, "", 42]) {
-      expect(connectImport(configDir, { bundle: value })).toEqual({
-        ok: false,
-        status: 400,
-        error: "Missing pairing bundle",
-      });
-    }
-    expect(fs.existsSync(lockfilePath)).toBe(false);
-  });
-
-  test("an oversized bundle is refused before decoding", () => {
-    expect(
-      connectImport(configDir, {
-        bundle: "a".repeat(64 * 1024 + 1),
-      }),
-    ).toEqual({
-      ok: false,
-      status: 400,
-      error: "Pairing bundle is too large",
-    });
-    expect(fs.existsSync(lockfilePath)).toBe(false);
-  });
-
-  test("a loopback gatewayUrl keeps pairAssistant's 422 and refusal copy", () => {
-    const result = connectImport(configDir, {
-      bundle: encodeBundle({
-        gatewayUrl: "http://127.0.0.1:5432",
-        token: "tok",
-        deviceId: "dev-loop",
-      }),
-    });
-
-    expect(result.ok).toBe(false);
-    if (result.ok) {
-      return;
-    }
-    expect(result.status).toBe(422);
-    expect(result.error).toContain("non-loopback");
-    expect(fs.existsSync(lockfilePath)).toBe(false);
-  });
-
-  test("a malformed bundle maps the decode error to a 400", () => {
-    const result = connectImport(configDir, {
-      bundle: "not-base64-json!!!",
-    });
-
-    expect(result.ok).toBe(false);
-    if (result.ok) {
-      return;
-    }
-    expect(result.status).toBe(400);
-    expect(result.error).toContain("base64");
-    expect(fs.existsSync(lockfilePath)).toBe(false);
-  });
-
-  test("an overwrite refusal keeps pairAssistant's 409 and error string", () => {
-    writeLockfile({
-      assistants: [
-        {
-          assistantId: "desk",
-          cloud: "local",
-          ipAddress: "127.0.0.1",
-          port: 7830,
-        },
-      ],
-      activeAssistant: "desk",
-    });
-
-    const result = connectImport(configDir, {
-      bundle: encodeBundle({
-        gatewayUrl: "https://gw.example.com",
-        token: "tok",
-      }),
-      name: "desk",
-    });
-
-    expect(result).toEqual({
-      ok: false,
-      status: 409,
-      error: "An assistant named 'desk' already exists",
-    });
-    expect(fs.existsSync(guardianTokenPath(configDir, "desk"))).toBe(false);
-  });
-
-  test("a non-string name is ignored rather than slugified", () => {
-    const result = connectImport(configDir, {
-      bundle: encodeBundle({
-        gatewayUrl: "https://gw.example.com",
-        token: "tok",
-        deviceId: "dev-nn",
-      }),
-      name: 7,
-    });
-
-    expect(result).toEqual({
-      ok: true,
-      assistantId: "paired-gw-example-com",
-      accessOnly: true,
-      entry: {
-        assistantId: "paired-gw-example-com",
-        name: "paired (gw.example.com)",
-        cloud: "custom",
-        ipAddress: "gw.example.com",
-        port: 443,
-      },
-    });
   });
 });

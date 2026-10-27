@@ -11,11 +11,9 @@
 
 import {
   checkPairedAssistantName,
-  connectImport as importLegacyBundle,
   pairingCancel,
   pairingPoll,
   pairingStart,
-  resolveConfigDir,
   saveLockfileAssistant,
 } from "@mycadet/local-mode";
 import { isRetryablePairingReason } from "@mycadet/service-contracts/remote-web-pairing";
@@ -93,53 +91,26 @@ function reportImported(result: {
 }
 
 /**
- * The cli's registration step. Pairing itself never touches the lockfile —
- * assistant entries belong to hatch/retire/the cli — so the command saves the
- * exchanged pairing through the owning layer. The pre-check refused a
- * colliding id before the exchange spent its one-time code.
+ * The import's registration step. Pairing never defines or saves a lockfile
+ * entry — imports create entries; pairs pair with a defined one — so this
+ * command defines the entry from the exchange's identity facts (the canonical
+ * custom encoding every reader derives from) and saves it through the owning
+ * layer. The pre-check refused a colliding id before the exchange spent its
+ * one-time code.
  */
-function registerPairedEntry(
-  entry: Parameters<typeof saveLockfileAssistant>[0],
-): void {
-  saveLockfileAssistant(entry);
-}
-
-/**
- * DEPRECATED input path, kept for one upgrade cycle: a host still on the
- * previous CLI release mints a base64 pairing bundle, and an upgraded second
- * machine would otherwise reject that bundle as an invalid address. Delete
- * this once that release is out of support; nothing mints bundles any more.
- *
- * Returns true when the argument was a bundle and the import is done. A 400
- * means it did not decode as one, so the caller reports the address error it
- * already has instead of a bundle error.
- */
-function importLegacyPairingBundle(
-  configDir: string,
-  address: string,
-  name: string | undefined,
-): boolean {
-  const result = importLegacyBundle(configDir, {
-    bundle: address,
-    name,
+function registerImportedPairing(result: {
+  assistantId: string;
+  name: string;
+  gatewayUrl: string;
+}): void {
+  const gateway = new URL(result.gatewayUrl);
+  saveLockfileAssistant({
+    assistantId: result.assistantId,
+    name: result.name,
+    cloud: "custom",
+    ipAddress: gateway.hostname,
+    port: Number(gateway.port) || (gateway.protocol === "https:" ? 443 : 80),
   });
-  if (!result.ok) {
-    if (result.status === 400) {
-      return false;
-    }
-    console.error(formatImportFailure(result.status, result.error));
-    process.exit(1);
-  }
-  console.log(
-    "Warning: base64 pairing bundles are deprecated and will stop working in a future release.",
-  );
-  console.log(
-    "Newer hosts print a pairing link instead: run `cadet pair` there and import that link.",
-  );
-  console.log("");
-  registerPairedEntry(result.entry);
-  reportImported(result);
-  return true;
 }
 
 export async function connectImport(): Promise<void> {
@@ -176,8 +147,6 @@ export async function connectImport(): Promise<void> {
     process.exit(1);
   }
 
-  const configDir = resolveConfigDir();
-
   // Refuse a colliding --name BEFORE anything is exchanged. The device code is
   // one-time and the gateway records a device the moment it is spent, so
   // discovering the collision after the exchange would orphan that device and
@@ -194,14 +163,6 @@ export async function connectImport(): Promise<void> {
 
   const started = await pairingStart(address);
   if (!started.ok) {
-    // The address path runs first, so the normal flow never touches the
-    // deprecated bundle decoder; only an unusable address falls through to it.
-    if (
-      started.reason === "invalid-address" &&
-      importLegacyPairingBundle(configDir, address, nameFlag)
-    ) {
-      return;
-    }
     console.error(`Error: ${started.error}`);
     process.exit(1);
   }
@@ -240,7 +201,7 @@ export async function connectImport(): Promise<void> {
     let consecutiveFailures = 0;
 
     for (;;) {
-      const result = await pairingPoll(configDir, {
+      const result = await pairingPoll({
         handle: started.handle,
         name: nameFlag,
         platform: "cli",
@@ -282,7 +243,7 @@ export async function connectImport(): Promise<void> {
       consecutiveFailures = 0;
 
       if (result.status === "imported") {
-        registerPairedEntry(result.entry);
+        registerImportedPairing(result);
         reportImported(result);
         return;
       }
