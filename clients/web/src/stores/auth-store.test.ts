@@ -163,8 +163,10 @@ mock.module("@/lib/local-mode", () => ({
   isCadetCloudRemote: () => mockIsCadetCloudRemote,
   isServedGatewayRuntime: () => mockIsServedGatewayRuntime,
   hasGatewayAssistant: () => mockIsGatewayAuth,
-  isGatewaySessionLive: () =>
-    getSelfHostedActorToken() !== null || mockPairedSelection(),
+  hasPairedGateway: (a: { assistantId: string } | undefined) =>
+    !!a && mockPairedSelection(),
+  hasLocalGateway: (a: { assistantId: string } | undefined) =>
+    !!a && mockIsGatewayAuth && !mockPairedSelection(),
   getCloudAssistants: () => mockCloudAssistants,
   getLocalAssistants: () => [],
   getActiveAssistant: () => mockSelectedAssistant,
@@ -560,6 +562,7 @@ describe("auth store onboarding flag reconciliation", () => {
     // persisted local assistant to the recovery controls.
     mockIsLocalClient = true;
     mockIsGatewayAuth = true;
+    mockSelectedAssistant = { assistantId: "local-a", cloud: "local" };
 
     await useAuthStore.getState().initSession();
 
@@ -575,6 +578,7 @@ describe("auth store onboarding flag reconciliation", () => {
     // through to the chooser exactly as before.
     mockIsLocalClient = true;
     mockIsGatewayAuth = true;
+    mockSelectedAssistant = { assistantId: "local-a", cloud: "local" };
     mockPrimeError = new Error("Gateway token request failed: 401");
 
     await useAuthStore.getState().initSession();
@@ -863,6 +867,7 @@ describe("iOS widget snapshot on session end", () => {
     // Screen while the app shows the recovery controls.
     mockIsLocalClient = true;
     mockIsGatewayAuth = true;
+    mockSelectedAssistant = { assistantId: "local-a", cloud: "local" };
     mockPrimeError = new Error("Gateway token request failed: 401");
 
     await useAuthStore.getState().initSession();
@@ -877,6 +882,7 @@ describe("iOS widget snapshot on session end", () => {
     // the probe on a value the follow-up probe is about to replace.
     mockIsLocalClient = true;
     mockIsGatewayAuth = true;
+    mockSelectedAssistant = { assistantId: "local-a", cloud: "local" };
     mockPrimeError = new Error("Gateway token request failed: 401");
     sessionUser = { id: "user-1", email: "user@example.com" };
     useAuthStore.setState({ cloudSession: "unknown" });
@@ -1034,6 +1040,7 @@ describe("iOS widget snapshot on session end", () => {
     // established while the boot's snapshot clear was still outstanding.
     mockIsLocalClient = true;
     mockIsGatewayAuth = true;
+    mockSelectedAssistant = { assistantId: "local-a", cloud: "local" };
     mockPrimeError = new Error("Gateway token request failed: 401");
     const releaseClear = holdWidgetSnapshotClear();
 
@@ -1045,6 +1052,13 @@ describe("iOS widget snapshot on session end", () => {
       url: window.location.origin,
       token: "slot-token",
     });
+    // The re-auth is a gateway session: give the refresh a paired selection
+    // whose resolvable gateway re-verifies through the prime.
+    mockSelectedAssistant = {
+      assistantId: "paired-1",
+      cloud: "local",
+      runtimeUrl: "https://gw.example.com",
+    };
     await expect(useAuthStore.getState().refreshSession()).resolves.toBe(true);
 
     releaseClear();
@@ -1204,6 +1218,7 @@ describe("platform session probe resolution", () => {
       url: window.location.origin,
       token: "slot-token",
     });
+    mockSelectedAssistant = { assistantId: "local-a", cloud: "local" };
     mockIsLocalClient = true;
     sessionUser = { id: "user-1", email: "user@example.com" };
     useAuthStore.setState({ cloudSession: "absent" });
@@ -1233,6 +1248,7 @@ describe("platform session probe resolution", () => {
       url: window.location.origin,
       token: "slot-token",
     });
+    mockSelectedAssistant = { assistantId: "local-a", cloud: "local" };
     mockIsLocalClient = true;
     sessionUser = { id: "user-1", email: "user@example.com" };
     useAuthStore.setState({ cloudSession: "absent" });
@@ -1658,6 +1674,7 @@ describe("connectLocalAssistant", () => {
   test("waits for the new cloud probe before bootstrapping a connected local assistant", async () => {
     mockIsLocalClient = true;
     mockIsGatewayAuth = true;
+    mockSelectedAssistant = { assistantId: "local-a", cloud: "local" };
     sessionUser = { id: "user-1" };
     useAuthStore.setState({ cloudSession: "present" });
     getSessionGates = [];
