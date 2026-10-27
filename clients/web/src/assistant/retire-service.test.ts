@@ -49,7 +49,7 @@ mock.module("@/lib/local-mode", () => ({
   isLocalClient: () => isLocalClientValue,
   isPairedAssistant: (a: { cloud?: string }) => a.cloud === "paired",
   retireLocalAssistant: retireLocalAssistantMock,
-  // The auth-store graph (imported for the post-retire probe answer) needs
+  // The auth-store graph (pulled in by the store modules under test) needs
   // these; no test here exercises the gateway machinery.
   getActiveAssistant: () => undefined,
   isServedGatewayRuntime: () => false,
@@ -67,32 +67,18 @@ mock.module("@/hooks/use-chooser-row-avatar", () => ({
 const queryClient = new QueryClient();
 
 mock.module("@/lib/navigation/navigation-resolver", () => ({
-  resolveNavigation: (
-    state: Record<string, unknown>,
-    query: { kind: string },
-  ) => {
+  resolveNavigation: (query: { kind: string }) => {
     if (query.kind !== "post-retire") {
       return { action: "allow" };
     }
-    if (state.hasAssistants) {
+    if (storeAssistants.length > 0) {
       return { action: "redirect", to: "/assistant" };
     }
-    if (!state.isLocalClient) {
+    if (!isLocalClientValue) {
       return { action: "redirect", to: "/assistant/onboarding/privacy" };
     }
-    if (state.cloudSession === "present") {
-      return { action: "redirect", to: "/account/onboarding/hosting" };
-    }
-    return { action: "redirect", to: "/assistant/welcome" };
+    return { action: "redirect", to: "/account/onboarding/hosting" };
   },
-}));
-mock.module("@/lib/navigation/build-state", () => ({
-  buildNavigationState: () => ({
-    isLocalClient: isLocalClientValue,
-    isAuthenticated: false,
-    cloudSession: "absent",
-    hasAssistants: storeAssistants.length > 0,
-  }),
 }));
 
 const removeMock = mock((assistantId: string) => {
@@ -117,12 +103,8 @@ mock.module("@/utils/routes", () => ({
 }));
 
 const { retireAssistant } = await import("./retire-service");
-const { __settleCloudProbeForTesting } = await import("@/stores/auth-store");
 
 beforeEach(() => {
-  // The post-retire fork awaits the cloud-session probe's answer; the real
-  // auth store's boot flow never runs here, so settle its default directly.
-  __settleCloudProbeForTesting("absent");
   isLocalClientValue = false;
   lockfileAssistants = [];
   storeAssistants = [];
@@ -261,7 +243,7 @@ describe("retireAssistant", () => {
     }
   });
 
-  test("post-retire redirects to welcome when no assistants and not logged in", async () => {
+  test("post-retire redirects to hosting when no assistants remain in local mode", async () => {
     isLocalClientValue = true;
     lockfileAssistants = [{ assistantId: "l1", cloud: "local" }];
     storeAssistants = [{ id: "l1" }];
@@ -270,7 +252,7 @@ describe("retireAssistant", () => {
 
     expect(outcome.ok).toBe(true);
     if (outcome.ok) {
-      expect(outcome.nextRoute).toBe("/assistant/welcome");
+      expect(outcome.nextRoute).toBe("/account/onboarding/hosting");
     }
   });
 });
