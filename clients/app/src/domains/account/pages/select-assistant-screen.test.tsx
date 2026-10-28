@@ -624,8 +624,9 @@ describe("remembered origins", () => {
         {
           assistantId: "paired-1",
           name: "Office",
-          cloud: "paired",
-          runtimeUrl: "https://office.example.com",
+          cloud: "custom",
+          ipAddress: "office.example.com",
+          port: 443,
         },
       ],
       activeAssistant: null,
@@ -642,9 +643,8 @@ describe("remembered origins", () => {
       // Hostless surfaces add an origin instead; with a host the dialog owns
       // pairing.
       expect(screen.queryByText("Add a remote assistant")).toBeNull();
-      expect(
-        await screen.findByText("Paired · office.example.com"),
-      ).toBeDefined();
+      // A custom remote's row names the gateway host — the actual remote.
+      expect(await screen.findByText("office.example.com")).toBeDefined();
       fireEvent.click(screen.getByText("Connect a remote assistant"));
       expect(
         await screen.findByText("Connect a Remote Assistant"),
@@ -662,6 +662,9 @@ describe("remembered origins", () => {
             url: "web/1.2.3/assistant/",
           });
         }
+        if (String(url).includes("/v1/assistants")) {
+          return Response.json({ results: [] });
+        }
         return iframeDocument.clone();
       });
       fireEvent.click(await screen.findByRole("radio", { name: /^Office/ }));
@@ -677,7 +680,11 @@ describe("remembered origins", () => {
       });
     });
 
-    test("a local assistant that is not healthy opens the recovery dialog", async () => {
+    test("an unhealthy local assistant still connects — the shell's not-ready wake owns recovery", async () => {
+      // The chooser connects by navigating, full stop: no connect-time
+      // probe, no verdict, no recovery dialog of its own. An entry whose
+      // daemon is down lands on the app shell's not-ready panel, whose
+      // wake is remote-agnostic.
       stubCadet(
         {
           assistants: [
@@ -691,16 +698,26 @@ describe("remembered origins", () => {
         },
         { ok: true, state: "crashed" },
       );
-      setup("/account/select-assistant", false, async () =>
-        Response.json({ results: [] }),
-      );
+      setup("/account/select-assistant", false, async (url) => {
+        if (String(url).includes("/v1/assistants/local-1")) {
+          return Response.json({
+            id: "local-1",
+            status: "inactive",
+            version: "1.2.3",
+          });
+        }
+        return iframeDocument.clone();
+      });
       fireEvent.click(await screen.findByRole("radio", { name: /^Workbench/ }));
-      expect(
-        await screen.findByText("Can\u2019t Authenticate Assistant"),
-      ).toBeDefined();
-      expect(
-        screen.getByText(/authentication token for Workbench/),
-      ).toBeDefined();
+      await waitFor(() => {
+        expect(
+          request.mock.calls.some(([url]) =>
+            String(url).includes("/v1/assistants/local-1"),
+          ),
+        ).toBe(true);
+      });
+      // Recovery copy lives in the shell now, not the chooser.
+      expect(screen.queryByText("Can\u2019t Authenticate Assistant")).toBeNull();
     });
   });
 });
