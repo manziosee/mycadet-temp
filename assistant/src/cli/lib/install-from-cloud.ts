@@ -37,6 +37,7 @@ import { getCloudBaseUrl } from "../../config/env.js";
 import { getExistingDeviceId } from "../../util/device-id.js";
 import { getWorkspacePluginsDir } from "../../util/layout.js";
 import { getPluginManifestInstallAction } from "../../util/plugin-manifest.js";
+import { MAX_RETRY_AFTER_MS, parseRetryAfterMs } from "../../util/retry.js";
 import { APP_VERSION } from "../../version.js";
 import type { FetchLike } from "./fetch-like.js";
 import {
@@ -363,14 +364,10 @@ async function downloadInstallArchive(
 
 /** Compute the backoff before the next retry, honoring `Retry-After` on a 429. */
 function retryDelayMs(res: Response, attempt: number): number {
-  const retryAfter = res.headers.get("retry-after");
-  if (retryAfter) {
-    const seconds = Number.parseInt(retryAfter, 10);
-    if (Number.isFinite(seconds) && seconds >= 0) {
-      return seconds * 1000;
-    }
-  }
-  return RETRY_BASE_MS * 2 ** (attempt - 1);
+  return (
+    parseRetryAfterMs(res.headers.get("retry-after"), MAX_RETRY_AFTER_MS) ??
+    RETRY_BASE_MS * 2 ** (attempt - 1)
+  );
 }
 
 /** Build the install URL, appending optional attribution query params. */

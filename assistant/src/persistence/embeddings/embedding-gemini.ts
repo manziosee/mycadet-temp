@@ -1,4 +1,5 @@
 import { getLogger } from "../../util/logger.js";
+import { MAX_RETRY_AFTER_MS, parseRetryAfterMs } from "../../util/retry.js";
 import type {
   EmbeddingBackend,
   EmbeddingInput,
@@ -288,8 +289,9 @@ export class GeminiEmbeddingBackend implements EmbeddingBackend {
     });
     if (!response.ok) {
       const responseBody = await response.text();
-      const retryAfterMs = parseRetryAfterHeader(
+      const retryAfterMs = parseRetryAfterMs(
         response.headers.get("Retry-After"),
+        MAX_RETRY_AFTER_MS,
       );
       throw new GeminiEmbedError(
         `Gemini embeddings request failed (${response.status}): ${responseBody}`,
@@ -337,26 +339,4 @@ export class GeminiEmbeddingBackend implements EmbeddingBackend {
       },
     ];
   }
-}
-
-/**
- * Parse the value of a `Retry-After` response header into milliseconds.
- * Accepts a delta-seconds integer ("30") or an HTTP date string.
- * Returns undefined when the value is absent, unparseable, or in the past.
- */
-function parseRetryAfterHeader(value: string | null): number | undefined {
-  if (!value) {
-    return undefined;
-  }
-  const trimmed = value.trim();
-  const seconds = Number(trimmed);
-  if (!Number.isNaN(seconds) && seconds >= 0) {
-    return Math.ceil(seconds * 1000);
-  }
-  const date = new Date(trimmed);
-  if (!isNaN(date.getTime())) {
-    const ms = date.getTime() - Date.now();
-    return ms > 0 ? ms : undefined;
-  }
-  return undefined;
 }

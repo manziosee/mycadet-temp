@@ -21,6 +21,7 @@
 
 import type { OAuthConnection } from "../../../oauth/connection.js";
 import { getLogger } from "../../../util/logger.js";
+import { MAX_RETRY_AFTER_MS, parseRetryAfterMs } from "../../../util/retry.js";
 import type { SlackApiResponse } from "./types.js";
 
 const log = getLogger("slack-web-api");
@@ -124,8 +125,11 @@ function sleepMs(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-function retryAfterSeconds(header: string | null): number {
-  return parseInt(header ?? "", 10) || DEFAULT_RETRY_AFTER_S;
+function retryAfterMs(header: string | null): number {
+  return (
+    parseRetryAfterMs(header, MAX_RETRY_AFTER_MS) ??
+    DEFAULT_RETRY_AFTER_S * 1000
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -200,9 +204,9 @@ export async function rawSlackRequest<T extends SlackApiResponse>(
           message: "Slack API rate limited",
         });
       }
-      const retryAfter = retryAfterSeconds(resp.headers.get("Retry-After"));
-      log.warn({ method, retryAfter, attempt }, "Slack rate limited, retrying");
-      await sleepMs(retryAfter * 1000);
+      const delayMs = retryAfterMs(resp.headers.get("Retry-After"));
+      log.warn({ method, delayMs, attempt }, "Slack rate limited, retrying");
+      await sleepMs(delayMs);
       continue;
     }
 
@@ -306,10 +310,11 @@ async function connectionSlackRequest<T extends SlackApiResponse>(
           message: "Slack API rate limited",
         });
       }
-      const retryAfter = retryAfterSeconds(
-        resp.headers["retry-after"] ?? resp.headers["Retry-After"] ?? null,
+      await sleepMs(
+        retryAfterMs(
+          resp.headers["retry-after"] ?? resp.headers["Retry-After"] ?? null,
+        ),
       );
-      await sleepMs(retryAfter * 1000);
       continue;
     }
 

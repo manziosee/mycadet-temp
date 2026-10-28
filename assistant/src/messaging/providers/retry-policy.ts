@@ -12,6 +12,8 @@
  * fourth copy of the loop.
  */
 
+import { parseRetryAfterMs } from "../../util/retry.js";
+
 /**
  * `setTimeout` clamps above this, so a longer delay would fire immediately
  * instead of waiting. Any server-advertised wait is capped to it.
@@ -45,18 +47,9 @@ export function computeRetryDelayMs(
   retryAfter: string | null,
   maxDelayMs: number = MAX_TIMER_DELAY_MS,
 ): number {
-  if (retryAfter) {
-    const seconds = Number(retryAfter);
-    if (Number.isFinite(seconds) && seconds > 0) {
-      return Math.min(seconds * 1000, maxDelayMs);
-    }
-    const targetTime = new Date(retryAfter).getTime();
-    if (Number.isFinite(targetTime)) {
-      const delayMs = targetTime - Date.now();
-      if (delayMs > 0) {
-        return Math.min(delayMs, maxDelayMs);
-      }
-    }
+  const advertised = parseRetryAfterMs(retryAfter, maxDelayMs);
+  if (advertised !== undefined) {
+    return advertised;
   }
   const exponential = initialBackoffMs * 2 ** (attempt - 1);
   const jitter = Math.random() * exponential * 0.5;

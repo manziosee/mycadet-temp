@@ -2,6 +2,7 @@ import type {
   OAuthConnection,
   OAuthConnectionResponse,
 } from "../../../oauth/connection.js";
+import { MAX_RETRY_AFTER_MS, parseRetryAfterMs } from "../../../util/retry.js";
 import type {
   OutlookAttachmentListResponse,
   OutlookAutoReplySettings,
@@ -90,9 +91,9 @@ async function request<T>(
       if (canRetry && isRetryable(resp.status) && attempt < MAX_RETRIES) {
         const retryAfter =
           resp.headers["retry-after"] ?? resp.headers["Retry-After"];
-        const delayMs = retryAfter
-          ? parseInt(retryAfter, 10) * 1000
-          : INITIAL_BACKOFF_MS * Math.pow(2, attempt);
+        const delayMs =
+          parseRetryAfterMs(retryAfter, MAX_RETRY_AFTER_MS) ??
+          INITIAL_BACKOFF_MS * Math.pow(2, attempt);
         await new Promise((resolve) => setTimeout(resolve, delayMs));
         continue;
       }
