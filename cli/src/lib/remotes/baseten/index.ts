@@ -1,9 +1,9 @@
 import { green } from "../../color.js";
+import { PROVIDER_ENV_VAR_NAMES } from "../../../shared/provider-env-vars.js";
 import {
   basetenImageRef,
   createBasetenSandbox,
   pushBasetenImage,
-  resolveBasetenToken,
 } from "./api.js";
 import {
   BASETEN_IMAGE_NAME,
@@ -15,25 +15,23 @@ import {
  *
  * Builds the Cadet sandbox image from the Dockerfile + entrypoint.sh beside
  * this module (version stamped from cli/package.json, optional assistant
- * name piped through), pushes it through Baseten's management API, and
- * creates a sandbox from it with the provider credentials injected as secret
- * env vars. No local Baseten CLI required.
+ * name piped through), pushes it, and creates a sandbox from it with the
+ * provider credentials injected as secret env vars. The installed `baseten`
+ * CLI is preferred when present; without one, the same operations ride
+ * Baseten's management API directly.
  *
  * The model loop runs IN the sandbox: the image hatches a golden assistant
  * at build time and the sandbox entrypoint wakes it, so once this returns
  * the sandbox is a running Cadet.
  */
 
-/** Provider credentials worth injecting into the sandbox, when present. */
-const PROVIDER_KEY_ENV_VARS = [
-  "ANTHROPIC_API_KEY",
-  "OPENAI_API_KEY",
-  "XAI_API_KEY",
-  "GEMINI_API_KEY",
-] as const;
-
+/**
+ * Every supported provider API key from the caller's environment is injected
+ * into the sandbox as a secret env var when present — the same combined map
+ * the docker/aws/gcp flows iterate (see shared/provider-env-vars.ts).
+ */
 function collectProviderEnvs() {
-  return PROVIDER_KEY_ENV_VARS.flatMap((name) => {
+  return Object.values(PROVIDER_ENV_VAR_NAMES).flatMap((name) => {
     const value = process.env[name];
     return value ? [{ name, secret: true, value }] : [];
   });
@@ -56,11 +54,10 @@ export const hatchBaseten = Object.assign(
 
     const staged = stageBasetenBuildContext({ assistantName: name });
     try {
-      const token = await resolveBasetenToken();
-
       console.log("🚀 Pushing the Cadet sandbox image to Baseten...");
-      await pushBasetenImage(token, {
+      await pushBasetenImage({
         name: BASETEN_IMAGE_NAME,
+        dir: staged.dir,
         zip: staged.zip,
         poll: verbose
           ? (status) => console.log(`   image status: ${status}`)
@@ -69,14 +66,14 @@ export const hatchBaseten = Object.assign(
       console.log(green("   Image built.", process.stdout));
 
       console.log("🥚 Creating the sandbox...");
-      const sandbox = await createBasetenSandbox(token, {
+      const sandbox = await createBasetenSandbox({
         name,
         image: basetenImageRef(BASETEN_IMAGE_NAME),
         envs: collectProviderEnvs(),
       });
 
-      const sandboxName = String(sandbox.name ?? name ?? "the sandbox");
-      const sandboxUrl = typeof sandbox.url === "string" ? sandbox.url : undefined;
+      const sandboxName = sandbox.name ?? name ?? "the sandbox";
+      const sandboxUrl = sandbox.url;
       console.log("");
       console.log(green(`✅ Your Cadet sandbox is up: ${sandboxName}`, process.stdout));
       if (sandboxUrl) {
