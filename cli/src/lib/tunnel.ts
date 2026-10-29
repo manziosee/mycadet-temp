@@ -17,13 +17,13 @@ import {
 import { isLocalContainerEntry } from "./ingress-config.js";
 import {
   ensureAppServer,
-  getNginxIngressPort,
+  getNginxServerPort,
   getNginxVersion,
   isPidAlive,
   isIngressRunning,
   readIngressState,
   type AppServer,
-} from "./nginx-ingress.js";
+} from "./servers/nginx.js";
 import { waitForDaemonReady } from "./http-client.js";
 import {
   confirmStopAnswer,
@@ -580,7 +580,7 @@ export async function restoreAppServerAndAutoTunnel(
   //    tunnel we expect connected to the app server, so only that provider's
   //    own start piece runs — pointed at the app server's port.
   const publicUrl = await ensureTunnel(
-    edgePort ?? gatewayPort ?? getNginxIngressPort(),
+    edgePort ?? gatewayPort ?? getNginxServerPort(),
     entry.assistantId,
   );
   // 3. Save the ingress url from the tunnel to each assistant.

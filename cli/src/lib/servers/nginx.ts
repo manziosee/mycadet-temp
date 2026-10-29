@@ -1,9 +1,4 @@
-import {
-  execFileSync,
-  spawn,
-  spawnSync,
-  type ChildProcess,
-} from "node:child_process";
+import { execFileSync, spawn, spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import {
   closeSync,
@@ -21,8 +16,7 @@ import { z } from "zod";
 
 import { cloudAssistantHubUrl } from "@mycadet/environments";
 
-import cliPkg from "../../package.json";
-import { stampedVersion } from "@mycadet/shared/version";
+import { resolveVersion } from "@mycadet/shared/version";
 
 import {
   clearAppProcessRecord,
@@ -32,16 +26,16 @@ import {
   resolveTargetAssistant,
   stampRootProcess,
   type LockfileAssistant,
-} from "./assistant-config.js";
-import { getGatewayUrl } from "@mycadet/local-mode/contract";
+} from "../assistant-config.js";
+import {
+  getGatewayUrl,
+  type InjectedConfig,
+} from "@mycadet/local-mode/contract";
 import { resolveDataDir, resolveLogDir } from "@mycadet/local-mode";
-import type { RemoteHost } from "./constants.js";
-import { waitForDaemonReady } from "./http-client.js";
-import { isLocalContainerEntry } from "./ingress-config.js";
-import { resolveEdgeClientDists } from "./web-dist.js";
-
-export { findWebDistDir } from "./web-dist.js";
-export { findAppDistDir } from "./web-dist.js";
+import type { RemoteHost } from "../constants.js";
+import { waitForDaemonReady } from "../http-client.js";
+import { isLocalContainerEntry } from "../ingress-config.js";
+import { resolveEdgeClientDists } from "../web-dist.js";
 
 /**
  * CLI-managed nginx reverse proxy that fronts the gateway as the canonical
@@ -53,8 +47,14 @@ export { findAppDistDir } from "./web-dist.js";
 
 export const DEFAULT_NGINX_INGRESS_PORT = 7840;
 
+/** True when the edge's listen port is explicitly pinned via env (a pin
+ *  keeps its port: collision discovery must not move it). */
+export function serverPortPinned(): boolean {
+  return process.env.CADET_NGINX_INGRESS_PORT !== undefined;
+}
+
 /** Listen port for nginx ingress, from CADET_NGINX_INGRESS_PORT. */
-export function getNginxIngressPort(): number {
+export function getNginxServerPort(): number {
   const raw = process.env.CADET_NGINX_INGRESS_PORT;
   if (!raw) return DEFAULT_NGINX_INGRESS_PORT;
   const value = Number(raw);
@@ -181,7 +181,6 @@ export interface RemoteWebIngressOptions {
   indexHtmlPath?: string;
   /** Assistant release verified against the served UI artifact. */
   version?: string;
-  config?: Record<string, unknown>;
   /** Serving assistant's display name, stamped into the served config so
    *  remote clients can label this origin. Absent in older served configs. */
   assistantName?: string;
@@ -223,12 +222,18 @@ export function edgeServedRemote(recorded: string | undefined): RemoteHost {
   return recorded === "docker" ? "docker" : "custom";
 }
 
+/**
+ * The config the edge injects into every served document. Structurally the
+ * web bundle's `InjectedConfig` (clients/web, `InjectedConfigSchema`) — the
+ * served document must parse under that schema, so any field added here must
+ * land there too.
+ */
 function remoteWebIngressConfig(
   opts: Pick<
     RemoteWebIngressOptions,
-    "config" | "assistantName" | "assistantId" | "hubUrl" | "version"
+    "assistantName" | "assistantId" | "hubUrl" | "version"
   > & { cloudUrl?: string },
-): Record<string, unknown> {
+): InjectedConfig {
   return {
     remote: edgeServedRemote(
       opts.assistantId ? lockfileAssistantRemote(opts.assistantId) : undefined,
@@ -238,7 +243,6 @@ function remoteWebIngressConfig(
     hubUrl: opts.hubUrl,
     cloudUrl: opts.cloudUrl,
     version: opts.version,
-    ...opts.config,
   };
 }
 
@@ -366,7 +370,7 @@ async function isPortInUse(
  * probed (the IPv4 loopback always, the IPv6 loopback when the host has one),
  * so the returned port is one nginx can actually take.
  */
-export async function findAvailableIngressPort(
+export async function findAvailableServerPort(
   startPort: number,
   attempts = 20,
 ): Promise<number | null> {
@@ -388,7 +392,6 @@ const AssistantHostConfigSchema = z.object({
   assistantName: z.string().optional(),
   version: z.string().min(1).optional(),
   hubUrl: z.string().url().optional(),
-  appAllowedOrigins: z.array(z.string().url()).default([]),
 });
 
 function assistantHostConfig(config: Record<string, unknown>) {
@@ -418,7 +421,6 @@ function appOrigins(config: Record<string, unknown>): string[] {
   const metadata = assistantHostConfig(config);
   const origins = [
     ...CAPACITOR_APP_ORIGINS,
-    ...metadata.appAllowedOrigins,
     ...(metadata.hubUrl ? [new URL(metadata.hubUrl).origin] : []),
   ];
   return [...new Set(origins)].map((origin) => {
@@ -509,8 +511,11 @@ function assistantMetadataLocations(config: Record<string, unknown>): string {
     .join("\n");
 }
 
-/** Build the nginx config for the app server and its public assistant metadata. */
-export function buildIngressNginxConfig(opts: {
+/** Build the nginx config for the app server and its public assistant metadata.
+ *  Not in the module's public surface: production callers go through
+ *  `startAppServer`. Exported for tests
+ *  (cli/src/__tests__/nginx.test.ts), which assert on the generated text. */
+export function buildNginxConfig(opts: {
   /** Where the edge proxies gateway traffic — `getGatewayUrl` of the entry the edge fronts. */
   gatewayUrl: string;
   listenPort: number;
@@ -1009,88 +1014,6 @@ function savedPublicBaseUrl(): string | undefined {
   }
 }
 
-/**
- * Write the nginx config and spawn nginx detached (stdout/stderr to a log
- * file, fd closed after spawn, caller unrefs). nginx runs with `daemon off`
- * so the spawned process is the master; it writes its pid to nginx.pid under
- * the prefix dir.
- */
-export function startIngressNginx(opts: {
-  gatewayUrl: string;
-  listenPort: number;
-  remoteWebIngress?: RemoteWebIngressOptions;
-}): ChildProcess {
-  const paths = getIngressPaths();
-  mkdirSync(paths.dir, { recursive: true });
-  mkdirSync(resolveLogDir(), { recursive: true });
-  const remoteWebIngress = opts.remoteWebIngress
-    ? {
-        ...opts.remoteWebIngress,
-        config: remoteWebIngressConfig(opts.remoteWebIngress),
-        indexHtmlPath: join(paths.dir, "assistant-index.html"),
-        // The app shell's own injected document — written below, and wired
-        // here so the generated location aliases THIS copy instead of the
-        // raw dist index (which carries the build-time vite stamp instead
-        // of the edge's served config).
-        appIndexHtmlPath: join(paths.dir, "app-index.html"),
-      }
-    : undefined;
-  if (remoteWebIngress) {
-    const rawIndexHtml = readFileSync(
-      join(remoteWebIngress.webDistDir, "index.html"),
-      "utf-8",
-    );
-    writeFileSync(
-      remoteWebIngress.indexHtmlPath,
-      buildRemoteWebIndexHtml(rawIndexHtml, remoteWebIngress.config),
-    );
-    // The app shell gets its own injected document: the same remote-web
-    // config, written beside the web one so the generated locations can
-    // alias it internally.
-    const rawAppIndexHtml = readFileSync(
-      join(remoteWebIngress.appDistDir, "index.html"),
-      "utf-8",
-    );
-    writeFileSync(
-      join(paths.dir, "app-index.html"),
-      buildRemoteWebIndexHtml(rawAppIndexHtml, remoteWebIngress.config),
-    );
-  }
-  writeFileSync(
-    paths.confPath,
-    buildIngressNginxConfig({
-      gatewayUrl: opts.gatewayUrl,
-      listenPort: opts.listenPort,
-      remoteWebIngress,
-      ipv6Loopback: hasIpv6Loopback(),
-    }),
-  );
-
-  const fd = openSync(paths.logPath, "a");
-  const child = spawn(
-    nginxBin(),
-    ["-p", paths.dir, "-c", paths.confPath, "-g", "daemon off;"],
-    { detached: true, stdio: ["ignore", fd, fd], windowsHide: true },
-  );
-  closeSync(fd);
-
-  saveIngressState({
-    listenPort: opts.listenPort,
-    gatewayUrl: opts.gatewayUrl,
-    ...(remoteWebIngress
-      ? {
-          remoteWebConfigHash: remoteWebConfigFingerprint(
-            remoteWebIngress.config,
-            remoteWebIngress.webDistDir,
-            remoteWebIngress.version,
-            remoteWebIngress.appDistDir,
-          ),
-        }
-      : {}),
-  });
-  return child;
-}
-
 const STOP_TIMEOUT_MS = 2_000;
 
 async function waitForPidExit(
@@ -1165,13 +1088,12 @@ const OWNERSHIP_SETTLE_TIMEOUT_MS = 4_000;
 const OWNERSHIP_SETTLE_INTERVAL_MS = 100;
 
 /**
- * Outcome of an attempt to bring up the nginx ingress edge. Callers render
- * their own messaging per variant: `ensureAppServer` maps failure variants to
- * thrown errors with actionable text, which `cadet tunnel` and
- * `nginx-ingress up` print before exiting non-zero while the wake restore path
- * warns and continues.
+ * Outcome of an attempt to bring up the app server. Callers render their own
+ * messaging per variant: `ensureAppServer` maps failure variants to thrown
+ * errors with actionable text, which `cadet tunnel` and `cadet app up` print
+ * before exiting non-zero while the wake restore path warns and continues.
  */
-export type StartRemoteWebIngressResult =
+export type StartAppServerResult =
   | {
       status: "started";
       listenPort: number;
@@ -1199,8 +1121,8 @@ export type StartRemoteWebIngressResult =
   | { status: "port-conflict"; listenPort: number; logPath: string };
 
 /**
- * Generate the nginx config and start the remote-web ingress edge, probe
- * /healthz through it to prove the ingress → gateway path is live, and confirm
+ * Generate the nginx config and start the app server, probe /healthz through
+ * it to prove the ingress → gateway path is live, and confirm
  * via the recorded pid file that the spawned nginx owns the listen port. A
  * spawned but unreachable or unowned nginx is rolled back so a failed attempt
  * leaves no half-up edge behind.
@@ -1214,14 +1136,12 @@ export type StartRemoteWebIngressResult =
  * is the routing decision, resolved from the lockfile by the caller.
  *
  * Pure mechanism: it performs no console output and never exits the process, so
- * every edge caller (`cadet tunnel`, `nginx-ingress up`, the wake restore
- * path) can share one implementation and map the returned result to its own UX.
+ * every edge caller (`cadet tunnel`, `cadet app up`, the wake restore path)
+ * can share one implementation and map the returned result to its own UX.
  */
-export async function startRemoteWebIngress(opts: {
+export async function startAppServer(opts: {
   /** Where the edge proxies gateway traffic — `getGatewayUrl` of the fronted entry. */
   gatewayUrl: string;
-  listenPort?: number;
-  readyTimeoutMs?: number;
   /**
    * Serving assistant's display name, stamped into the served remote-web
    * config (`__CADET_CONFIG__.assistantName`) so remote clients can label
@@ -1234,19 +1154,8 @@ export async function startRemoteWebIngress(opts: {
    * confirm which assistant the edge fronts. Omitted when unknown.
    */
   assistantId?: string;
-  /**
-   * Invoked once, after every preflight check passes and immediately before
-   * nginx is spawned, so callers can emit their own "starting" progress line
-   * with the resolved version/dist/port. Never fires on a preflight bail-out
-   * (nginx-missing, already-running, web-dist-missing).
-   */
-  onStarting?: (info: {
-    version: string;
-    webDistDir: string;
-    listenPort: number;
-  }) => void;
-}): Promise<StartRemoteWebIngressResult> {
-  let listenPort = opts.listenPort ?? getNginxIngressPort();
+}): Promise<StartAppServerResult> {
+  let listenPort = getNginxServerPort();
 
   const nginxVersion = getNginxVersion();
   if (!nginxVersion) {
@@ -1255,11 +1164,7 @@ export async function startRemoteWebIngress(opts: {
 
   const running = isIngressRunning();
   const recorded = running ? readIngressState() : null;
-  if (
-    recorded &&
-    opts.listenPort === undefined &&
-    process.env.CADET_NGINX_INGRESS_PORT === undefined
-  ) {
+  if (recorded && !serverPortPinned()) {
     listenPort = recorded.listenPort;
   }
   const { webDistDir, appDistDir } = await resolveEdgeClientDists();
@@ -1274,7 +1179,7 @@ export async function startRemoteWebIngress(opts: {
   // runtime's. stampedVersion is stable for a given checkout (the stamp's
   // timestamp is the HEAD commit's), so the fingerprint below never drifts
   // between processes.
-  const version = stampedVersion(cliPkg.version);
+  const version = resolveVersion(join(import.meta.dir, "../../.."));
   const spaOptions = {
     hubUrl: cloudAssistantHubUrl(),
     assistantName: opts.assistantName,
@@ -1291,7 +1196,7 @@ export async function startRemoteWebIngress(opts: {
   // A record without a fingerprint predates the field and counts as drifted
   // (see IngressState).
   const configMatches = recorded?.remoteWebConfigHash === requestedConfigHash;
-  const alreadyRunning = (): StartRemoteWebIngressResult => ({
+  const alreadyRunning = (): StartAppServerResult => ({
     status: "already-running",
     listenPort: recorded?.listenPort ?? listenPort,
     ...(recorded?.gatewayUrl !== undefined
@@ -1317,30 +1222,80 @@ export async function startRemoteWebIngress(opts: {
   // A foreign process squatting the default edge port (another assistant's
   // edge, a stale dev server) must not kill the tunnel: the edge port is
   // loopback-local and the public tunnel URL never carries it, so moving to
-  // the next free port is invisible to remote clients. Explicit pins
-  // (opts.listenPort / CADET_NGINX_INGRESS_PORT) keep their intent and still
-  // fail on a collision.
-  if (
-    opts.listenPort === undefined &&
-    process.env.CADET_NGINX_INGRESS_PORT === undefined
-  ) {
-    const discovered = await findAvailableIngressPort(listenPort);
+  // the next free port is invisible to remote clients. An explicit
+  // CADET_NGINX_INGRESS_PORT pin keeps its intent and still fails on a
+  // collision.
+  if (!serverPortPinned()) {
+    const discovered = await findAvailableServerPort(listenPort);
     if (discovered !== null && discovered !== listenPort) {
       console.log(`Port ${listenPort} in use; using ${discovered} instead.`);
       listenPort = discovered;
     }
   }
 
-  opts.onStarting?.({ version: nginxVersion, webDistDir, listenPort });
-
-  const child = startIngressNginx({
-    gatewayUrl: opts.gatewayUrl,
+  // The edge's private state lives under the XDG data dir (never an
+  // assistant workspace): conf, pidfile, and the two index documents the
+  // generated locations alias — each injected with the served config, so
+  // the edge never serves the build-time vite stamp the dist indexes
+  // carry.
+  const paths = getIngressPaths();
+  mkdirSync(paths.dir, { recursive: true });
+  mkdirSync(resolveLogDir(), { recursive: true });
+  const remoteWebIngress = {
+    webDistDir,
+    ...spaOptions,
+    appDistDir,
+    config: remoteWebIngressConfig(spaOptions),
+    indexHtmlPath: join(paths.dir, "assistant-index.html"),
+    appIndexHtmlPath: join(paths.dir, "app-index.html"),
+  };
+  const rawIndexHtml = readFileSync(
+    join(remoteWebIngress.webDistDir, "index.html"),
+    "utf-8",
+  );
+  writeFileSync(
+    remoteWebIngress.indexHtmlPath,
+    buildRemoteWebIndexHtml(rawIndexHtml, remoteWebIngress.config),
+  );
+  // The app shell gets its own injected document: the same remote-web
+  // config, written beside the web one so the generated locations can
+  // alias it internally.
+  const rawAppIndexHtml = readFileSync(
+    join(remoteWebIngress.appDistDir, "index.html"),
+    "utf-8",
+  );
+  writeFileSync(
+    join(paths.dir, "app-index.html"),
+    buildRemoteWebIndexHtml(rawAppIndexHtml, remoteWebIngress.config),
+  );
+  writeFileSync(
+    paths.confPath,
+    buildNginxConfig({
+      gatewayUrl: opts.gatewayUrl,
+      listenPort,
+      remoteWebIngress,
+      ipv6Loopback: hasIpv6Loopback(),
+    }),
+  );
+  const fd = openSync(paths.logPath, "a");
+  // nginx runs `daemon off`, so the spawned process is the master and
+  // stays alive while the edge serves; it writes its pid to nginx.pid
+  // under the prefix dir.
+  const child = spawn(
+    nginxBin(),
+    ["-p", paths.dir, "-c", paths.confPath, "-g", "daemon off;"],
+    { detached: true, stdio: ["ignore", fd, fd], windowsHide: true },
+  );
+  closeSync(fd);
+  saveIngressState({
     listenPort,
-    remoteWebIngress: {
-      webDistDir,
-      ...spaOptions,
-      appDistDir,
-    },
+    gatewayUrl: opts.gatewayUrl,
+    remoteWebConfigHash: remoteWebConfigFingerprint(
+      remoteWebIngress.config,
+      remoteWebIngress.webDistDir,
+      remoteWebIngress.version,
+      remoteWebIngress.appDistDir,
+    ),
   });
   let exited = false;
   child.once("exit", () => {
@@ -1350,13 +1305,10 @@ export async function startRemoteWebIngress(opts: {
 
   // /healthz proxies through nginx to the gateway, so a 200 proves the whole
   // ingress → gateway path works.
-  const ready = await waitForDaemonReady(
-    listenPort,
-    opts.readyTimeoutMs ?? INGRESS_READY_TIMEOUT_MS,
-  );
+  const ready = await waitForDaemonReady(listenPort, INGRESS_READY_TIMEOUT_MS);
   const rollback = async (
     status: "port-conflict" | "unreachable",
-  ): Promise<StartRemoteWebIngressResult> => {
+  ): Promise<StartAppServerResult> => {
     const { logPath } = getIngressPaths();
     await stopIngressNginx();
     return { status, listenPort, logPath };
@@ -1445,7 +1397,7 @@ export async function stopContainerAppServer(
 /** Record the running edge's pid in the root lockfile for `cadet ps`. */
 function stampAppProcessEntry(
   assistantId?: string,
-  port = getNginxIngressPort(),
+  port = getNginxServerPort(),
 ): void {
   const pid = getIngressPid();
   if (pid !== null) {
@@ -1472,7 +1424,7 @@ export interface AppServer {
 
 /**
  * Recovery text for a drifted edge that outlived the automatic restart.
- * `startRemoteWebIngress` already escalated SIGTERM to SIGKILL before
+ * `startAppServer` already escalated SIGTERM to SIGKILL before
  * reporting `already-running`, so the only thing left is the wedged process
  * itself: name its PID and log so the user can clear it by hand.
  */
@@ -1499,31 +1451,21 @@ function stuckEdgeRecoveryHint(): string {
  * upstream) lives under the XDG data dir, never an assistant workspace.
  *
  * The edge always serves the SPA alongside the gateway proxy. It is always
- * delegated to `startRemoteWebIngress`, which reuses a running edge whose
+ * delegated to `startAppServer`, which reuses a running edge whose
  * gateway upstream and injected SPA config match and restarts one that
  * drifted in any respect, so the returned port always fronts the requested
  * config. `started` is false when a matching edge was reused; a drifted edge
  * that survives the restart attempt throws rather than reporting the wrong
  * config. Failures throw with actionable install or diagnostic text.
  */
-export async function ensureAppServer(
-  opts: {
-    /** Forwarded to `startRemoteWebIngress` for caller progress output. */
-    onStarting?: (info: {
-      version: string;
-      webDistDir: string;
-      listenPort: number;
-    }) => void;
-  } = {},
-): Promise<AppServer> {
+export async function ensureAppServer(): Promise<AppServer> {
   const entry = resolveTargetAssistant();
   const assistantName = lockfileAssistantName(entry.assistantId);
   const gatewayUrl = getGatewayUrl(entry);
-  const result = await startRemoteWebIngress({
+  const result = await startAppServer({
     gatewayUrl,
     ...(assistantName ? { assistantName } : {}),
     assistantId: entry.assistantId,
-    ...(opts.onStarting ? { onStarting: opts.onStarting } : {}),
   });
 
   switch (result.status) {
