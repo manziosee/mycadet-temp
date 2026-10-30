@@ -155,20 +155,19 @@ export function readAppBuiltSha(): string | undefined {
 export function stampAppBuiltSha(builtSha: string): void {
   withCliLockfileLock(() => {
     const data = readLockfile();
+    // The stamp rides the edge's own record: no record (the edge never
+    // started, or was cleared since) means nothing to stamp — the next
+    // resolve reads no stamp and rebuilds.
     if (data.app) {
       data.app.builtSha = builtSha;
-    } else {
-      data.app = { builtSha };
     }
     writeLockfileUnlocked(data);
   });
 }
 
 /**
- * Release the edge's process entry. The built-sha stamp is a build-cache
- * fact rather than a process fact, so it is kept while the pid bookkeeping
- * goes — restarting the edge re-stamps the process fields without paying a
- * needless bundle rebuild.
+ * Release the edge's process entry — the record and its riding build stamp
+ * go with it.
  */
 export function clearAppProcessRecord(expectedPid?: number): void {
   withCliLockfileLock(() => {
@@ -179,11 +178,7 @@ export function clearAppProcessRecord(expectedPid?: number): void {
       (expectedPid !== undefined && record.pid !== expectedPid)
     )
       return;
-    if (record.builtSha !== undefined) {
-      data.app = { builtSha: record.builtSha };
-    } else {
-      delete data.app;
-    }
+    delete data.app;
     writeLockfileUnlocked(data);
   });
 }

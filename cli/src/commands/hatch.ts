@@ -11,10 +11,7 @@ import type { RemoteHost } from "../lib/constants";
 import { hatchDocker } from "../lib/docker";
 import { hatchBaseten } from "../lib/remotes/baseten/index";
 import { hatchLocal } from "../lib/hatch-local";
-import {
-  hatchAssistant,
-  readCloudToken,
-} from "../lib/cloud-client";
+import { hatchAssistant, readCloudToken } from "../lib/cloud-client";
 import { validateAssistantName } from "../lib/retire-archive";
 
 const DEFAULT_REMOTE: RemoteHost = "local";

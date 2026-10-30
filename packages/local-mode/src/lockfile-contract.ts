@@ -96,6 +96,16 @@ export const InjectedConfigSchema = z.object({
 export type InjectedConfig = z.infer<typeof InjectedConfigSchema>;
 
 /**
+ * What a host stamps into a served document before parsing is in play: the
+ * recorded `remote` may be omitted outright (the schema's parse-time
+ * default answers for it) — the edge stamps the truthful recorded kind or
+ * nothing, never a served-spelling alias.
+ */
+export type InjectedConfigStamp = Omit<InjectedConfig, "remote"> & {
+  remote?: Remote;
+};
+
+/**
  * Strip every `SENSITIVE_KEYS` field from a parsed lockfile, in place: from
  * each assistant entry and from that entry's `resources`. The one redaction
  * every host runs before lockfile data crosses to the renderer — pure, no
@@ -380,23 +390,15 @@ export type TunnelProcessRecord = z.infer<typeof TunnelProcessRecordSchema>;
  * tunnel serves a URL, the edge serves a port.
  */
 export const AppProcessRecordSchema = z.object({
-  /**
-   * The edge process's bookkeeping, present while the edge runs. Absent on
-   * a stamp-only entry: the built-sha stamp below survives the edge's own
-   * stop, so between runs the `app` entry may carry only that.
-   */
+  /** The edge process's bookkeeping, present while the edge runs. */
   pid: z.number().optional(),
-  /** The assistant the edge fronts, so `cadet ps` can nest the row. */
-  assistantId: z.string().optional(),
   startedAt: z.string().optional(),
   /** Listening port for the nginx edge. */
-  port: z.number().optional(),
+  port: z.number(),
   /**
    * The commit the edge's source-built client bundles were last built from
-   * — the auto-build staleness stamp. Lives on the edge's own record rather
-   * than beside each dist so the CLI lockfile is the single home for edge
-   * state, and survives the edge's own stop (a build-cache fact, not a
-   * process fact) so restarting the edge never pays a needless rebuild.
+   * — the auto-build staleness stamp. Rides the running edge's record: a
+   * build only stamps when an edge record exists to carry it.
    */
   builtSha: z.string().optional(),
 });
