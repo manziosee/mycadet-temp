@@ -119,6 +119,7 @@ import {
   getSqliteFrom,
   getTelemetryDb,
 } from "./db-connection.js";
+import { injectionEnvelopeSchema } from "./injection-envelope.js";
 import {
   clearMessagesLexicalIndex,
   enqueueDeleteMessageLexical,
@@ -524,6 +525,9 @@ export const messageMetadataSchema = z
     channelCapabilitiesBlock: z.string().optional(),
     /** `<non_interactive_context>` block, rehydrated for the same reason. */
     nonInteractiveContextBlock: z.string().optional(),
+    /** Ordered blocks wrapping the message outside its memory region,
+     *  rehydrated for the same reason. See `injection-envelope.ts`. */
+    injectionEnvelope: injectionEnvelopeSchema.optional(),
   })
   .passthrough();
 
