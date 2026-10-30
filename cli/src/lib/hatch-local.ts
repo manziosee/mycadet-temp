@@ -15,7 +15,7 @@ import { join } from "path";
 // Direct import — bun embeds this at compile time so it works in compiled binaries.
 import cliPkg from "../../package.json";
 
-import { saveLockfileAssistant } from "@mycadet/local-mode";
+import { saveLockfileAssistant, resolveLogDir } from "@mycadet/local-mode";
 import {
   allocateLocalResources,
   findAssistantByName,
@@ -338,6 +338,9 @@ export async function hatchLocal(
     } catch (error) {
       reporter.error(
         `\n❌ Local assistant startup failed — stopping partial processes.`,
+      );
+      reporter.error(
+        `   Logs: ${join(getLocalInstanceDir(resources), "logs")} and ${join(resolveLogDir(), "hatch.log")}`,
       );
       await stopLocalProcesses(resources);
       throw error;
