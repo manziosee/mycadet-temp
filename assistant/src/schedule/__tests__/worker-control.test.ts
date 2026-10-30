@@ -69,6 +69,13 @@ function neverExits(): Promise<unknown> {
   return new Promise(() => {});
 }
 
+// A PID no process can ever have — above every platform's pid_max — so the
+// identity probe's command-line read is deterministically unreadable. A
+// hand-picked small PID (4321) made these tests flaky: on runners where that
+// PID happened to be live, the probe correctly reported a recycled PID
+// (not_running) instead of "running".
+const UNASSIGNABLE_PID = 2_147_483_646;
+
 beforeEach(() => {
   // The preload's workspace already resolves <workspace>/schedule-worker.pid.
   tmpDir = PRELOAD_WS;
@@ -231,10 +238,13 @@ describe("probeScheduleWorker", () => {
   });
 
   test("reports running (not throws) when the process exists but is not signalable (EPERM)", () => {
-    writeFileSync(pidPath, "4321");
-    const restore = stubProcessKill(new Set(), new Set([4321]));
+    writeFileSync(pidPath, String(UNASSIGNABLE_PID));
+    const restore = stubProcessKill(new Set(), new Set([UNASSIGNABLE_PID]));
     try {
-      expect(probeScheduleWorker()).toEqual({ status: "running", pid: 4321 });
+      expect(probeScheduleWorker()).toEqual({
+        status: "running",
+        pid: UNASSIGNABLE_PID,
+      });
     } finally {
       restore();
     }
@@ -266,7 +276,7 @@ describe("stopScheduleWorkerProcess", () => {
   });
 
   test("signals a running worker and reports its prior state", () => {
-    writeFileSync(pidPath, "4321");
+    writeFileSync(pidPath, String(UNASSIGNABLE_PID));
     const signalled: Array<[number, string | number | undefined]> = [];
     const original = process.kill.bind(process);
     process.kill = ((pid: number, signal?: string | number) => {
@@ -279,9 +289,9 @@ describe("stopScheduleWorkerProcess", () => {
     try {
       expect(stopScheduleWorkerProcess()).toEqual({
         status: "running",
-        pid: 4321,
+        pid: UNASSIGNABLE_PID,
       });
-      expect(signalled).toEqual([[4321, "SIGTERM"]]);
+      expect(signalled).toEqual([[UNASSIGNABLE_PID, "SIGTERM"]]);
     } finally {
       process.kill = original;
     }
