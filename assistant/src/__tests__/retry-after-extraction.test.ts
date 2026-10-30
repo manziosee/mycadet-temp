@@ -1,7 +1,12 @@
 import { describe, expect, test } from "bun:test";
 
 import { ProviderError } from "../util/errors.js";
-import { extractRetryAfterMs, parseRetryAfterMs } from "../util/retry.js";
+import {
+  extractRetryAfterMs,
+  getHttpRetryDelay,
+  MAX_RETRY_AFTER_MS,
+  parseRetryAfterMs,
+} from "../util/retry.js";
 
 // ---------------------------------------------------------------------------
 // parseRetryAfterMs
@@ -29,9 +34,67 @@ describe("parseRetryAfterMs", () => {
     expect(result!).toBeLessThan(65_000);
   });
 
-  test("returns 0 for past HTTP-date", () => {
+  test("returns undefined for an elapsed HTTP-date so the caller backs off", () => {
     const pastDate = new Date(Date.now() - 10_000).toUTCString();
-    expect(parseRetryAfterMs(pastDate)).toBe(0);
+    expect(parseRetryAfterMs(pastDate)).toBeUndefined();
+  });
+
+  test("returns undefined for absent, blank, zero, and negative values", () => {
+    for (const value of [null, undefined, "", "   ", "0", "-5"]) {
+      expect(parseRetryAfterMs(value)).toBeUndefined();
+    }
+  });
+
+  test("rejects numeric forms outside delta-seconds", () => {
+    for (const value of ["0x10", "1e3", "Infinity", "30s"]) {
+      expect(parseRetryAfterMs(value)).toBeUndefined();
+    }
+  });
+
+  test("tolerates surrounding whitespace", () => {
+    expect(parseRetryAfterMs(" 30 ")).toBe(30_000);
+  });
+
+  test("caps the wait at maxMs", () => {
+    expect(parseRetryAfterMs("3600", MAX_RETRY_AFTER_MS)).toBe(
+      MAX_RETRY_AFTER_MS,
+    );
+    const farDate = new Date(Date.now() + 3_600_000).toUTCString();
+    expect(parseRetryAfterMs(farDate, MAX_RETRY_AFTER_MS)).toBe(
+      MAX_RETRY_AFTER_MS,
+    );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// getHttpRetryDelay
+// ---------------------------------------------------------------------------
+
+describe("getHttpRetryDelay", () => {
+  const withRetryAfter = (value: string) =>
+    new Response(null, { status: 429, headers: { "retry-after": value } });
+
+  test("honors an HTTP-date Retry-After", () => {
+    const delay = getHttpRetryDelay(
+      withRetryAfter(new Date(Date.now() + 5_000).toUTCString()),
+      0,
+    );
+    expect(delay).toBeGreaterThan(3_000);
+    expect(delay).toBeLessThanOrEqual(5_000);
+  });
+
+  test("caps a long Retry-After so the caller's turn is not stalled", () => {
+    expect(getHttpRetryDelay(withRetryAfter("3600"), 0)).toBe(
+      MAX_RETRY_AFTER_MS,
+    );
+  });
+
+  test("backs off instead of retrying immediately on an unusable value", () => {
+    for (const value of ["0", "soon"]) {
+      expect(
+        getHttpRetryDelay(withRetryAfter(value), 0, 1_000),
+      ).toBeGreaterThanOrEqual(1_000);
+    }
   });
 });
 

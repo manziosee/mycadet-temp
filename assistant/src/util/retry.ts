@@ -30,38 +30,55 @@ export function computeRetryDelay(
 }
 
 /**
- * Parse a Retry-After header value into milliseconds.
- * RFC 7231 allows either delta-seconds (e.g. "120") or an HTTP-date
- * (e.g. "Tue, 17 Feb 2026 12:00:00 GMT"). Returns undefined if unparseable.
+ * Longest server-advertised wait a caller honors inline, so a pathological
+ * `Retry-After` cannot stall the turn or job waiting on the retry.
  */
-export function parseRetryAfterMs(value: string): number | undefined {
-  const seconds = Number(value);
-  if (!isNaN(seconds)) {
-    return seconds * 1000;
+export const MAX_RETRY_AFTER_MS = 60_000;
+
+const DELTA_SECONDS_PATTERN = /^\d+(?:\.\d+)?$/;
+
+/**
+ * Parse a `Retry-After` header value into a positive wait in milliseconds.
+ * RFC 9110 allows delta-seconds (e.g. "120"; some APIs send fractions such
+ * as "0.75") or an HTTP-date (e.g. "Tue, 17 Feb 2026 12:00:00 GMT").
+ *
+ * Returns undefined for an absent, blank, zero, negative, or unparseable
+ * value and for an already-elapsed date, so the caller falls back to its own
+ * backoff. The result is capped at `maxMs`.
+ */
+export function parseRetryAfterMs(
+  value: string | null | undefined,
+  maxMs = Number.POSITIVE_INFINITY,
+): number | undefined {
+  const trimmed = value?.trim();
+  if (!trimmed) {
+    return undefined;
   }
-  // Try HTTP-date format — Date.parse handles RFC 2822 / IMF-fixdate
-  const dateMs = Date.parse(value);
-  if (!isNaN(dateMs)) {
-    return Math.max(0, dateMs - Date.now());
+  const ms = DELTA_SECONDS_PATTERN.test(trimmed)
+    ? Number(trimmed) * 1000
+    : Date.parse(trimmed) - Date.now();
+  if (!(ms > 0)) {
+    return undefined;
   }
-  return undefined;
+  return Math.min(ms, maxMs);
 }
 
 /**
  * Determine the retry delay for an HTTP response. Uses the Retry-After
- * header if present, otherwise falls back to exponential backoff with jitter.
+ * header (capped at {@link MAX_RETRY_AFTER_MS}) if present, otherwise falls
+ * back to exponential backoff with jitter.
  */
 export function getHttpRetryDelay(
   response: Response,
   attempt: number,
   baseDelayMs = DEFAULT_BASE_DELAY_MS,
 ): number {
-  const retryAfter = response.headers.get("retry-after");
-  if (retryAfter) {
-    const parsed = parseRetryAfterMs(retryAfter);
-    if (parsed !== undefined) {
-      return parsed;
-    }
+  const parsed = parseRetryAfterMs(
+    response.headers.get("retry-after"),
+    MAX_RETRY_AFTER_MS,
+  );
+  if (parsed !== undefined) {
+    return parsed;
   }
   // For attempt 0, double the base so jitter range [baseDelayMs, 2*baseDelayMs) stays above the floor.
   // For attempt >= 1, use the original base — jitter is already above baseDelayMs.
