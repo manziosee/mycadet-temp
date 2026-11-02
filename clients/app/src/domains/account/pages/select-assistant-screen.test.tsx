@@ -18,7 +18,6 @@ import {
   resetRememberedOriginsForTesting,
 } from "@app/stores/remembered-origins-store";
 import { __resetConnectDialogForTesting } from "@app/stores/connect-dialog-store";
-import { __resetLocalLockfileForTesting } from "@app/stores/local-lockfile-store";
 
 const request = spyOn(globalThis, "fetch");
 const iframeDocument = new Response("<!doctype html><html></html>", {
@@ -592,147 +591,24 @@ describe("remembered origins", () => {
   });
 
   describe("with a local-mode host", () => {
-    const originalCadet = Object.getOwnPropertyDescriptor(window, "cadet");
-
-    const hostRealFetch = globalThis.fetch;
-
-    function stubCadet(lockfile: unknown, status: unknown): void {
-      // Availability rides the platform stamp; the lockfile and status reads
-      // are the operator routes' GETs.
-      Object.defineProperty(window, "cadet", {
-        configurable: true,
-        value: { platform: "electron" },
-      });
-      globalThis.fetch = (async (input: unknown, init?: RequestInit) => {
-        const path = String(input).split("?")[0] ?? "";
-        if (path === "/v1/assistants/") {
-          return new Response(JSON.stringify(lockfile), {
-            headers: { "content-type": "application/json" },
-          });
-        }
-        if (path.match(/^\/v1\/assistants\/[^/]+\/$/)) {
-          return new Response(JSON.stringify(status), {
-            headers: { "content-type": "application/json" },
-          });
-        }
-        // Everything else (the shell's resolution fetch, the iframe doc)
-        // rides the test's own fetch spy.
-        return hostRealFetch(input as RequestInfo, init);
-      }) as unknown as typeof fetch;
-    }
-
     afterEach(() => {
-      if (originalCadet) {
-        Object.defineProperty(window, "cadet", originalCadet);
-      } else {
-        Reflect.deleteProperty(window, "cadet");
-      }
-      globalThis.fetch = hostRealFetch;
       __resetConnectDialogForTesting();
-      __resetLocalLockfileForTesting();
     });
 
-    const pairedLockfile = {
-      assistants: [
-        {
-          assistantId: "paired-1",
-          name: "Office",
-          cloud: "custom",
-          ipAddress: "office.example.com",
-          port: 443,
-        },
-      ],
-      activeAssistant: null,
-    };
-
-    test("the pairing affordance replaces the add-origin affordance, and opens the connect dialog", async () => {
-      stubCadet(pairedLockfile, { ok: true, state: "healthy" });
+    test("both pairing affordances render and the connect one opens the connect dialog", async () => {
       setup("/account/select-assistant", false, async () =>
         Response.json({ results: [] }),
       );
       expect(
         await screen.findByText("Connect a remote assistant"),
       ).toBeDefined();
-      // Hostless surfaces add an origin instead; with a host the dialog owns
-      // pairing.
-      expect(screen.queryByText("Add a remote assistant")).toBeNull();
-      // A custom remote's row names the gateway host — the actual remote.
-      expect(await screen.findByText("office.example.com")).toBeDefined();
+      // The add-origin arm rides alongside the connect dialog: a paired
+      // shell can still point the chooser at another deployment.
+      expect(screen.getByText("Add a remote assistant")).toBeDefined();
       fireEvent.click(screen.getByText("Connect a remote assistant"));
       expect(
         await screen.findByText("Connect a Remote Assistant"),
       ).toBeDefined();
-    });
-
-    test("a paired entry connects same-origin, routed by the host through the id in the path", async () => {
-      stubCadet(pairedLockfile, { ok: true, state: "healthy" });
-      setup("/account/select-assistant", false, async (url) => {
-        if (String(url).includes("/v1/assistants/paired-1")) {
-          return Response.json({
-            id: "paired-1",
-            status: "active",
-            version: "1.2.3",
-            url: "web/1.2.3/assistant/",
-          });
-        }
-        if (String(url).includes("/v1/assistants")) {
-          return Response.json({ results: [] });
-        }
-        return iframeDocument.clone();
-      });
-      fireEvent.click(await screen.findByRole("radio", { name: /^Office/ }));
-      // The selection carries no apiBase: the shell's resolution fetch is
-      // plain same-origin /v1, and the serving host resolves the paired
-      // entry from the id in the path (bearer injected server-side).
-      await waitFor(() => {
-        expect(
-          request.mock.calls.some(([url]) =>
-            String(url).includes("/v1/assistants/paired-1"),
-          ),
-        ).toBe(true);
-      });
-    });
-
-    test("an unhealthy local assistant still connects — the shell's not-ready wake owns recovery", async () => {
-      // The chooser connects by navigating, full stop: no connect-time
-      // probe, no verdict, no recovery dialog of its own. An entry whose
-      // daemon is down lands on the app shell's not-ready panel, whose
-      // wake is remote-agnostic.
-      stubCadet(
-        {
-          assistants: [
-            {
-              assistantId: "local-1",
-              name: "Workbench",
-              cloud: "local",
-            },
-          ],
-          activeAssistant: null,
-        },
-        { ok: true, state: "crashed" },
-      );
-      setup("/account/select-assistant", false, async (url) => {
-        if (String(url).includes("/v1/assistants/local-1")) {
-          return Response.json({
-            id: "local-1",
-            status: "inactive",
-            version: "1.2.3",
-          });
-        }
-        return iframeDocument.clone();
-      });
-      fireEvent.click(await screen.findByRole("radio", { name: /^Workbench/ }));
-      await waitFor(() => {
-        expect(
-          request.mock.calls.some(([url]) =>
-            String(url).includes("/v1/assistants/local-1"),
-          ),
-        ).toBe(true);
-      });
-      // Recovery copy lives in the shell now, not the chooser.
-      expect(
-        screen.queryByText("Can\u2019t Authenticate Assistant"),
-      ).toBeNull();
     });
   });
 });
