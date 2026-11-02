@@ -14,7 +14,7 @@ import { getDeviceId } from "@mycadet/electron-desktop/device-id";
 import { installGatewayRequestGuard } from "@mycadet/electron-desktop/gateway-request-guard";
 import { installPermissionHandler } from "@mycadet/electron-desktop/permissions";
 import { registerCadetProtocol } from "@mycadet/electron-desktop/cadet-protocol";
-import { runWhenReady } from "@mycadet/electron-desktop/app-lifecycle";
+import { startApp } from "@mycadet/electron-desktop/app-lifecycle";
 
 import {
   APP_HOST,
@@ -113,29 +113,29 @@ handleSync("cadet:config:get", () => ({
 // App lifecycle
 // ---------------------------------------------------------------------------
 
-runWhenReady(log, () => {
-    if (usesAppProtocolRenderer(app.isPackaged)) {
-      registerAppProtocol();
-      installGatewayRequestGuard({
-        appOrigin: { protocol: `${APP_PROTOCOL}:`, host: APP_HOST },
-        resolveAllowedOrigin,
-      });
-    }
-    registerCadetProtocol(path.join(app.getPath("userData"), BUNDLES_DIR_NAME));
-    installPermissionHandler(resolveAllowedOrigin);
-    installCsp();
-    if (app.isPackaged && process.platform === "win32") {
-      try {
-        const result = provisionCliForCurrentUser(resolveCliPathFlowOptions());
-        if (["foreign", "shadowed"].includes(result.launcherState)) {
-          log.warn(`[cli] Windows launcher is ${result.launcherState}`);
-        }
-      } catch (error) {
-        log.error("[cli] Failed to provision the Windows CLI:", error);
+startApp(log, () => {
+  if (usesAppProtocolRenderer(app.isPackaged)) {
+    registerAppProtocol();
+    installGatewayRequestGuard({
+      appOrigin: { protocol: `${APP_PROTOCOL}:`, host: APP_HOST },
+      resolveAllowedOrigin,
+    });
+  }
+  registerCadetProtocol(path.join(app.getPath("userData"), BUNDLES_DIR_NAME));
+  installPermissionHandler(resolveAllowedOrigin);
+  installCsp();
+  if (app.isPackaged && process.platform === "win32") {
+    try {
+      const result = provisionCliForCurrentUser(resolveCliPathFlowOptions());
+      if (["foreign", "shadowed"].includes(result.launcherState)) {
+        log.warn(`[cli] Windows launcher is ${result.launcherState}`);
       }
+    } catch (error) {
+      log.error("[cli] Failed to provision the Windows CLI:", error);
     }
-    installMainFeatures();
-  });
+  }
+  installMainFeatures();
+});
 
 app.on("second-instance", () => {
   ensureVisible();

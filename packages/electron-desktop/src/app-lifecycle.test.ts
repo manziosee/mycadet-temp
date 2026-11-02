@@ -17,17 +17,19 @@ mock.module("electron", () => ({
   },
 }));
 
-const { runWhenReady } = await import("./app-lifecycle");
+const { startApp } = await import("./app-lifecycle");
 
+// The seam's contract is the full electron-log MainLogger; the test drives
+// only info/error, so the stub carries those and casts.
 const log = {
   info: (...args: unknown[]) => logCalls.push(["info", ...args]),
   error: (...args: unknown[]) => logCalls.push(["error", ...args]),
-};
+} as unknown as Parameters<typeof startApp>[0];
 
-describe("runWhenReady", () => {
+describe("startApp", () => {
   test("logs ready and runs setup once Electron is ready", async () => {
     let ran = false;
-    runWhenReady(log, () => {
+    startApp(log, () => {
       ran = true;
     });
 
@@ -36,12 +38,16 @@ describe("runWhenReady", () => {
     await Promise.resolve();
 
     expect(ran).toBe(true);
-    expect(logCalls.some(([level, message]) => level === "info" && message === "[app] ready")).toBe(true);
+    expect(
+      logCalls.some(
+        ([level, message]) => level === "info" && message === "[app] ready",
+      ),
+    ).toBe(true);
   });
 
   test("reports a failed setup as `[app] whenReady setup failed`", async () => {
     const boom = new Error("install blew up");
-    runWhenReady(log, () => {
+    startApp(log, () => {
       throw boom;
     });
 
