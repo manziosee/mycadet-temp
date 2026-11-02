@@ -91,8 +91,16 @@ export {
 } from "./cli-invocation";
 export { runHatch } from "./hatch";
 export type { HatchResult } from "./hatch";
-export { matchOperatorRequest } from "./operations/routes";
-export type { OperatorRoute, OperatorMatch } from "./operations/routes";
+export {
+  matchOperatorRequest,
+  forwardOperatorRequest,
+  OPERATOR_ROUTES,
+} from "./operations/routes";
+export type {
+  OperatorRoute,
+  OperatorMatch,
+  OperatorRequest,
+} from "./operations/routes";
 export { retireAssistant } from "./operations/retire";
 export type { RetireResult } from "./operations/retire";
 export { sleepAssistant, type SleepOptions } from "./operations/sleep";

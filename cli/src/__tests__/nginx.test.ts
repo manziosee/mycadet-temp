@@ -74,9 +74,16 @@ const waitForDaemonReadyMock = mock<typeof httpClient.waitForDaemonReady>(
   async () => true,
 );
 
+// The start's operator-path probe (edge -> operation server) answers ok, so
+// a start succeeds without a real nginx or operation child.
+const loopbackSafeFetchMock = mock<typeof httpClient.loopbackSafeFetch>(
+  async () => new Response(null, { status: 200 }),
+);
+
 mock.module("@mycadet/local-mode", () => ({
   ...httpClient,
   waitForDaemonReady: waitForDaemonReadyMock,
+  loopbackSafeFetch: loopbackSafeFetchMock,
 }));
 
 // The edge stamps the CLI's own stampedVersion as the served version — a
@@ -179,6 +186,10 @@ afterEach(() => {
   stampedVersionMock.mockImplementation(() => "1.2.3");
   waitForDaemonReadyMock.mockReset();
   waitForDaemonReadyMock.mockImplementation(async () => true);
+  loopbackSafeFetchMock.mockReset();
+  loopbackSafeFetchMock.mockImplementation(
+    async () => new Response(null, { status: 200 }),
+  );
   for (const dir of workspaces.splice(0)) {
     rmSync(dir, { recursive: true, force: true });
   }
@@ -863,10 +874,12 @@ function mockNginxSpawn(): void {
     execFileSyncMock.mockImplementation(((
       _file: string,
       psArgs?: readonly string[],
-    ) =>
-      psArgs?.includes(String(SPAWNED_NGINX_PID))
-        ? `nginx: master process nginx -p ${dir} -c ${join(dir, "nginx.conf")} -g daemon off;`
-        : "") as typeof childProcess.execFileSync);
+    ) => {
+      if (psArgs?.includes(String(SPAWNED_NGINX_PID))) {
+        return `nginx: master process nginx -p ${dir} -c ${join(dir, "nginx.conf")} -g daemon off;`;
+      }
+      return "";
+    }) as typeof childProcess.execFileSync);
     const child = new childProcess.ChildProcess();
     Object.assign(child, { pid: SPAWNED_NGINX_PID });
     return child;
@@ -954,6 +967,7 @@ function mockRunningEdge(opts: {
   );
   writeFileSync(getIngressPaths().pidPath, `${pid}\n`);
   const dir = getIngressPaths().dir;
+  installKillMock();
   execFileSyncMock.mockReturnValue(
     `nginx: master process nginx -p ${dir} -c ${getIngressPaths().confPath} -g daemon off;`,
   );
@@ -1015,28 +1029,6 @@ function pinProductionEnvironment(): void {
 
 describe("startAppServer", () => {
   pinProductionEnvironment();
-
-  test("the metadata route serves the CLI's own version stamp, always ready", async () => {
-    makeWorkspace();
-    seedAssistant();
-    mockNginxInstalled();
-    mockNginxSpawn();
-    mockWebDistPresent();
-    const result = await startAppServer({
-      gatewayUrl: "http://127.0.0.1:7830",
-      assistantId: "assistant-1",
-    });
-    expect(result.status).toBe("started");
-    const conf = realFs.readFileSync(ingressConfPath(), "utf8");
-    const detail = conf
-      .split('location = "/v1/assistants/assistant-1/" {')[1]
-      ?.split("\n    }")[0];
-    // The version is the CLI's own stamp (mocked to "1.2.3" here), so the
-    // detail route is always a 200 — the served page's "which one is
-    // running" answer follows the CLI, not the runtime's /healthz.
-    expect(detail).toContain("return 200 ");
-    expect(detail).toContain('\\"version\\":\\"1.2.3\\"');
-  });
 
   test("serves the SPA config unchanged", async () => {
     makeWorkspace();
@@ -1842,6 +1834,7 @@ describe("ensureAppServer", () => {
     const second = await ensureAppServer();
 
     expect(second.started).toBe(true);
+    // Two starts: each spawns its own nginx master.
     expect(spawnMock).toHaveBeenCalledTimes(2);
     const indexHtml = realFs.readFileSync(
       join(getIngressPaths().dir, "assistant-index.html"),
@@ -2076,105 +2069,7 @@ describe("stopContainerAppServer", () => {
   });
 });
 
-describe("assistant metadata API", () => {
-  function config(id = "assistant-1") {
-    return buildNginxConfig({
-      gatewayUrl: "http://127.0.0.1:7830",
-      listenPort: 7840,
-
-      webDistDir: "/tmp/web",
-      appDistDir: "/tmp/app-dist",
-      config: {
-        remote: "custom",
-        assistantName: "My assistant",
-        assistantId: id,
-        hubUrl: "https://parent.example",
-        version: "1.2.3",
-      },
-    });
-  }
-  function body(conf: string, path: string, status = 200): unknown {
-    const location = conf
-      .split(`location = "${path}" {`)[1]
-      ?.split("\n    }")[0];
-    const value = location?.match(/return (200|409) ("(?:\\.|[^"\\])*");/);
-    expect(Number(value?.[1])).toBe(status);
-    if (!value) {
-      throw new Error(`Missing metadata for ${path}`);
-    }
-    return JSON.parse(JSON.parse(value[2]));
-  }
-  test("lists only this host's assistant and returns its actual UI version and URL", () => {
-    const conf = config();
-    // Each row carries its own hosting kind — here the test env has no
-    // lockfile entry for the id, so the remote kind is omitted (unknown
-    // entries invent nothing).
-    expect(body(conf, "/v1/assistants/")).toEqual({
-      results: [{ id: "assistant-1", name: "My assistant" }],
-      next: null,
-    });
-    expect(body(conf, "/v1/assistants/assistant-1/")).toEqual({
-      id: "assistant-1",
-      name: "My assistant",
-      status: "active",
-      version: "1.2.3",
-      url: "web/assistant/",
-    });
-    expect(conf).not.toContain('location = "/v1/assistants/other/"');
-  });
-  test("metadata supports both slash forms and only read methods", () => {
-    const conf = config();
-    for (const path of [
-      "/v1/assistants",
-      "/v1/assistants/",
-      "/v1/assistants/assistant-1",
-      "/v1/assistants/assistant-1/",
-    ]) {
-      expect(body(conf, path)).toBeDefined();
-    }
-    expect(conf).toContain(
-      "if ($request_method !~ ^(GET|HEAD)$) { return 405; }",
-    );
-    expect(conf).toContain(
-      '"https://parent.example" "https://parent.example";',
-    );
-    expect(conf).toContain(
-      "add_header Access-Control-Allow-Origin $cadet_app_origin always;",
-    );
-  });
-  test("unknown identity yields an empty list without inventing an assistant ID", () => {
-    const conf = buildNginxConfig({
-      gatewayUrl: "http://127.0.0.1:7830",
-      listenPort: 7840,
-
-      webDistDir: "/tmp/web",
-      appDistDir: "/tmp/app-dist",
-      config: { remote: "custom" },
-    });
-    expect(body(conf, "/v1/assistants/")).toEqual({ results: [], next: null });
-  });
-  test("a known assistant without a UI bundle returns 409 on both detail paths", () => {
-    const conf = buildNginxConfig({
-      gatewayUrl: "http://127.0.0.1:7830",
-      listenPort: 7840,
-
-      webDistDir: "/tmp/web",
-      appDistDir: "/tmp/app-dist",
-      config: { remote: "custom", assistantId: "assistant-1" },
-    });
-    expect(body(conf, "/v1/assistants/")).toEqual({
-      results: [{ id: "assistant-1" }],
-      next: null,
-    });
-    for (const path of [
-      "/v1/assistants/assistant-1",
-      "/v1/assistants/assistant-1/",
-    ]) {
-      expect(body(conf, path, 409)).toEqual({
-        detail: "assistant is not ready",
-      });
-    }
-  });
+describe("the generated config's origin guard", () => {
   test("invalid browser origins fail before nginx starts", () => {
     expect(() =>
       buildNginxConfig({
@@ -2271,9 +2166,6 @@ describe("the app shell edge", () => {
 
   test("iframes the web UI from the distinct /web/assistant namespace", () => {
     const conf = appConf();
-    expect(conf).toContain('location = "/v1/assistants/assistant-1/"');
-    expect(conf).toContain('\\"url\\":\\"web/assistant/\\"');
-    expect(conf).toContain('\\"version\\":\\"1.2.3\\"');
     expect(conf).toContain(
       "location = /web/assistant/ {\n      rewrite ^ /web/assistant/__remote-index.html last;\n    }",
     );
@@ -2339,7 +2231,6 @@ describe("the app shell edge", () => {
     expect(appIndex).toContain(`"assistantId":"assistant-1"`);
     const conf = realFs.readFileSync(ingressConfPath(), "utf-8");
     expect(conf).toContain("location = /__cadet-app-index.html {");
-    expect(conf).toContain('\\"url\\":\\"web/assistant/\\"');
     // The served shell document must be the edge's INJECTED copy (which
     // carries the served config), never the raw dist index — that one only
     // carries the build-time vite stamp.

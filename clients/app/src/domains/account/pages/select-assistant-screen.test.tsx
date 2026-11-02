@@ -98,13 +98,21 @@ test("the account route lists names, defaulting unnamed assistants, then resolve
   // calls (see the create-flow pin below) — seed by URL, not FIFO order.
   const router = setup(undefined, true, async (url) => {
     const target = String(url);
-    if (target.includes("/v1/assistants/?")) {
+    if (target.endsWith("/v1/assistants/")) {
       return Response.json({
-        results: [{ id: "assistant-1", name: "One" }, { id: "assistant-2" }],
+        status: "selection",
+        assistants: [{ id: "assistant-1", name: "One" }, { id: "assistant-2" }],
       });
     }
     if (target.includes("/v1/assistants/assistant-2/")) {
-      return Response.json(detail);
+      return Response.json({
+        status: "ready",
+        assistant: {
+          id: "assistant-2",
+          version: detail.version,
+          url: detail.url,
+        },
+      });
     }
     return iframeDocument.clone();
   });
@@ -125,7 +133,7 @@ test("the account route lists names, defaulting unnamed assistants, then resolve
       .map(([url]) => String(url))
       .filter((url) => url.includes("/v1/") && !url.includes("/_allauth/")),
   ).toEqual([
-    "http://localhost:3001/v1/assistants/?limit=100&offset=0",
+    "http://localhost:3001/v1/assistants/",
     "http://localhost:3001/v1/assistants/assistant-2/",
   ]);
   expect(request.mock.calls[0][1]?.credentials).toBe("include");
@@ -134,7 +142,8 @@ test("the account route lists names, defaulting unnamed assistants, then resolve
 test("rows render the cloud's synced avatar when the list carries one", async () => {
   request.mockResolvedValueOnce(
     Response.json({
-      results: [
+      status: "selection",
+      assistants: [
         {
           id: "assistant-1",
           name: "One",
@@ -168,7 +177,8 @@ test("rows on a cloud build render the cloud-hosted subtitle with a relative cre
   setup(undefined, false, undefined, { ...host, remote: "cloud" });
   request.mockResolvedValueOnce(
     Response.json({
-      results: [
+      status: "selection",
+      assistants: [
         {
           id: "assistant-1",
           name: "One",
@@ -194,7 +204,8 @@ test("rows on a non-cloud remote render the self-hosted subtitle", async () => {
   // its list rows are the machine's own assistants, not the cloud's.
   request.mockResolvedValueOnce(
     Response.json({
-      results: [{ id: "assistant-1", name: "One" }],
+      status: "selection",
+      assistants: [{ id: "assistant-1", name: "One" }],
     }),
   );
   setup();
@@ -210,7 +221,8 @@ test("each row labels itself with its own remote", async () => {
   setup(undefined, false, undefined, { ...host, remote: "local" });
   request.mockResolvedValueOnce(
     Response.json({
-      results: [
+      status: "selection",
+      assistants: [
         { id: "assistant-1", name: "Cloud one", remote: "cloud" },
         { id: "assistant-2", name: "Own one", remote: "custom" },
         { id: "assistant-3", name: "Fallback", remote: "skynet" },
@@ -228,7 +240,8 @@ test("each row labels itself with its own remote", async () => {
 test("arrow keys move focus across cards without selecting", async () => {
   request.mockResolvedValueOnce(
     Response.json({
-      results: [
+      status: "selection",
+      assistants: [
         { id: "assistant-1", name: "One" },
         { id: "assistant-2", name: "Two" },
       ],
@@ -248,13 +261,23 @@ test("arrow keys move focus across cards without selecting", async () => {
 test("Enter selects the focused card", async () => {
   const router = setup(undefined, false, async (url) => {
     const target = String(url);
-    if (target.includes("/v1/assistants/?")) {
-      return Response.json({ results: [{ id: "assistant-1", name: "One" }] });
+    if (target.endsWith("/v1/assistants/")) {
+      return Response.json({
+        status: "selection",
+        assistants: [{ id: "assistant-1", name: "One" }],
+      });
     }
     // The shell rejects a detail whose id mismatches the selection, so the
     // detail must answer the assistant the card navigated with.
     if (target.includes("/v1/assistants/assistant-1/")) {
-      return Response.json({ ...detail, id: "assistant-1" });
+      return Response.json({
+        status: "ready",
+        assistant: {
+          id: "assistant-1",
+          version: detail.version,
+          url: detail.url,
+        },
+      });
     }
     return iframeDocument.clone();
   });
@@ -271,7 +294,10 @@ test("Enter selects the focused card", async () => {
 
 test("a sole assistant waits for selection rather than fetching detail on the account page", async () => {
   request.mockResolvedValueOnce(
-    Response.json({ results: [{ id: "assistant-1", name: "One" }] }),
+    Response.json({
+      status: "selection",
+      assistants: [{ id: "assistant-1", name: "One" }],
+    }),
   );
   setup();
   await screen.findByRole("radio", { name: /^One/ });
@@ -281,9 +307,12 @@ test("a sole assistant waits for selection rather than fetching detail on the ac
 
 test("an empty host list can be refreshed", async () => {
   request
-    .mockResolvedValueOnce(Response.json({ results: [] }))
+    .mockResolvedValueOnce(Response.json({ status: "empty" }))
     .mockResolvedValueOnce(
-      Response.json({ results: [{ id: "assistant-1", name: "One" }] }),
+      Response.json({
+        status: "selection",
+        assistants: [{ id: "assistant-1", name: "One" }],
+      }),
     );
   setup();
   await screen.findByText("No assistant is available.");
@@ -294,8 +323,8 @@ test("an empty host list can be refreshed", async () => {
 test("an empty list offers creation and lands in the created assistant", async () => {
   const router = setup("/account/select-assistant", false, async (url) => {
     const target = String(url);
-    if (target.includes("/v1/assistants/?")) {
-      return Response.json({ results: [] });
+    if (target.endsWith("/v1/assistants/")) {
+      return Response.json({ status: "empty" });
     }
     // The dialog's create flow resolves the organization, hatches, and the
     // shell then resolves the created assistant's detail same-origin.
@@ -306,7 +335,14 @@ test("an empty list offers creation and lands in the created assistant", async (
       return Response.json(detail);
     }
     if (target.includes("/v1/assistants/assistant-2/")) {
-      return Response.json(detail);
+      return Response.json({
+        status: "ready",
+        assistant: {
+          id: "assistant-2",
+          version: detail.version,
+          url: detail.url,
+        },
+      });
     }
     return iframeDocument.clone();
   });
@@ -324,7 +360,7 @@ test("an empty list offers creation and lands in the created assistant", async (
       // the cloud session between API calls; pin the load-bearing chain.
       .filter((url) => url.includes("/v1/") && !url.includes("/_allauth/")),
   ).toEqual([
-    "http://localhost:3001/v1/assistants/?limit=100&offset=0",
+    "http://localhost:3001/v1/assistants/",
     "/v1/organizations/?limit=100&offset=0",
     "/v1/assistants/hatch/?mode=create",
     "http://localhost:3001/v1/assistants/assistant-2/",
@@ -343,7 +379,8 @@ test("the row's menu retires the assistant and refreshes the list", async () => 
   request
     .mockResolvedValueOnce(
       Response.json({
-        results: [
+        status: "selection",
+        assistants: [
           { id: "assistant-1", name: "One" },
           { id: "assistant-2", name: "Two" },
         ],
@@ -352,7 +389,10 @@ test("the row's menu retires the assistant and refreshes the list", async () => 
     // The DELETE lands, then the refresh re-lists without the retired row.
     .mockResolvedValueOnce(new Response(null, { status: 204 }))
     .mockResolvedValueOnce(
-      Response.json({ results: [{ id: "assistant-2", name: "Two" }] }),
+      Response.json({
+        status: "selection",
+        assistants: [{ id: "assistant-2", name: "Two" }],
+      }),
     );
   setup();
   const one = await screen.findByRole("radio", { name: /^One/ });
@@ -383,7 +423,10 @@ test("the row's menu retires the assistant and refreshes the list", async () => 
 test("a failed retire keeps the dialog open with the cloud's detail", async () => {
   request
     .mockResolvedValueOnce(
-      Response.json({ results: [{ id: "assistant-1", name: "One" }] }),
+      Response.json({
+        status: "selection",
+        assistants: [{ id: "assistant-1", name: "One" }],
+      }),
     )
     .mockResolvedValueOnce(
       Response.json(
@@ -409,7 +452,10 @@ test("a failed retire keeps the dialog open with the cloud's detail", async () =
 
 test("a failed list renders a degraded disabled row plus the way forward", async () => {
   request.mockResolvedValueOnce(
-    Response.json({ results: [{ name: "Missing ID" }] }),
+    Response.json({
+      status: "selection",
+      assistants: [{ name: "Missing ID" }],
+    }),
   );
   setup();
   const row = await screen.findByRole("radio", {
@@ -454,7 +500,12 @@ test("leaving the chooser aborts its request and ignores a late reply", async ()
   cleanup();
   expect(signal?.aborted).toBe(true);
   await act(async () => {
-    finish(Response.json({ results: [{ id: "assistant-1" }] }));
+    finish(
+      Response.json({
+        status: "selection",
+        assistants: [{ id: "assistant-1" }],
+      }),
+    );
   });
   expect(screen.queryByRole("radio", { name: "assistant-1" })).toBeNull();
 });
@@ -468,7 +519,14 @@ test("browser history restores selection and frame navigation retains it", async
     false,
     async (url) => {
       if (String(url).includes("/v1/assistants/assistant-2/")) {
-        return Response.json(detail);
+        return Response.json({
+          status: "ready",
+          assistant: {
+            id: "assistant-2",
+            version: detail.version,
+            url: detail.url,
+          },
+        });
       }
       return iframeDocument.clone();
     },
@@ -516,7 +574,7 @@ describe("remembered origins", () => {
   test("the chooser lists remembered origins under the assistants", async () => {
     seedOrigin("https://workshop.example/assistant-9");
     setup("/account/select-assistant", false, async () =>
-      Response.json({ results: [] }),
+      Response.json({ status: "empty" }),
     );
     expect(await screen.findByText("Remote · workshop.example")).toBeTruthy();
     expect(screen.getByText("workshop.example")).toBeTruthy();
@@ -529,7 +587,7 @@ describe("remembered origins", () => {
     );
     try {
       setup("/account/select-assistant", false, async () =>
-        Response.json({ results: [] }),
+        Response.json({ status: "empty" }),
       );
       await act(async () => {
         fireEvent.click(await screen.findByText("Workshop"));
@@ -548,7 +606,7 @@ describe("remembered origins", () => {
     );
     try {
       setup("/account/select-assistant", false, async () =>
-        Response.json({ results: [] }),
+        Response.json({ status: "empty" }),
       );
       fireEvent.click(await screen.findByText("Add a remote assistant"));
       fireEvent.change(screen.getByLabelText("Assistant address"), {
@@ -572,7 +630,7 @@ describe("remembered origins", () => {
   test("a remembered origin can be removed from this device", async () => {
     seedOrigin("https://workshop.example/assistant-9", "Workshop");
     setup("/account/select-assistant", false, async () =>
-      Response.json({ results: [] }),
+      Response.json({ status: "empty" }),
     );
     // Radix menus open on pointerdown, not click.
     fireEvent.pointerDown(
@@ -597,7 +655,7 @@ describe("remembered origins", () => {
 
     test("both pairing affordances render and the connect one opens the connect dialog", async () => {
       setup("/account/select-assistant", false, async () =>
-        Response.json({ results: [] }),
+        Response.json({ status: "empty" }),
       );
       expect(
         await screen.findByText("Connect a remote assistant"),

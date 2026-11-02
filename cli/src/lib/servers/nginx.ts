@@ -25,7 +25,6 @@ import {
 import {
   getGatewayUrl,
   type InjectedConfig,
-  type Remote,
 } from "@mycadet/local-mode/contract";
 import {
   getAssistantDisplayName,
@@ -127,23 +126,6 @@ function denylistLocations(prefix = ""): string {
 }
 
 const DENYLIST_LOCATIONS = denylistLocations();
-
-/**
- * The web UI entry the assistant detail API hands the shell, relative to the
- * origin root: the distinct /web/assistant/ iframe namespace, so the shell's
- * own /assistant/* host routes can never load the shell recursively.
- */
-export const ASSISTANT_ENTRY_URL = "web/assistant/";
-
-// The edge serves remote browsers, so the bundle's remote-gateway machinery
-// must always run: it is reached through this self-hosted edge however the
-// cadet itself is hosted. "cloud" is never stamped (the cloud serves its
-// own bundles).
-/** The lockfile's recorded remote kind for the assistant, if one is found. */
-function lockfileAssistantRemote(assistantId: string): Remote | undefined {
-  const result = lookupAssistantByIdentifier(assistantId);
-  return result.status === "found" ? result.entry.cloud : undefined;
-}
 
 /**
  * Stable fingerprint of the injected SPA config and its source bundles,
@@ -345,68 +327,6 @@ function appOrigins(config: Record<string, unknown>): string[] {
     }
     return url.origin;
   });
-}
-
-function assistantMetadataLocations(config: Record<string, unknown>): string {
-  const metadata = assistantHostConfig(config);
-  const id = metadata.assistantId;
-  const entryUrl =
-    typeof config.entryUrl === "string" ? config.entryUrl : undefined;
-  const choice = id
-    ? {
-        id,
-        ...(metadata.assistantName ? { name: metadata.assistantName } : {}),
-        // Each assistant carries its own hosting kind (the review follow-up
-        // on #543): the chooser labels rows individually, so the edge stamps
-        // the served assistant's lockfile cloud — the truthful remote kind,
-        // NOT the served-SPA spelling (that one deliberately reads "custom"
-        // so remote browsers run the remote-gateway machinery; an assistant
-        // fact has no such excuse). Undefined drops out of the JSON body.
-        remote: lockfileAssistantRemote(id),
-      }
-    : undefined;
-  const responses = [
-    {
-      path: "/v1/assistants",
-      status: 200,
-      body: { results: choice ? [choice] : [], next: null },
-    },
-    ...(choice && id
-      ? [
-          {
-            path: `/v1/assistants/${encodeURIComponent(id)}`,
-            status: metadata.version ? 200 : 409,
-            body: metadata.version
-              ? {
-                  ...choice,
-                  status: "active",
-                  version: metadata.version,
-                  url: entryUrl ?? "assistant/",
-                }
-              : { detail: "assistant is not ready" },
-          },
-        ]
-      : []),
-  ];
-  return responses
-    .flatMap(({ path, status, body }) =>
-      [path, `${path}/`].map(
-        (route) => `
-    location = ${nginxQuoted(route, "assistant API path")} {
-      default_type application/json;
-      add_header Cache-Control "no-store" always;
-      add_header Access-Control-Allow-Origin $cadet_app_origin always;
-      add_header Access-Control-Allow-Credentials "true" always;
-      add_header Access-Control-Allow-Methods "GET, HEAD, OPTIONS" always;
-      add_header Access-Control-Allow-Headers "Accept, Cadet-Organization-Id" always;
-      add_header Vary "Origin" always;
-      if ($request_method = OPTIONS) { return 204; }
-      if ($request_method !~ ^(GET|HEAD)$) { return 405; }
-      return ${status} ${nginxQuoted(JSON.stringify(body), "assistant metadata")};
-    }`,
-      ),
-    )
-    .join("\n");
 }
 
 /** Build the nginx config for the app server and its public assistant metadata.
@@ -678,10 +598,6 @@ function buildRemoteWebIngressLocations(opts: {
 
 ${denylistLocations("/web")}
 
-${assistantMetadataLocations({
-  ...opts.config,
-  entryUrl: ASSISTANT_ENTRY_URL,
-})}
 
 ${gatewayProxyLocations(opts.gatewayUrl)}
 
