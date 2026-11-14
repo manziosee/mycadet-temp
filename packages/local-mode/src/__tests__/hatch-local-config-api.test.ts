@@ -33,10 +33,25 @@ let capturedApply: CapturedApply | undefined;
 // replaces the whole module record for every file that runs later in the
 // same bun test process.
 const actualLocalWake = await import("../remotes/local/wake");
-const wakeMock = mock(
-  async (_entry: unknown, _opts?: { watch?: boolean }) =>
-    ({ ok: true }) as never,
-);
+
+// The readyz seam: hatch's readiness wait polls the entry's gateway port, so
+// the wake stub brings up a real HTTP server that answers ready there — the
+// same contract the actual gateway serves.
+let readyzServer: ReturnType<typeof Bun.serve> | undefined;
+const wakeMock = mock(async (entry: unknown) => {
+  const port = (entry as { port?: number }).port;
+  if (typeof port !== "number") throw new Error("no gateway port allocated");
+  readyzServer = Bun.serve({
+    port,
+    fetch: (request) => {
+      const url = new URL(request.url);
+      return Response.json(
+        url.pathname === "/readyz" ? { ready: true } : {},
+      );
+    },
+  });
+  return { ok: true } as never;
+});
 mock.module("../remotes/local/wake", () => ({
   ...actualLocalWake,
   wakeLocal: wakeMock,
@@ -105,6 +120,8 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  readyzServer?.stop(true);
+  readyzServer = undefined;
   for (const [key, value] of saved) {
     if (value === undefined) Reflect.deleteProperty(process.env, key);
     else process.env[key] = value;
