@@ -239,3 +239,5 @@ export {
   loadGuardianToken,
 } from "./guardian-token";
 export type { TokenResult, GuardianTokenData } from "./guardian-token";
+
+export { setLocalSourceRoot } from "./source-root";

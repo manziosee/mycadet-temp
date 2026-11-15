@@ -3,7 +3,11 @@
 import { join } from "path";
 import { readFileSync } from "node:fs";
 
-import { checkHealth, resolveConfigDir } from "@mycadet/local-mode";
+import {
+  checkHealth,
+  resolveConfigDir,
+  setLocalSourceRoot,
+} from "@mycadet/local-mode";
 
 import { stampedVersion } from "@mycadet/shared/version";
 
@@ -40,6 +44,11 @@ import { voice } from "./commands/voice";
 import { wake } from "./commands/wake";
 import { red } from "./lib/color";
 import { resolveAssistant, setActiveAssistant } from "./lib/assistant-config";
+// Report where the source tree lives for local file resolution
+if (typeof import.meta.dir === "string") {
+  setLocalSourceRoot(join(import.meta.dir, "..", ".."));
+}
+
 const commands = {
   backup,
   app,

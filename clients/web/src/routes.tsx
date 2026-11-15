@@ -105,22 +105,6 @@ export const routeTree = [
   // chooser's screen is deleted; the shell's SPA fallback hands the path to
   // the app bundle's chooser), so their paths fall through to the NotFound
   // splat like the rest of the nuked auth pages.
-  // About — standalone metadata page rendered inside the Electron
-  // About BrowserWindow. Declared as a sibling of `/assistant` (not
-  // a child) so React Router's most-specific matcher picks it for
-  // `/assistant/about` BEFORE falling into the auth-protected app
-  // tree below. URL sits under `/assistant/*` so it's served by
-  // Vite's SPA fallback in dev (which is scoped to the `base`).
-  {
-    path: "/assistant/about",
-    ErrorBoundary: RouteErrorBoundary,
-    HydrateFallback: RootHydrateFallback,
-    lazy: {
-      Component: () =>
-        import("@/components/about-page").then((m) => m.AboutPage),
-    },
-  },
-
   // Bundle confirmation — standalone page rendered inside the Electron
   // bundle-confirmation BrowserWindow. No auth required so bundles can
   // be opened before the user logs in. Same sibling pattern as About.
