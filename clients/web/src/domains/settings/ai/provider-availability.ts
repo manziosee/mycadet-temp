@@ -1,5 +1,4 @@
 import { MODELS_BY_PROVIDER } from "@/assistant/llm-model-catalog";
-import { useActiveAssistantIsSelfHosted } from "@/assistant/hosting";
 
 import {
   CHATGPT_CONNECTION_PROVIDER,
@@ -14,14 +13,6 @@ import type {
   ConnectionProvider,
   ProviderConnection,
 } from "@/generated/daemon/types.gen";
-
-/**
- * Providers whose runtime lives on the user's own machine, so a
- * cloud-hosted assistant has nothing to reach. Pickers keep listing them
- * and disable the row instead of dropping it: an absent row reads as "not
- * supported yet" rather than "not applicable to this assistant".
- */
-const LOCAL_ONLY_PROVIDERS = new Set<string>(["ollama"]);
 
 /** Every provider the model catalog knows, in catalog order. */
 export const CATALOG_PROVIDERS = Object.keys(MODELS_BY_PROVIDER) as Array<
@@ -51,46 +42,31 @@ export function connectionServesProvider(
   );
 }
 
-export function isProviderSelectableForAssistant(
-  provider: string,
-  activeAssistantIsSelfHosted: boolean,
-): boolean {
-  return !LOCAL_ONLY_PROVIDERS.has(provider) || activeAssistantIsSelfHosted;
+export function selectableInferenceProvidersForAssistant(): Array<
+  (typeof INFERENCE_PROVIDERS)[number]
+> {
+  return [...INFERENCE_PROVIDERS];
 }
 
-export function selectableInferenceProvidersForAssistant(
-  activeAssistantIsSelfHosted: boolean,
-): Array<(typeof INFERENCE_PROVIDERS)[number]> {
-  return INFERENCE_PROVIDERS.filter((provider) =>
-    isProviderSelectableForAssistant(provider, activeAssistantIsSelfHosted),
-  );
-}
-
-export function selectableConnectionProvidersForAssistant(
-  activeAssistantIsSelfHosted: boolean,
-): ConnectionProvider[] {
-  return CONNECTION_PROVIDERS.filter((provider) =>
-    isProviderSelectableForAssistant(provider, activeAssistantIsSelfHosted),
-  );
+export function selectableConnectionProvidersForAssistant(): ConnectionProvider[] {
+  return [...CONNECTION_PROVIDERS];
 }
 
 /**
  * Inference providers the active assistant can dispatch through. Picker
- * option lists offer the full catalog (see `useProviderPickerAvailability`);
+ * option lists offer the full catalog;
  * this narrower set is for choosing a default, which must land on a provider
  * the assistant can actually use.
  */
 export function useSelectableInferenceProviders(): Array<
   (typeof INFERENCE_PROVIDERS)[number]
 > {
-  const activeAssistantIsSelfHosted = useActiveAssistantIsSelfHosted();
-  return selectableInferenceProvidersForAssistant(activeAssistantIsSelfHosted);
+  return selectableInferenceProvidersForAssistant();
 }
 
 /** Connection providers the active assistant can connect, for defaulting. */
 export function useSelectableConnectionProviders(): ConnectionProvider[] {
-  const activeAssistantIsSelfHosted = useActiveAssistantIsSelfHosted();
-  return selectableConnectionProvidersForAssistant(activeAssistantIsSelfHosted);
+  return selectableConnectionProvidersForAssistant();
 }
 
 /**

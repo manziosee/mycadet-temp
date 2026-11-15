@@ -33,7 +33,6 @@ import {
   CATALOG_PROVIDERS,
   entryPickerValue,
   expandEndpointEntries,
-  isProviderSelectableForAssistant,
   parseEntryPickerValue,
   providersServedByConnections,
   unconnectedProviders,
@@ -90,7 +89,6 @@ export interface ModelFirstOption {
 
 export interface ModelFirstInput {
   readonly connections: readonly ProviderConnection[];
-  readonly activeAssistantIsSelfHosted: boolean;
   /** Provider id to display name. */
   readonly labelFor: (provider: ConnectionProvider) => string;
   /** Meta on a kind's bare row once it expands into named entries. */
@@ -194,13 +192,7 @@ function unconnectedCandidate(
 }
 
 function selectableKinds(input: ModelFirstInput): CandidateKinds {
-  const { kinds, connected } = candidateKinds(input.connections);
-  return {
-    kinds: kinds.filter((kind) =>
-      isProviderSelectableForAssistant(kind, input.activeAssistantIsSelfHosted),
-    ),
-    connected,
-  };
+  return candidateKinds(input.connections);
 }
 
 interface CatalogEntry {

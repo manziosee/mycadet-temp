@@ -6,7 +6,6 @@ import { useQuery } from "@tanstack/react-query";
 import { useActiveAssistantId } from "@/assistant/use-active-assistant-id";
 import { ExternalAnchor } from "@/components/external-anchor";
 import { credentialsInspectPost } from "@/generated/daemon/sdk.gen";
-import { useActiveAssistantIsSelfHosted } from "@/assistant/hosting";
 import { captureError } from "@/lib/error-reporting/capture-error";
 import { useEnvironmentStore } from "@/stores/environment-store";
 import { shouldRetryDaemonError } from "@/utils/daemon-errors";
@@ -15,7 +14,6 @@ import { Select } from "@mycadet/design-library/components/select";
 import { toast } from "@mycadet/design-library/components/toast";
 
 import { Trans, useTranslation } from "@/i18n";
-import { ByoServiceCard } from "@/components/byo-service-card";
 import { ServiceCard } from "@/components/service-card";
 import { SaveButton } from "@/components/service-form-controls";
 import {
@@ -33,17 +31,10 @@ export function EmailChannelSection() {
   const assistantId = useActiveAssistantId();
 
   const emailRootDomain = useEnvironmentStore.use.emailRootDomain();
-  const isSelfHosted = useActiveAssistantIsSelfHosted();
 
-  const [mode, setMode] = useState<ServiceMode>(() => {
-    if (isSelfHosted) {
-      return "your-own";
-    }
-    return parseServiceMode(
-      getLocalSetting(LS_EMAIL_MODE, "managed"),
-      "managed",
-    );
-  });
+  const [mode, setMode] = useState<ServiceMode>(() =>
+    parseServiceMode(getLocalSetting(LS_EMAIL_MODE, "managed"), "managed"),
+  );
   const [byoProviderId, setByoProviderId] = useState<EmailByoProvider["id"]>(
     () => {
       const raw = getLocalSetting(LS_EMAIL_BYO_PROVIDER, "resend");
@@ -64,7 +55,7 @@ export function EmailChannelSection() {
       });
       return data;
     },
-    enabled: mode === "your-own" || isSelfHosted,
+    enabled: mode === "your-own",
     staleTime: 60_000,
     retry: shouldRetryDaemonError,
     meta: { errorContext: "byo_email_credential_check" },
@@ -196,18 +187,6 @@ export function EmailChannelSection() {
       </div>
     </div>
   );
-
-  if (isSelfHosted) {
-    return (
-      <ByoServiceCard
-        id="email"
-        title={t("emailChannelSection.title")}
-        subtitle={t("emailChannelSection.subtitle")}
-      >
-        {yourOwnContent}
-      </ByoServiceCard>
-    );
-  }
 
   return (
     <ServiceCard
