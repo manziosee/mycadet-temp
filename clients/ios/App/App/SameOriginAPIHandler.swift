@@ -135,14 +135,53 @@ final class SameOriginAPIHandler: NSObject, WKURLSchemeHandler {
         else {
             return
         }
-        let cookies = HTTPCookie.cookies(
-            withResponseHeaderFields: fields,
-            for: target
-        )
+        let tlsTarget = target.scheme?.lowercased() == "https"
+        // The cookie parser applies the browser setter policy and drops
+        // `Secure` cookies for insecure URLs outright — so on a plain-http
+        // target the gateway's session cookies never reach the jar at all
+        // (the post-pairing 401). Parse against the target's TLS twin and
+        // let `replayable` carry the transport adjustment onto the rebuilt
+        // cookie instead.
+        let parseTarget = tlsTarget ? target : Self.tlsTwin(of: target)
+        let cookies = HTTPCookie
+            .cookies(withResponseHeaderFields: fields, for: parseTarget)
+            .map { Self.replayable($0, overTLS: tlsTarget) }
         guard !cookies.isEmpty else {
             return
         }
         HTTPCookieStorage.shared.setCookies(cookies, for: target, mainDocumentURL: target)
+    }
+
+    private static func tlsTwin(of url: URL) -> URL {
+        var components = URLComponents(url: url, resolvingAgainstBaseURL: false)
+        components?.scheme = "https"
+        return components?.url ?? url
+    }
+
+    /// A `Secure` cookie never matches an http URL on the jar's read side —
+    /// plain RFC semantics, no exceptions. The gateway stamps `Secure`
+    /// unconditionally (the cloud's https origin needs it), including on
+    /// its plain-http local loopback, where a real browser still replays
+    /// the cookie because `http://localhost` is a trustworthy context. The
+    /// forwarder owns the jar for this transport and the server set these
+    /// cookies over it, so store them with the transport's actual scheme:
+    /// `Secure` kept for https targets, dropped otherwise — replaying to
+    /// the host that set the cookie over the transport that carried it
+    /// cannot leak it anywhere it has not already traveled.
+    private static func replayable(_ cookie: HTTPCookie, overTLS: Bool) -> HTTPCookie {
+        guard !overTLS, cookie.isSecure else {
+            return cookie
+        }
+        var properties: [HTTPCookiePropertyKey: Any] = [
+            .name: cookie.name,
+            .value: cookie.value,
+            .domain: cookie.domain,
+            .path: cookie.path,
+        ]
+        if let expires = cookie.expiresDate {
+            properties[.expires] = expires
+        }
+        return HTTPCookie(properties: properties) ?? cookie
     }
 
     /// The request to fire at the base origin: the task's path and query
