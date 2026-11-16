@@ -10,6 +10,7 @@ import { mock } from "bun:test";
 import {
   clearCloudToken,
   fetchAssistantDetail,
+  fetchCloudAssistants,
   fetchUpgradeInProgress,
   saveCloudToken,
 } from "../lib/cloud-client.js";
@@ -144,10 +145,10 @@ describe("getCloudBaseUrl resolution order", () => {
     expect(getCloudBaseUrl()).toBe("https://env.mycadet.ai");
   });
 
-  test("falls back to the dev seed when no environment is set", () => {
-    // CADET_ENVIRONMENT is unset → the dev seed (the env-only reader's
-    // fallback — browser bundles have no channel file to consult).
-    expect(getCloudBaseUrl()).toBe("https://dev.mycadet.ai");
+  test("falls back to production when nothing signals an environment", () => {
+    // No CADET_ENVIRONMENT, no version channel suffix, no persisted default —
+    // resolveEnvironmentName's last step is the production seed.
+    expect(getCloudBaseUrl()).toBe("https://mycadet.ai");
   });
 
   test("falls back to the dev seed URL when CADET_ENVIRONMENT=dev", () => {
@@ -161,20 +162,41 @@ describe("getCloudBaseUrl resolution order", () => {
   });
 });
 
-describe("fetchAssistantDetail / fetchUpgradeInProgress", () => {
-  // vak_ token → authHeaders skips the org-ID fetch, so the single mocked
-  // fetch call is the endpoint under test.
+// Shared fetch stubs — pure module-scope helpers, no env coupling.
+const CLOUD_URL = "https://test.mycadet.ai";
+const originalFetch = globalThis.fetch;
+
+afterEach(() => {
+  globalThis.fetch = originalFetch;
+});
+
+function mockFetchJson(body: unknown, status = 200) {
+  const fetchMock = mock(
+    async (_url: RequestInfo | URL, _init?: RequestInit) =>
+      new Response(JSON.stringify(body), { status }),
+  );
+  globalThis.fetch = fetchMock as unknown as typeof globalThis.fetch;
+  return fetchMock;
+}
+
+function mockFetchNetworkError() {
+  globalThis.fetch = mock(async () => {
+    throw new TypeError("fetch failed");
+  }) as unknown as typeof globalThis.fetch;
+}
+
+function usePlatformUrl() {
+  // The vak_ token skips cloudAuthHeaders' org-ID fetch, so the single
+  // mocked fetch call is the endpoint under test. Each describe scopes its
+  // own env save/restore around this.
   const TOKEN = "vak_test_token";
-  const ASSISTANT_ID = "11111111-2222-3333-4444-555555555555";
-  const PLATFORM_URL = "https://platform.test";
   let savedCloudUrl: string | undefined;
   let savedEnv: string | undefined;
 
   beforeEach(() => {
-    // The ops derive the origin from the shared helper now — pin it.
     savedCloudUrl = process.env.CADET_CLOUD_URL;
     savedEnv = process.env.CADET_ENVIRONMENT;
-    process.env.CADET_CLOUD_URL = PLATFORM_URL;
+    process.env.CADET_CLOUD_URL = CLOUD_URL;
     delete process.env.CADET_ENVIRONMENT;
   });
 
@@ -191,26 +213,12 @@ describe("fetchAssistantDetail / fetchUpgradeInProgress", () => {
     }
   });
 
-  const originalFetch = globalThis.fetch;
+  return TOKEN;
+}
 
-  afterEach(() => {
-    globalThis.fetch = originalFetch;
-  });
-
-  function mockFetchJson(body: unknown, status = 200) {
-    const fetchMock = mock(
-      async (_url: RequestInfo | URL, _init?: RequestInit) =>
-        new Response(JSON.stringify(body), { status }),
-    );
-    globalThis.fetch = fetchMock as unknown as typeof globalThis.fetch;
-    return fetchMock;
-  }
-
-  function mockFetchNetworkError() {
-    globalThis.fetch = mock(async () => {
-      throw new TypeError("fetch failed");
-    }) as unknown as typeof globalThis.fetch;
-  }
+describe("fetchAssistantDetail / fetchUpgradeInProgress", () => {
+  const TOKEN = usePlatformUrl();
+  const ASSISTANT_ID = "11111111-2222-3333-4444-555555555555";
 
   test("fetchAssistantDetail maps fields", async () => {
     const fetchMock = mockFetchJson({
@@ -221,7 +229,7 @@ describe("fetchAssistantDetail / fetchUpgradeInProgress", () => {
       currentReleaseVersion: "0.7.0",
     });
     const url = String(fetchMock.mock.calls[0][0]);
-    expect(url).toBe(`${PLATFORM_URL}/v1/assistants/${ASSISTANT_ID}/`);
+    expect(url).toBe(`${CLOUD_URL}/v1/assistants/${ASSISTANT_ID}/`);
   });
 
   test("fetchAssistantDetail defaults missing fields", async () => {
@@ -247,7 +255,7 @@ describe("fetchAssistantDetail / fetchUpgradeInProgress", () => {
     expect(await fetchUpgradeInProgress(TOKEN, ASSISTANT_ID)).toBe(true);
     const url = String(fetchMock.mock.calls[0][0]);
     expect(url).toBe(
-      `${PLATFORM_URL}/v1/assistants/${ASSISTANT_ID}/upgrade-status/`,
+      `${CLOUD_URL}/v1/assistants/${ASSISTANT_ID}/upgrade-status/`,
     );
 
     mockFetchJson({ in_progress: false });
@@ -267,5 +275,58 @@ describe("fetchAssistantDetail / fetchUpgradeInProgress", () => {
   test("fetchUpgradeInProgress returns null on a malformed body", async () => {
     mockFetchJson({ something_else: 1 });
     expect(await fetchUpgradeInProgress(TOKEN, ASSISTANT_ID)).toBeNull();
+  });
+});
+
+describe("fetchCloudAssistants reads the chooser's list union", () => {
+  const TOKEN = usePlatformUrl();
+
+  test("a selection body maps every listed row — extra choice fields drop", async () => {
+    mockFetchJson({
+      status: "selection",
+      assistants: [
+        {
+          id: "00000000-0000-7000-8000-000000000007",
+          name: "Cadet 1",
+          avatar_url: null,
+          created: "2026-01-01T00:00:00.000Z",
+          remote: "cloud",
+        },
+        {
+          id: "00000000-0000-7000-8000-000000000008",
+          name: "Cadet 2",
+          avatar_url: null,
+          created: "2026-01-02T00:00:00.000Z",
+          remote: "cloud",
+        },
+      ],
+    });
+    expect(await fetchCloudAssistants(TOKEN)).toEqual([
+      {
+        id: "00000000-0000-7000-8000-000000000007",
+        name: "Cadet 1",
+        status: "active",
+      },
+      {
+        id: "00000000-0000-7000-8000-000000000008",
+        name: "Cadet 2",
+        status: "active",
+      },
+    ]);
+  });
+
+  test("the empty arm is an empty list", async () => {
+    mockFetchJson({ status: "empty" });
+    expect(await fetchCloudAssistants(TOKEN)).toEqual([]);
+  });
+
+  test("an unparseable body is a non-fatal empty list", async () => {
+    mockFetchJson({ detail: "not a list" });
+    expect(await fetchCloudAssistants(TOKEN)).toEqual([]);
+  });
+
+  test("a non-ok response is a non-fatal empty list", async () => {
+    mockFetchJson({ detail: "boom" }, 500);
+    expect(await fetchCloudAssistants(TOKEN)).toEqual([]);
   });
 });
