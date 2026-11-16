@@ -94,7 +94,7 @@ export {
 
 export { retireAssistant } from "./operations/retire";
 export { sleepAssistant, type SleepOptions } from "./operations/sleep";
-export { hatchAssistant, type HatchAssistantResult } from "./operations/hatch";
+export { hatchAssistant } from "./operations/hatch";
 export { allocateLocalPlacement } from "./remotes/local/hatch";
 
 export { wakeAssistant } from "./operations/wake";
@@ -109,7 +109,9 @@ export {
   computeDeviceId,
   getOrCreatePersistedDeviceId,
   GuardianLeasePermanentError,
+  guardianTokenDueForRenewal,
   leaseGuardianToken,
+  loadFreshGuardianToken,
   parseGuardianToken,
 } from "./guardian-token";
 export {
