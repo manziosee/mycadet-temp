@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { isElectron } from "@/runtime/is-electron";
+import { useActiveAssistantId } from "@/assistant/use-active-assistant-id";
 import {
   beginNotificationIdentityPublication,
   clearNotificationAvatar,
@@ -36,8 +37,6 @@ import {
 import type { NotificationAvatar } from "@mycadet/ipc-contract";
 
 export interface NotificationAvatarSyncOptions {
-  scopeId: string | null;
-  cloudAssistantId?: string | null;
   assistantName?: string | null;
   assistantNameOwner?: NotificationIdentityOwner | null;
   avatarOwner?: NotificationIdentityOwner | null;
@@ -73,7 +72,6 @@ function ownerMatches(
  * it also feeds the existing dock/tray notification path.
  */
 export function useNotificationAvatarSync(
-  assistantId: string | null,
   customImageUrl: string | null,
   imageMeta: AvatarImageMeta | null,
   components: CharacterComponents | null,
@@ -82,19 +80,18 @@ export function useNotificationAvatarSync(
   options?: NotificationAvatarSyncOptions,
 ): void {
   const legacyEnabled = isElectron() && !isPopoutWindowLifetime();
-  const scopeId = options
-    ? options.scopeId
-    : resolveNotificationIdentityScope(assistantId);
+  // The active assistant is guaranteed truthy — the web bundle exists only
+  // for a resolved assistant — and the scope keys on it plus the current
+  // origin, so the hook resolves both itself and callers never drift from
+  // the identity the rest of the notification path computes.
+  const assistantId = useActiveAssistantId();
+  const scopeId = resolveNotificationIdentityScope();
   const identity = useMemo(
     () =>
       assistantId && scopeId
-        ? createNotificationIdentity(
-            scopeId,
-            assistantId,
-            options?.cloudAssistantId,
-          )
+        ? createNotificationIdentity(scopeId, assistantId)
         : null,
-    [assistantId, options?.cloudAssistantId, scopeId],
+    [assistantId, scopeId],
   );
   const identityKey = identity
     ? JSON.stringify([

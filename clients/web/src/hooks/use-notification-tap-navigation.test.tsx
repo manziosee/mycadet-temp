@@ -4,7 +4,6 @@ import { act, cleanup, renderHook } from "@testing-library/react";
 
 import type { NotificationIdentity } from "@mycadet/ipc-contract";
 
-import { resolveAssistantNotificationCloudId } from "@/hooks/use-assistant-avatar";
 import { resolveNotificationIdentityScope } from "@/runtime/notification-avatar";
 import { __resetForTesting, subscribe } from "@/lib/event-bus";
 import { createNotificationIdentity } from "@/runtime/notification-avatar";
@@ -40,13 +39,14 @@ const { useNotificationTapNavigation } =
 function platformIdentity(
   assistant: LockfileAssistant = ASSISTANT_A,
 ): NotificationIdentity {
-  const scopeId = resolveNotificationIdentityScope(assistant.assistantId);
+  // The resolver reads the served assistant, so borrow the store briefly to
+  // derive a foreign identity and put this surface's assistant back.
+  const previous = useResolvedAssistantStore.getState().assistant;
+  useResolvedAssistantStore.getState().setAssistant(assistant);
+  const scopeId = resolveNotificationIdentityScope();
+  useResolvedAssistantStore.getState().setAssistant(previous);
   const identity = scopeId
-    ? createNotificationIdentity(
-        scopeId,
-        assistant.assistantId,
-        resolveAssistantNotificationCloudId(assistant),
-      )
+    ? createNotificationIdentity(scopeId, assistant.assistantId)
     : null;
   if (!identity) {
     throw new Error("expected notification identity");
@@ -142,6 +142,7 @@ describe("useNotificationTapNavigation", () => {
   });
 
   test("a tap for another assistant has no answer in this surface", async () => {
+    useResolvedAssistantStore.getState().setAssistant(ASSISTANT_A);
     renderHook(() => useNotificationTapNavigation());
     const received = collectThreadOpens();
 

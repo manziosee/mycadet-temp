@@ -5,7 +5,6 @@
  */
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 import { act, cleanup, renderHook, waitFor } from "@testing-library/react";
-import { useEffect } from "react";
 
 import { getCharacterComponents } from "@mycadet/avatar-catalog";
 import { NOTIFICATION_AVATAR_MAX_LOCAL_BYTES } from "@mycadet/avatar-manifest/notification-avatar";
@@ -16,6 +15,7 @@ import type {
   CharacterComponents,
   CharacterTraits,
 } from "@/types/avatar";
+import { useResolvedAssistantStore } from "@/stores/resolved-assistant-store";
 
 const AVATAR_PNG = new Uint8Array([0x89, 0x50, 0x4e, 0x47]);
 
@@ -58,7 +58,6 @@ const {
   createNotificationIdentity,
   getNotificationAvatar,
   getNotificationIdentitySnapshot,
-  reconcilePreparedNotificationIdentityOwners,
   resetNotificationIdentitySession,
   setNotificationIdentityNativeAdapter,
   sha256Hex,
@@ -76,29 +75,25 @@ const IMAGE_META: AvatarImageMeta = {
   updatedAt: "2026-01-01T00:00:00.000Z",
   etag: "etag-a",
 };
-/** The scope the hook computes for ASSISTANT_ID under the test origin. */
-const CONNECTION_SCOPE = ASSISTANT_ID;
+const setActiveAssistant = (assistantId: string) =>
+  useResolvedAssistantStore
+    .getState()
+    .setAssistant({ cloud: "cloud", assistantId });
 
-function preparedIdentity(
-  assistantId = ASSISTANT_ID,
-  scope: string = CONNECTION_SCOPE,
-  cloudAssistantId?: string,
-) {
-  const scopeId = resolveNotificationIdentityScope(scope)!;
-  return createNotificationIdentity(scopeId, assistantId, cloudAssistantId)!;
+function preparedIdentity(assistantId = ASSISTANT_ID) {
+  setActiveAssistant(assistantId);
+  const scopeId = resolveNotificationIdentityScope()!;
+  return createNotificationIdentity(scopeId, assistantId)!;
 }
 
 const preparedOptions = (
   assistantName = "Assistant One",
   avatarReady = true,
-  scope: string = CONNECTION_SCOPE,
-  cloudAssistantId?: string,
   ownerAssistantId = ASSISTANT_ID,
 ) => {
-  const scopeId = resolveNotificationIdentityScope(scope)!;
+  setActiveAssistant(ownerAssistantId);
+  const scopeId = resolveNotificationIdentityScope()!;
   return {
-    scopeId,
-    cloudAssistantId,
     assistantName,
     assistantNameOwner: { scopeId, assistantId: ownerAssistantId },
     avatarOwner: { scopeId, assistantId: ownerAssistantId },
@@ -125,14 +120,7 @@ const staleTraits = (): CharacterTraits => ({
 
 const render = (accentHex: string | null = ACCENT) =>
   renderHook(() =>
-    useNotificationAvatarSync(
-      ASSISTANT_ID,
-      IMAGE_URL,
-      IMAGE_META,
-      null,
-      null,
-      accentHex,
-    ),
+    useNotificationAvatarSync(IMAGE_URL, IMAGE_META, null, null, accentHex),
   );
 
 beforeEach(() => {
@@ -144,6 +132,7 @@ beforeEach(() => {
   rasterizeNotificationAvatar.mockClear();
   installSenderNotificationIdentityAdapter.mockClear();
   __clearNotificationIdentitySnapshotsForTests();
+  setActiveAssistant(ASSISTANT_ID);
 });
 
 afterEach(() => {
@@ -155,7 +144,6 @@ describe("useNotificationAvatarSync", () => {
   test("passes the character layout when saved traits resolve", async () => {
     renderHook(() =>
       useNotificationAvatarSync(
-        ASSISTANT_ID,
         IMAGE_URL,
         IMAGE_META,
         getCharacterComponents(),
@@ -235,9 +223,7 @@ describe("useNotificationAvatarSync", () => {
   });
 
   test("holds nothing for an assistant with no avatar to draw", async () => {
-    renderHook(() =>
-      useNotificationAvatarSync(ASSISTANT_ID, null, null, null, null, ACCENT),
-    );
+    renderHook(() => useNotificationAvatarSync(null, null, null, null, ACCENT));
 
     await waitFor(() => {
       expect(rasterizeNotificationAvatar).not.toHaveBeenCalled();
@@ -246,15 +232,11 @@ describe("useNotificationAvatarSync", () => {
   });
 
   test("holds nothing while there is no active assistant", async () => {
+    act(() => {
+      useResolvedAssistantStore.getState().resetAssistant();
+    });
     renderHook(() =>
-      useNotificationAvatarSync(
-        null,
-        IMAGE_URL,
-        IMAGE_META,
-        null,
-        null,
-        ACCENT,
-      ),
+      useNotificationAvatarSync(IMAGE_URL, IMAGE_META, null, null, ACCENT),
     );
 
     await waitFor(() => {
@@ -295,7 +277,6 @@ describe("useNotificationAvatarSync", () => {
         traits: CharacterTraits;
       }) =>
         useNotificationAvatarSync(
-          ASSISTANT_ID,
           IMAGE_URL,
           IMAGE_META,
           components,
@@ -319,9 +300,9 @@ describe("useNotificationAvatarSync", () => {
 
   test("empties the holder before drawing a replacement, then holds the new assistant's avatar", async () => {
     const { rerender } = renderHook(
-      ({ id, url }: { id: string; url: string }) =>
-        useNotificationAvatarSync(id, url, null, null, null, ACCENT),
-      { initialProps: { id: ASSISTANT_ID, url: IMAGE_URL } },
+      ({ url }: { url: string }) =>
+        useNotificationAvatarSync(url, null, null, null, ACCENT),
+      { initialProps: { url: IMAGE_URL } },
     );
     await waitFor(() => {
       expect(getNotificationAvatar()).not.toBeNull();
@@ -331,7 +312,10 @@ describe("useNotificationAvatarSync", () => {
     rasterizeGate = new Promise<void>((resolve) => {
       releaseRasterize = resolve;
     });
-    rerender({ id: "assistant-2", url: "blob:avatar-2" });
+    act(() => {
+      setActiveAssistant("assistant-2");
+    });
+    rerender({ url: "blob:avatar-2" });
 
     expect(getNotificationAvatar()).toBeNull();
 
@@ -352,7 +336,6 @@ describe("useNotificationAvatarSync", () => {
         traits: CharacterTraits;
       }) =>
         useNotificationAvatarSync(
-          ASSISTANT_ID,
           IMAGE_URL,
           IMAGE_META,
           components,
@@ -390,7 +373,6 @@ describe("useNotificationAvatarSync", () => {
         traits: CharacterTraits;
       }) =>
         useNotificationAvatarSync(
-          ASSISTANT_ID,
           IMAGE_URL,
           IMAGE_META,
           components,
@@ -430,14 +412,7 @@ describe("useNotificationAvatarSync", () => {
     rasterizeThrows = true;
     const { rerender } = renderHook(
       ({ url }: { url: string }) =>
-        useNotificationAvatarSync(
-          ASSISTANT_ID,
-          url,
-          IMAGE_META,
-          null,
-          null,
-          ACCENT,
-        ),
+        useNotificationAvatarSync(url, IMAGE_META, null, null, ACCENT),
       { initialProps: { url: IMAGE_URL } },
     );
     await waitFor(() => {
@@ -485,14 +460,7 @@ describe("useNotificationAvatarSync", () => {
   test("keeps the held avatar when a refetch mints a new URL for the same image", async () => {
     const { rerender } = renderHook(
       ({ url }: { url: string }) =>
-        useNotificationAvatarSync(
-          ASSISTANT_ID,
-          url,
-          IMAGE_META,
-          null,
-          null,
-          ACCENT,
-        ),
+        useNotificationAvatarSync(url, IMAGE_META, null, null, ACCENT),
       { initialProps: { url: IMAGE_URL } },
     );
     await waitFor(() => {
@@ -509,7 +477,7 @@ describe("useNotificationAvatarSync", () => {
   test("redraws when the manifest says the uploaded image changed", async () => {
     const { rerender } = renderHook(
       ({ url, meta }: { url: string; meta: AvatarImageMeta }) =>
-        useNotificationAvatarSync(ASSISTANT_ID, url, meta, null, null, ACCENT),
+        useNotificationAvatarSync(url, meta, null, null, ACCENT),
       { initialProps: { url: IMAGE_URL, meta: IMAGE_META } },
     );
     await waitFor(() => {
@@ -533,18 +501,24 @@ describe("useNotificationAvatarSync", () => {
 
   test("a render the holder has moved past never lands", async () => {
     const { rerender } = renderHook(
-      ({ id, url }: { id: string; url: string }) =>
-        useNotificationAvatarSync(id, url, null, null, null, ACCENT),
-      { initialProps: { id: ASSISTANT_ID, url: IMAGE_URL } },
+      ({ url }: { url: string }) =>
+        useNotificationAvatarSync(url, null, null, null, ACCENT),
+      { initialProps: { url: IMAGE_URL } },
     );
 
     let releaseRasterize = () => {};
     rasterizeGate = new Promise<void>((resolve) => {
       releaseRasterize = resolve;
     });
-    rerender({ id: "assistant-2", url: "blob:avatar-2" });
+    act(() => {
+      setActiveAssistant("assistant-2");
+    });
+    rerender({ url: "blob:avatar-2" });
     rasterizeGate = null;
-    rerender({ id: "assistant-3", url: "blob:avatar-3" });
+    act(() => {
+      setActiveAssistant("assistant-3");
+    });
+    rerender({ url: "blob:avatar-3" });
     releaseRasterize();
 
     await waitFor(() => {
@@ -558,15 +532,15 @@ describe("scoped notification identity preparation", () => {
     electronHost = false;
     __clearNotificationIdentitySnapshotsForTests();
     rasterizeNotificationAvatar.mockClear();
+    const options = preparedOptions();
     renderHook(() =>
       useNotificationAvatarSync(
-        ASSISTANT_ID,
         IMAGE_URL,
         IMAGE_META,
         null,
         null,
         ACCENT,
-        preparedOptions(),
+        options,
       ),
     );
 
@@ -580,16 +554,17 @@ describe("scoped notification identity preparation", () => {
 
   test("publishes the exact name during startup before avatar data is ready", async () => {
     electronHost = false;
+    const pendingOptions = preparedOptions("Exact Name", false);
+    const readyOptions = preparedOptions("Exact Name", true);
     const { rerender } = renderHook(
       ({ url, ready }: { url: string | null; ready: boolean }) =>
         useNotificationAvatarSync(
-          ASSISTANT_ID,
           url,
           url ? IMAGE_META : null,
           null,
           null,
           ACCENT,
-          preparedOptions("Exact Name", ready),
+          ready ? readyOptions : pendingOptions,
         ),
       { initialProps: { url: null as string | null, ready: false } },
     );
@@ -608,50 +583,27 @@ describe("scoped notification identity preparation", () => {
     });
   });
 
-  test("waits for an explicit owner scope during session startup", async () => {
-    renderHook(() =>
-      useNotificationAvatarSync(
-        ASSISTANT_ID,
-        IMAGE_URL,
-        IMAGE_META,
-        null,
-        null,
-        ACCENT,
-        { ...preparedOptions(), scopeId: null },
-      ),
-    );
-
-    await act(async () => {});
-    expect(rasterizeNotificationAvatar).not.toHaveBeenCalled();
-    expect(getNotificationIdentitySnapshot(preparedIdentity())).toBeNull();
-  });
-
   test("does not publish avatar or name data owned by another scope", async () => {
-    const scopeId = resolveNotificationIdentityScope(CONNECTION_SCOPE)!;
-    const wrongScopeId = resolveNotificationIdentityScope("assistant-2")!;
+    const wrongScopeId = (() => {
+      setActiveAssistant("assistant-2");
+      const scopeId = resolveNotificationIdentityScope()!;
+      setActiveAssistant(ASSISTANT_ID);
+      return scopeId;
+    })();
     const { rerender } = renderHook(
       ({ ownerScopeId }: { ownerScopeId: string }) =>
-        useNotificationAvatarSync(
-          ASSISTANT_ID,
-          IMAGE_URL,
-          IMAGE_META,
-          null,
-          null,
-          ACCENT,
-          {
-            scopeId,
-            assistantName: "Exact Name",
-            assistantNameOwner: {
-              scopeId: ownerScopeId,
-              assistantId: ASSISTANT_ID,
-            },
-            avatarOwner: {
-              scopeId: ownerScopeId,
-              assistantId: ASSISTANT_ID,
-            },
-            avatarReady: true,
+        useNotificationAvatarSync(IMAGE_URL, IMAGE_META, null, null, ACCENT, {
+          assistantName: "Exact Name",
+          assistantNameOwner: {
+            scopeId: ownerScopeId,
+            assistantId: ASSISTANT_ID,
           },
-        ),
+          avatarOwner: {
+            scopeId: ownerScopeId,
+            assistantId: ASSISTANT_ID,
+          },
+          avatarReady: true,
+        }),
       { initialProps: { ownerScopeId: wrongScopeId } },
     );
 
@@ -659,7 +611,7 @@ describe("scoped notification identity preparation", () => {
     expect(rasterizeNotificationAvatar).not.toHaveBeenCalled();
     expect(getNotificationIdentitySnapshot(preparedIdentity())).toBeNull();
 
-    rerender({ ownerScopeId: scopeId });
+    rerender({ ownerScopeId: preparedOptions().assistantNameOwner.scopeId });
     await waitFor(() => {
       expect(
         getNotificationIdentitySnapshot(preparedIdentity())?.avatar,
@@ -671,16 +623,17 @@ describe("scoped notification identity preparation", () => {
   });
 
   test("updates a verified name independently without redrawing a warm avatar", async () => {
+    const firstNameOptions = preparedOptions("First Name");
+    const renamedOptions = preparedOptions("Renamed Assistant");
     const { rerender } = renderHook(
       ({ name }: { name: string }) =>
         useNotificationAvatarSync(
-          ASSISTANT_ID,
           IMAGE_URL,
           IMAGE_META,
           null,
           null,
           ACCENT,
-          preparedOptions(name),
+          name === "First Name" ? firstNameOptions : renamedOptions,
         ),
       { initialProps: { name: "First Name" } },
     );
@@ -708,16 +661,17 @@ describe("scoped notification identity preparation", () => {
     rasterizeGate = new Promise<void>((resolve) => {
       releaseRasterize = resolve;
     });
+    const firstNameOptions = preparedOptions("First Name");
+    const renamedOptions = preparedOptions("Renamed Assistant");
     const { rerender } = renderHook(
       ({ name }: { name: string }) =>
         useNotificationAvatarSync(
-          ASSISTANT_ID,
           IMAGE_URL,
           IMAGE_META,
           null,
           null,
           ACCENT,
-          preparedOptions(name),
+          name === "First Name" ? firstNameOptions : renamedOptions,
         ),
       { initialProps: { name: "First Name" } },
     );
@@ -740,52 +694,17 @@ describe("scoped notification identity preparation", () => {
     expect(rasterizeNotificationAvatar).toHaveBeenCalledTimes(2);
   });
 
-  test("retains a verified old assistant while publishing a switched assistant", async () => {
-    const { rerender } = renderHook(
-      ({ id, url }: { id: string; url: string }) =>
-        useNotificationAvatarSync(
-          id,
-          url,
-          null,
-          null,
-          null,
-          ACCENT,
-          preparedOptions(id, true, CONNECTION_SCOPE, undefined, id),
-        ),
-      { initialProps: { id: ASSISTANT_ID, url: IMAGE_URL } },
-    );
-    await waitFor(() => {
-      expect(
-        getNotificationIdentitySnapshot(preparedIdentity()),
-      ).not.toBeNull();
-    });
-
-    rerender({ id: "assistant-2", url: "blob:avatar-2" });
-
-    await waitFor(() => {
-      expect(
-        getNotificationIdentitySnapshot(preparedIdentity("assistant-2"))
-          ?.avatar,
-      ).toBeDefined();
-    });
-    expect(
-      getNotificationIdentitySnapshot(preparedIdentity())?.avatar,
-    ).toBeDefined();
-  });
-
   test("clears a prepared identity when the active assistant is removed", async () => {
-    const { rerender } = renderHook(
-      ({ id }: { id: string | null }) =>
-        useNotificationAvatarSync(
-          id,
-          IMAGE_URL,
-          IMAGE_META,
-          null,
-          null,
-          ACCENT,
-          preparedOptions(),
-        ),
-      { initialProps: { id: ASSISTANT_ID as string | null } },
+    const options = preparedOptions();
+    renderHook(() =>
+      useNotificationAvatarSync(
+        IMAGE_URL,
+        IMAGE_META,
+        null,
+        null,
+        ACCENT,
+        options,
+      ),
     );
     await waitFor(() => {
       expect(
@@ -793,7 +712,9 @@ describe("scoped notification identity preparation", () => {
       ).toBeDefined();
     });
 
-    rerender({ id: null });
+    act(() => {
+      useResolvedAssistantStore.getState().resetAssistant();
+    });
 
     await waitFor(() => {
       expect(getNotificationIdentitySnapshot(preparedIdentity())).toBeNull();
@@ -806,22 +727,24 @@ describe("scoped notification identity preparation", () => {
     rasterizeGate = new Promise<void>((resolve) => {
       releaseRasterize = resolve;
     });
+    const secondOptions = preparedOptions("assistant-2", true, "assistant-2");
+    const firstOptions = preparedOptions(ASSISTANT_ID, true, ASSISTANT_ID);
     const { rerender } = renderHook(
-      ({ id, url }: { id: string; url: string }) =>
+      ({ url }: { url: string }) =>
         useNotificationAvatarSync(
-          id,
           url,
           null,
           null,
           null,
           ACCENT,
-          preparedOptions(id, true, CONNECTION_SCOPE, undefined, id),
+          url === IMAGE_URL ? firstOptions : secondOptions,
         ),
-      { initialProps: { id: ASSISTANT_ID, url: IMAGE_URL } },
+      { initialProps: { url: IMAGE_URL } },
     );
 
     rasterizeGate = null;
-    rerender({ id: "assistant-2", url: "blob:avatar-2" });
+    setActiveAssistant("assistant-2");
+    rerender({ url: "blob:avatar-2" });
     releaseRasterize();
 
     await waitFor(() => {
@@ -830,12 +753,10 @@ describe("scoped notification identity preparation", () => {
           ?.avatar,
       ).toBeDefined();
     });
-    expect(getNotificationIdentitySnapshot(preparedIdentity())).toMatchObject({
-      name: ASSISTANT_ID,
-    });
-    expect(
-      getNotificationIdentitySnapshot(preparedIdentity())?.avatar,
-    ).toBeUndefined();
+    // The switch keyed the scope on the new assistant, so the old identity's
+    // snapshot is retired outright and a stale render's late bytes must not
+    // resurrect it.
+    expect(getNotificationIdentitySnapshot(preparedIdentity())).toBeNull();
     expect(getNotificationAvatar()).toBeNull();
   });
 
@@ -855,15 +776,15 @@ describe("scoped notification identity preparation", () => {
         resets.push(payload);
       },
     });
+    const options = preparedOptions();
     renderHook(() =>
       useNotificationAvatarSync(
-        ASSISTANT_ID,
         IMAGE_URL,
         IMAGE_META,
         null,
         null,
         ACCENT,
-        preparedOptions(),
+        options,
       ),
     );
     await waitFor(() => {
@@ -881,6 +802,7 @@ describe("scoped notification identity preparation", () => {
   });
 
   test("a same-owner reactivation publishes above the session reset epoch", async () => {
+    const options = preparedOptions();
     const prepares: Array<{ scopeEpoch: number }> = [];
     const resets: Array<{ scopeEpoch: number }> = [];
     setNotificationIdentityNativeAdapter({
@@ -895,13 +817,12 @@ describe("scoped notification identity preparation", () => {
       ({ renderCount }: { renderCount: number }) => {
         void renderCount;
         useNotificationAvatarSync(
-          ASSISTANT_ID,
           IMAGE_URL,
           IMAGE_META,
           null,
           null,
           ACCENT,
-          preparedOptions(),
+          options,
         );
       },
       { initialProps: { renderCount: 0 } },
@@ -926,84 +847,71 @@ describe("scoped notification identity preparation", () => {
   });
 
   test("an assistant switch retires the old scope", async () => {
-    const firstScope = "assistant-1";
-    const secondScope = "assistant-2";
+    const firstAssistant = "assistant-1";
+    const secondAssistant = "assistant-2";
     const nativeResets: Array<{ scopeId: string; assistantId?: string }> = [];
     setNotificationIdentityNativeAdapter({
       resetIdentities: (payload) => {
         nativeResets.push(payload);
       },
     });
+    const secondOptions = preparedOptions(
+      "Assistant One",
+      true,
+      secondAssistant,
+    );
+    const firstOptions = preparedOptions("Assistant One", true, firstAssistant);
     const { rerender } = renderHook(
-      ({ scope, ownerScope }: { scope: string; ownerScope: string }) => {
-        const options = preparedOptions("Assistant One", true, scope);
-        const ownerScopeId = resolveNotificationIdentityScope(ownerScope)!;
-        useEffect(() => {
-          reconcilePreparedNotificationIdentityOwners([
-            { scopeId: options.scopeId, assistantId: ASSISTANT_ID },
-          ]);
-        }, [options.scopeId]);
+      ({ switched }: { switched: boolean }) =>
         useNotificationAvatarSync(
-          ASSISTANT_ID,
           IMAGE_URL,
           IMAGE_META,
           null,
           null,
           ACCENT,
-          {
-            ...options,
-            assistantNameOwner: {
-              scopeId: ownerScopeId,
-              assistantId: ASSISTANT_ID,
-            },
-            avatarOwner: { scopeId: ownerScopeId, assistantId: ASSISTANT_ID },
-          },
-        );
-      },
-      { initialProps: { scope: firstScope, ownerScope: firstScope } },
+          switched ? secondOptions : firstOptions,
+        ),
+      { initialProps: { switched: false } },
     );
-    const firstIdentity = preparedIdentity(ASSISTANT_ID, firstScope);
+    const firstIdentity = preparedIdentity(firstAssistant);
     await waitFor(() => {
       expect(
         getNotificationIdentitySnapshot(firstIdentity)?.avatar,
       ).toBeDefined();
     });
 
-    const secondScopeId = resolveNotificationIdentityScope(secondScope)!;
-    const firstScopeId = resolveNotificationIdentityScope(firstScope)!;
-    rerender({ scope: secondScope, ownerScope: firstScope });
-    const secondIdentity = preparedIdentity(ASSISTANT_ID, secondScope);
-    await act(async () => {});
-    expect(getNotificationIdentitySnapshot(secondIdentity)).toBeNull();
+    const secondIdentity = preparedIdentity(secondAssistant);
+    const firstScopeId = firstIdentity.scopeId;
+    expect(secondIdentity.scopeId).not.toBe(firstScopeId);
 
-    rerender({ scope: secondScope, ownerScope: secondScope });
+    act(() => {
+      setActiveAssistant(secondAssistant);
+    });
+    rerender({ switched: true });
     await waitFor(() => {
       expect(
         getNotificationIdentitySnapshot(secondIdentity)?.avatar,
       ).toBeDefined();
     });
-    expect(secondScopeId).not.toBe(firstScopeId);
 
     expect(getNotificationIdentitySnapshot(firstIdentity)).toBeNull();
-    expect(firstIdentity.nativeSenderId).not.toBe(
-      secondIdentity.nativeSenderId,
-    );
     expect(nativeResets).toHaveLength(1);
     expect(nativeResets[0]).toMatchObject({ scopeId: firstScopeId });
     expect(nativeResets[0]).not.toHaveProperty("assistantId");
   });
 
   test("keeps a same-owner avatar during loading but clears it on conclusive removal", async () => {
+    const pendingOptions = preparedOptions("Assistant One", false);
+    const readyOptions = preparedOptions("Assistant One", true);
     const { rerender } = renderHook(
       ({ url, ready }: { url: string | null; ready: boolean }) =>
         useNotificationAvatarSync(
-          ASSISTANT_ID,
           url,
           url ? IMAGE_META : null,
           null,
           null,
           ACCENT,
-          preparedOptions("Assistant One", ready),
+          ready ? readyOptions : pendingOptions,
         ),
       {
         initialProps: { url: IMAGE_URL as string | null, ready: true },
@@ -1031,37 +939,37 @@ describe("scoped notification identity preparation", () => {
     );
   });
 
-  test("scopes by assistant and preserves an explicit platform sender id", async () => {
-    const nativeId = "00000000-0000-4000-8000-000000000001";
+  test("scopes the native preparation by assistant", async () => {
     const nativeScopes: string[] = [];
     setNotificationIdentityNativeAdapter({
       prepareIdentity: (payload) => {
         nativeScopes.push(payload.identity.scopeId);
       },
     });
+    const options = preparedOptions("Assistant One", true);
     renderHook(() =>
       useNotificationAvatarSync(
-        ASSISTANT_ID,
         IMAGE_URL,
         IMAGE_META,
         null,
         null,
         ACCENT,
-        preparedOptions("Assistant One", true, CONNECTION_SCOPE, nativeId),
+        options,
       ),
     );
-    const identity = preparedIdentity(ASSISTANT_ID, CONNECTION_SCOPE, nativeId);
+    const identity = preparedIdentity();
 
     await waitFor(() => {
       expect(getNotificationIdentitySnapshot(identity)?.avatar).toBeDefined();
     });
-    expect(identity.nativeSenderId).toBe(nativeId);
+    expect(identity.nativeSenderId).toBe(ASSISTANT_ID);
     expect(
       nativeScopes.every((scopeId) => /^scope:v1:[a-f0-9]{64}$/.test(scopeId)),
     ).toBe(true);
-    expect(resolveNotificationIdentityScope("assistant-2")).not.toBe(
-      resolveNotificationIdentityScope(ASSISTANT_ID),
-    );
+    setActiveAssistant("assistant-2");
+    const otherScope = resolveNotificationIdentityScope();
+    setActiveAssistant(ASSISTANT_ID);
+    expect(otherScope).not.toBe(resolveNotificationIdentityScope());
   });
 });
 

@@ -29,7 +29,6 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "react-router";
 
 import { identityGetQueryKey } from "@/generated/daemon/@tanstack/react-query.gen";
-import { resolveAssistantNotificationCloudId } from "@/hooks/use-assistant-avatar";
 import { useBusSubscription } from "@/hooks/use-bus-subscription";
 import { supportsGuardianNotificationTargeting } from "@/lib/backwards-compat/guardian-notification-targeting";
 import { getSoundManager } from "@/lib/sounds/sound-manager";
@@ -68,17 +67,16 @@ export function useNotificationIntentSync(assistantId: string | null): void {
   const entry = useResolvedAssistantStore.use.assistant();
   const assistant = entry && entry.assistantId === assistantId ? entry : null;
   // Keyed on the resolved assistant — a resolved assistant is the whole
-  // fact; there is no separate session question to ask first.
-  const scopeId = assistant
-    ? resolveNotificationIdentityScope(assistant.assistantId)
-    : null;
-  const cloudAssistantId = resolveAssistantNotificationCloudId(assistant);
+  // fact; there is no separate session question to ask first. The scope
+  // reads the active assistant internally, and `assistant` is that same
+  // store entry filtered to the subscribed id.
+  const scopeId = assistant ? resolveNotificationIdentityScope() : null;
   const notificationIdentity = useMemo(
     () =>
       assistantId && scopeId
-        ? createNotificationIdentity(scopeId, assistantId, cloudAssistantId)
+        ? createNotificationIdentity(scopeId, assistantId)
         : null,
-    [assistantId, cloudAssistantId, scopeId],
+    [assistantId, scopeId],
   );
 
   const deliveryOwner = useRef(notificationIdentity);
