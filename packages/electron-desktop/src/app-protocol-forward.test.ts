@@ -7,6 +7,7 @@ let isPackaged = false;
 let appPath = process.cwd();
 
 const protocolHandle = mock(() => undefined);
+const cookieSet = mock(async () => undefined);
 const netFetch = mock(async (url: string) => {
   const file = decodeURIComponent(new URL(url).pathname);
   const body = await fs.readFile(file, "utf8");
@@ -24,6 +25,7 @@ mock.module("electron", () => ({
   },
   net: { fetch: netFetch },
   protocol: { handle: protocolHandle },
+  session: { defaultSession: { cookies: { set: cookieSet } } },
 }));
 
 import * as realLocalMode from "@mycadet/local-mode";
@@ -43,7 +45,7 @@ mock.module("./about", () => ({
   getVersionInfo: () => ({ version: "9.9.9" }),
 }));
 mock.module("./app-logger", () => ({
-  default: { error: mock(), warning: mock(), info: mock() },
+  default: { error: mock(), warning: mock(), info: mock(), warn: mock() },
 }));
 mock.module("@mycadet/local-mode", () => ({
   resolveLocalConfigFromEnv: () => ({ cloudUrl: "https://cloud.example.com" }),
@@ -89,6 +91,7 @@ afterEach(async () => {
   forwardCloud.mockClear();
   forwardOperator.mockResolvedValue(null);
   forwardCloud.mockResolvedValue(null);
+  cookieSet.mockClear();
   isPackaged = false;
   delete (process as unknown as { resourcesPath?: string }).resourcesPath;
   Object.defineProperty(process, "platform", ORIGINAL_PLATFORM_DESCRIPTOR);
@@ -223,5 +226,86 @@ describe("registerAppProtocol", () => {
     expect(await web.text()).toContain("<body>web</body>");
     const shell = await handler!(new Request("app://mycadet.ai/some/route"));
     expect(await shell.text()).toContain("<body>shell</body>");
+  });
+
+  test("a response's set-cookie headers land in the session jar", async () => {
+    await setupDev();
+    await register();
+    const headers = new Headers();
+    headers.append(
+      "Set-Cookie",
+      "cadet_web_access=edge-token-1; HttpOnly; Path=/; SameSite=Strict",
+    );
+    headers.append(
+      "Set-Cookie",
+      "cadet_web_refresh=edge-token-2; HttpOnly; Path=/; SameSite=Strict",
+    );
+    forwardOperator.mockResolvedValue(
+      new Response(JSON.stringify({ ok: true, assistantId: "local-1" }), {
+        headers,
+      }),
+    );
+    const response = await handler!(
+      new Request("app://mycadet.ai/v1/assistants/hatch", {
+        method: "POST",
+        body: JSON.stringify({ remote: "local" }),
+      }),
+    );
+    expect(await response.json()).toEqual({ ok: true, assistantId: "local-1" });
+    expect(cookieSet).toHaveBeenCalledWith({
+      url: "app://mycadet.ai/v1/assistants/hatch",
+      name: "cadet_web_access",
+      value: "edge-token-1",
+      httpOnly: true,
+      path: "/",
+      sameSite: "strict",
+    });
+    expect(cookieSet).toHaveBeenCalledWith({
+      url: "app://mycadet.ai/v1/assistants/hatch",
+      name: "cadet_web_refresh",
+      value: "edge-token-2",
+      httpOnly: true,
+      path: "/",
+      sameSite: "strict",
+    });
+  });
+
+  test("set-cookie lands whatever the route — the behavior is generic", async () => {
+    await setupDev();
+    await register();
+    const headers = new Headers();
+    headers.append(
+      "Set-Cookie",
+      "cadet_web_access=rotated-1; HttpOnly; Path=/; SameSite=Strict; Max-Age=60",
+    );
+    forwardOperator.mockResolvedValue(
+      new Response(JSON.stringify({ status: "ready" }), { headers }),
+    );
+    await handler!(new Request("app://mycadet.ai/v1/assistant"));
+    expect(cookieSet).toHaveBeenCalledWith(
+      expect.objectContaining({
+        name: "cadet_web_access",
+        value: "rotated-1",
+        httpOnly: true,
+        path: "/",
+        sameSite: "strict",
+      }),
+    );
+  });
+
+  test("a response without set-cookie touches no jar", async () => {
+    await setupDev();
+    await register();
+    forwardOperator.mockResolvedValue(
+      Response.json({ status: "ready", assistant: { id: "local-1" } }),
+    );
+    const response = await handler!(
+      new Request("app://mycadet.ai/v1/assistant"),
+    );
+    expect(await response.json()).toEqual({
+      status: "ready",
+      assistant: { id: "local-1" },
+    });
+    expect(cookieSet).not.toHaveBeenCalled();
   });
 });

@@ -1,4 +1,4 @@
-import { app, net, protocol } from "electron";
+import { app, net, protocol, session } from "electron";
 import { pathToFileURL } from "node:url";
 import path from "node:path";
 
@@ -25,6 +25,80 @@ import { planAppProtocolAssetRequest } from "@mycadet/electron-utils/app-protoco
 const APP_PROTOCOL = "app";
 const APP_HOST = "mycadet.ai";
 const RENDERER_MOUNT = "/assistant";
+
+/**
+ * Browser-like cookie custody for the single-origin protocol: Electron's
+ * `protocol.handle` does not store a response's Set-Cookie headers into
+ * the session's cookie jar — the headers ride the wire but never land —
+ * so the handler does what the browser would have done: every response
+ * through the pass has its Set-Cookie applied to the jar for the
+ * request's own origin. The hatch's pairing feed, the gateway's rotation
+ * refreshes — anything a forward hands back — lands.
+ *
+ * Best-effort: a cookie that fails to set never fails the response.
+ */
+async function applyResponseCookies(
+  request: Request,
+  response: Response,
+): Promise<void> {
+  for (const raw of response.headers.getSetCookie()) {
+    const details = cookieJarDetails(request.url, raw);
+    if (!details) continue;
+    try {
+      await session.defaultSession.cookies.set(details);
+    } catch (err) {
+      log.warn("[protocol-cookies] set failed:", err);
+    }
+  }
+}
+
+function cookieJarDetails(
+  url: string,
+  raw: string,
+): Electron.CookiesSetDetails | null {
+  const [pair, ...attrs] = raw.split(";");
+  const eq = pair.indexOf("=");
+  if (eq <= 0) return null;
+  const name = pair.slice(0, eq).trim();
+  const value = pair.slice(eq + 1).trim();
+  if (!name) return null;
+  const details: Electron.CookiesSetDetails = { url, name, value };
+  let maxAge: number | undefined;
+  for (const attr of attrs) {
+    const sep = attr.indexOf("=");
+    const attrName = (sep === -1 ? attr : attr.slice(0, sep))
+      .trim()
+      .toLowerCase();
+    const attrValue = sep === -1 ? "" : attr.slice(sep + 1).trim();
+    if (attrName === "path") {
+      details.path = attrValue || undefined;
+    } else if (attrName === "secure") {
+      details.secure = true;
+    } else if (attrName === "httponly") {
+      details.httpOnly = true;
+    } else if (attrName === "samesite") {
+      const site = attrValue.toLowerCase();
+      details.sameSite =
+        site === "strict"
+          ? "strict"
+          : site === "lax"
+            ? "lax"
+            : site === "none"
+              ? "no_restriction"
+              : "unspecified";
+    } else if (attrName === "max-age") {
+      const parsed = Number(attrValue);
+      if (Number.isFinite(parsed)) maxAge = parsed;
+    } else if (attrName === "expires" && details.expirationDate === undefined) {
+      const parsed = Date.parse(attrValue);
+      if (Number.isFinite(parsed)) details.expirationDate = parsed / 1000;
+    }
+  }
+  if (maxAge !== undefined) {
+    details.expirationDate = Math.floor(Date.now() / 1000) + maxAge;
+  }
+  return details;
+}
 
 const appOrigin = (): AllowedOrigin => ({
   protocol: `${APP_PROTOCOL}:`,
@@ -77,7 +151,7 @@ export function registerAppProtocol(): void {
     ...servedConfigFromLockfile(readLockfile()),
   }).replace(/</g, "\\u003c");
 
-  protocol.handle(APP_PROTOCOL, async (request) => {
+  const respond = async (request: Request): Promise<Response> => {
     if (new URL(request.url).host !== APP_HOST) {
       return new Response("Forbidden", { status: 403 });
     }
@@ -139,5 +213,11 @@ export function registerAppProtocol(): void {
       return new Response(finalHtml, { status: response.status, headers });
     }
     return new Response("Not Found", { status: 404 });
+  };
+
+  protocol.handle(APP_PROTOCOL, async (request) => {
+    const response = await respond(request);
+    await applyResponseCookies(request, response);
+    return response;
   });
 }
