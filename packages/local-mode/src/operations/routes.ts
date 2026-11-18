@@ -28,7 +28,8 @@ import { runResolveRoute } from "./resolve";
 import { sleepAssistant } from "./sleep";
 import { wakeAssistant } from "./wake";
 import { z } from "zod";
-import { getGatewayUrl } from "../lockfile-contract";
+import { getGatewayUrl, type LockfileAssistant } from "../lockfile-contract";
+import { cookieHeader, parseSetCookie, type CookieJar } from "./cookie-jar";
 
 /**
  * The operator ROUTE TABLE: the host-served operations — the headless
@@ -90,6 +91,18 @@ export interface OperatorRequest {
    * down. Absent (direct `run` calls in tests) reads as no signal.
    */
   signal?: AbortSignal | null;
+  /**
+   * The host's cookie jar, the custody seam for the cookie-carrying rows:
+   * the hatch row stores the pair it mints for the entry's gateway origin,
+   * and the proxy row attaches the jar's cookies on its dial (when the
+   * caller brings none) and re-stores every rotation the gateway sends
+   * back. The desktop's renderer can hold no cookies for `app://` (the
+   * cookie store refuses non-`http(s)` schemes), so its host supplies the
+   * session jar; hosts without one (the CLI edge, the dev server — whose
+   * browser callers jar natively) leave it unset and nothing is stored or
+   * attached.
+   */
+  cookieJar?: CookieJar;
 }
 
 export interface OperatorRoute {
@@ -197,11 +210,20 @@ const json = (
   body: unknown,
   status = 200,
   headers: Record<string, string | string[]> = {},
-): Response =>
-  new Response(JSON.stringify(body), {
-    status,
-    headers: { "content-type": "application/json", ...headers },
-  });
+): Response => {
+  // Array values append per element — the Headers record constructor
+  // comma-joins them, which corrupts `Set-Cookie` (cookies carry commas
+  // in their Expires attributes, and the pair would ride as one value).
+  const out = new Headers({ "content-type": "application/json" });
+  for (const [name, value] of Object.entries(headers)) {
+    if (Array.isArray(value)) {
+      for (const item of value) out.append(name, item);
+    } else {
+      out.append(name, value);
+    }
+  }
+  return new Response(JSON.stringify(body), { status, headers: out });
+};
 
 /**
  * Buffer and parse a JSON request body. An empty body resolves to `{}` (the
@@ -293,17 +315,36 @@ async function runHatchRoute(request: OperatorRequest): Promise<Response> {
   try {
     const result = await hatchAssistant({ remote });
     if (result.ok) {
-      // The leg's own lease minted the webview's credential pair — the
-      // hatch feeds it to the webview as cookies on this response.
-      return json(
-        { ok: true, assistantId: result.assistant.assistantId },
-        200,
-        { "Set-Cookie": result.cookies },
-      );
+      // The leg's own lease minted the webview's credential pair. A host
+      // with a jar stores it for the entry's gateway origin — the origin
+      // the proxy row dials, and the only origin a cookie store accepts
+      // (Chromium refuses `app://`). Hosts without one skip it; either
+      // way the pair still rides the response as Set-Cookie headers for
+      // the native-browser flow (the CLI edge, the dev server) and for
+      // QA visibility.
+      const jarOrigin = gatewayOriginFor(result.assistant);
+      if (request.cookieJar && jarOrigin) {
+        for (const raw of result.cookies) {
+          const cookie = parseSetCookie(raw);
+          if (cookie) await request.cookieJar.set(jarOrigin, cookie);
+        }
+      }
+      return json({ ok: true, assistantId: result.assistant.assistantId }, 200, {
+        "Set-Cookie": result.cookies,
+      });
     }
     return json({ ok: false, error: result.error }, result.status);
   } catch (err) {
     return json({ ok: false, error: (err as Error).message });
+  }
+}
+
+/** The origin the entry's gateway serves on, or null when unresolvable. */
+function gatewayOriginFor(entry: LockfileAssistant): string | null {
+  try {
+    return new URL(getGatewayUrl(entry)).origin;
+  } catch {
+    return null;
   }
 }
 
@@ -606,11 +647,20 @@ async function runProxyRoute(
   }
   const method = request.method ?? "GET";
   const target = new URL(request.path ?? "/", getGatewayUrl(entry));
+  const gatewayOrigin = target.origin;
   const hasBody = method !== "GET" && method !== "HEAD";
   const headers = normalizeForwardHeaders(
     request.headers,
     request.peer ?? null,
   );
+  // The caller's own Cookie wins (the CLI's browser jar holds the live
+  // pair); the host's jar fills the absence — the desktop's renderer can
+  // hold no cookies for `app://`, so its jar IS the browser-equivalent
+  // store.
+  if (!headers.has("cookie") && request.cookieJar) {
+    const jarCookies = await request.cookieJar.get(gatewayOrigin);
+    if (jarCookies.length > 0) headers.set("cookie", cookieHeader(jarCookies));
+  }
   if (process.env.ASSISTANT_PROXY_TRANSPORT === "ipc") {
     headers.set("x-cadet-proxy-server", "ipc");
   }
@@ -627,6 +677,16 @@ async function runProxyRoute(
     if (lower === "content-length" || lower === "content-encoding") return;
     outHeaders.append(key, value);
   });
+  // A rotation response re-stores the fresh pair for the gateway origin
+  // via the host's jar, so the next dial attaches it. Hosts without the
+  // jar skip it; their browser callers jar the forwarded Set-Cookie
+  // headers natively.
+  if (request.cookieJar) {
+    for (const raw of upstream.headers.getSetCookie()) {
+      const cookie = parseSetCookie(raw);
+      if (cookie) await request.cookieJar.set(gatewayOrigin, cookie);
+    }
+  }
   return new Response(upstream.body, {
     status: upstream.status,
     headers: outHeaders,
@@ -835,7 +895,10 @@ export function matchOperatorRequest(
  */
 export async function forwardOperatorRequest(
   request: Request,
-  options?: { peer?: string | null },
+  options?: {
+    peer?: string | null;
+    cookieJar?: CookieJar;
+  },
 ): Promise<Response | null> {
   const match = matchOperatorRequest(
     new URL(request.url).pathname,
@@ -853,5 +916,6 @@ export async function forwardOperatorRequest(
     body: request.body,
     signal: request.signal,
     ...(options?.peer !== undefined ? { peer: options.peer } : {}),
+    ...(options?.cookieJar ? { cookieJar: options.cookieJar } : {}),
   });
 }

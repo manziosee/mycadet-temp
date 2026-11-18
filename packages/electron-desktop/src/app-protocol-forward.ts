@@ -11,6 +11,7 @@ import {
   readLockfile,
   resolveLocalConfigFromEnv,
   servedConfigFromLockfile,
+  type CookieJar,
 } from "@mycadet/local-mode";
 import { planAppProtocolAssetRequest } from "@mycadet/electron-utils/app-protocol";
 
@@ -26,78 +27,33 @@ const APP_HOST = "mycadet.ai";
 const RENDERER_MOUNT = "/assistant";
 
 /**
- * Browser-like cookie custody for the single-origin protocol: Electron's
- * `protocol.handle` does not store a response's Set-Cookie headers into
- * the session's cookie jar — the headers ride the wire but never land —
- * so the handler does what the browser would have done: every response
- * through the pass has its Set-Cookie applied to the jar for the
- * request's own origin. The hatch's pairing feed, the gateway's rotation
- * refreshes — anything a forward hands back — lands.
- *
- * Best-effort: a cookie that fails to set never fails the response.
+ * The session jar, as the `CookieJar` the operator route table speaks.
+ * The pair the hatch mints (and every gateway rotation since) must live
+ * in Chromium's store for the entry's gateway origin — the renderer's
+ * `app://` origin can hold no cookies (the store refuses non-`http(s)`
+ * schemes) and `protocol.handle` jars nothing on its own — while the
+ * proxy row's dial, made host-side, can no more see that store than the
+ * renderer can: this adapter is the bridge in both directions. Best-effort
+ * both ways, per the jar's contract: a refused write degrades to a
+ * warning (the next dial just reads unauthenticated), a failed read to an
+ * empty jar.
  */
-async function applyResponseCookies(
-  request: Request,
-  response: Response,
-): Promise<void> {
-  for (const raw of response.headers.getSetCookie()) {
-    const details = cookieJarDetails(request.url, raw);
-    if (!details) continue;
+const sessionCookieJar: CookieJar = {
+  get: async (url) => {
     try {
-      await session.defaultSession.cookies.set(details);
+      return await session.defaultSession.cookies.get({ url });
+    } catch {
+      return [];
+    }
+  },
+  set: async (url, cookie) => {
+    try {
+      await session.defaultSession.cookies.set({ ...cookie, url });
     } catch (err) {
       log.warn("[protocol-cookies] set failed:", err);
     }
-  }
-}
-
-function cookieJarDetails(
-  url: string,
-  raw: string,
-): Electron.CookiesSetDetails | null {
-  const [pair, ...attrs] = raw.split(";");
-  const eq = pair.indexOf("=");
-  if (eq <= 0) return null;
-  const name = pair.slice(0, eq).trim();
-  const value = pair.slice(eq + 1).trim();
-  if (!name) return null;
-  const details: Electron.CookiesSetDetails = { url, name, value };
-  let maxAge: number | undefined;
-  for (const attr of attrs) {
-    const sep = attr.indexOf("=");
-    const attrName = (sep === -1 ? attr : attr.slice(0, sep))
-      .trim()
-      .toLowerCase();
-    const attrValue = sep === -1 ? "" : attr.slice(sep + 1).trim();
-    if (attrName === "path") {
-      details.path = attrValue || undefined;
-    } else if (attrName === "secure") {
-      details.secure = true;
-    } else if (attrName === "httponly") {
-      details.httpOnly = true;
-    } else if (attrName === "samesite") {
-      const site = attrValue.toLowerCase();
-      details.sameSite =
-        site === "strict"
-          ? "strict"
-          : site === "lax"
-            ? "lax"
-            : site === "none"
-              ? "no_restriction"
-              : "unspecified";
-    } else if (attrName === "max-age") {
-      const parsed = Number(attrValue);
-      if (Number.isFinite(parsed)) maxAge = parsed;
-    } else if (attrName === "expires" && details.expirationDate === undefined) {
-      const parsed = Date.parse(attrValue);
-      if (Number.isFinite(parsed)) details.expirationDate = parsed / 1000;
-    }
-  }
-  if (maxAge !== undefined) {
-    details.expirationDate = Math.floor(Date.now() / 1000) + maxAge;
-  }
-  return details;
-}
+  },
+};
 
 const appOrigin = (): AllowedOrigin => ({
   protocol: `${APP_PROTOCOL}:`,
@@ -160,8 +116,12 @@ export function registerAppProtocol(): void {
       });
     }
 
-    // The operator routes ride ahead of the gateway proxy.
-    const operated = await forwardOperatorRequest(request);
+    // The operator routes ride ahead of the gateway proxy. The session
+    // jar is the rows' cookie source and sink: the pair the hatch jars
+    // (and every rotation since) attaches on each gateway dial.
+    const operated = await forwardOperatorRequest(request, {
+      cookieJar: sessionCookieJar,
+    });
     if (operated) {
       return operated;
     }
@@ -213,9 +173,5 @@ export function registerAppProtocol(): void {
     return new Response("Not Found", { status: 404 });
   };
 
-  protocol.handle(APP_PROTOCOL, async (request) => {
-    const response = await respond(request);
-    await applyResponseCookies(request, response);
-    return response;
-  });
+  protocol.handle(APP_PROTOCOL, (request) => respond(request));
 }
