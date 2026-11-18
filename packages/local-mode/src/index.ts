@@ -88,8 +88,8 @@ export type {
 } from "./lockfile-contract";
 export { configureCliPaths, resolveCliInvocation } from "./cli-invocation";
 export {
-  matchOperatorRequest,
   forwardOperatorRequest,
+  matchOperatorRequest,
 } from "./operations/routes";
 export type { CookieJar } from "./operations/cookie-jar";
 

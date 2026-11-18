@@ -12,7 +12,7 @@
  * right, the registrations at the bottom of the module do the rest.
  */
 
-import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
+import { describe, expect, mock, test } from "bun:test";
 import type * as CaptureError from "@/lib/error-reporting/capture-error";
 
 // Error reporting, stubbed so a failed in-place recovery doesn't touch the
@@ -42,8 +42,6 @@ import {
 
 import { ApiError } from "@/utils/api-errors";
 import { getClientId } from "@/lib/client-identity";
-
-const ELECTRON_RENDERER_ORIGIN_HEADER = "X-Cadet-Electron-Renderer-Origin";
 
 async function intercept(
   method: string,
@@ -76,11 +74,6 @@ describe("api-interceptors / daemonRequestInterceptor", () => {
     }
   });
 
-  test("does not attach renderer-origin marker outside Electron", async () => {
-    const headers = await intercept("POST");
-    expect(headers.get(ELECTRON_RENDERER_ORIGIN_HEADER)).toBeNull();
-  });
-
   test("returns a new Request, leaving the input headers untouched", async () => {
     const input = new Request("https://example.test/v1/probe", {
       method: "POST",
@@ -91,30 +84,6 @@ describe("api-interceptors / daemonRequestInterceptor", () => {
     expect(output).not.toBe(input);
     expect(input.headers.get("X-Cadet-Client-Id")).toBeNull();
     expect(output.headers.get("X-Cadet-Client-Id")).toBe(getClientId());
-  });
-});
-
-describe("api-interceptors / Electron renderer-origin marker", () => {
-  beforeEach(() => {
-    (window as unknown as { cadet?: unknown }).cadet = {
-      platform: "electron",
-    };
-  });
-
-  afterEach(() => {
-    delete (window as unknown as { cadet?: unknown }).cadet;
-  });
-
-  test("attaches renderer-origin marker on Electron mutating requests", async () => {
-    const headers = await intercept("POST");
-    expect(headers.get(ELECTRON_RENDERER_ORIGIN_HEADER)).toBe(
-      `${window.location.protocol}//${window.location.host}`,
-    );
-  });
-
-  test("does not attach renderer-origin marker on Electron safe requests", async () => {
-    const headers = await intercept("GET");
-    expect(headers.get(ELECTRON_RENDERER_ORIGIN_HEADER)).toBeNull();
   });
 });
 

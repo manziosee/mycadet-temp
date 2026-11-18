@@ -47,38 +47,48 @@ mock.module("../cloud-auth", () => ({
 const ENTRY = {
   assistantId: "test-assistant",
   cloud: "local",
+  port: 7830,
   cloudAssistantId: "33333333-3333-4333-8333-333333333333",
   cloudOrganizationId: "org-123",
 };
 
+// Exists on this machine but never registered with the cloud — the
+// doctor row's own gate answers it (503), not the dispatcher's 404.
+const UNREGISTERED_ENTRY = {
+  assistantId: "never-registered",
+  cloud: "local",
+  port: 7830,
+};
+
 mock.module("../operations/lookup", () => ({
   ...realLookup,
-  findAssistantByName: (name: string) =>
-    name === ENTRY.assistantId ? ENTRY : null,
+  findAssistantByName: (name: string) => {
+    if (name === ENTRY.assistantId) return ENTRY;
+    if (name === UNREGISTERED_ENTRY.assistantId) return UNREGISTERED_ENTRY;
+    return null;
+  },
 }));
 
-const { matchOperatorRequest } = await import("../operations/routes");
+const { forwardOperatorRequest } = await import("../operations/routes");
 
 const CLOUD_ASSISTANT_ID = ENTRY.cloudAssistantId;
 const SESSION_ID = "doctor-sess-7";
+
+let dialSignal: AbortSignal | null = null;
 
 async function dial(
   method: string,
   path: string,
   init?: { headers?: Record<string, string>; body?: string },
 ): Promise<Response | null> {
-  // matchOperatorRequest takes the pathname only — the search rides in
-  // the OperatorRequest's path field.
-  const pathname = path.split("?")[0];
-  const match = matchOperatorRequest(pathname, method);
-  if (!match) return null;
-  return match.route.run({
-    assistantId: match.assistantId,
+  const request = new Request(`http://operator.test${path}`, {
     method,
-    path,
-    headers: new Headers(init?.headers),
-    body: init?.body ? new Blob([init.body]).stream() : null,
+    headers: init?.headers,
+    body: init?.body ? new Blob([init.body]).stream() : undefined,
+    ...(init?.body ? { duplex: "half" as const } : {}),
   });
+  dialSignal = request.signal;
+  return forwardOperatorRequest(request);
 }
 
 describe("the doctor operator rows", () => {
@@ -164,9 +174,11 @@ describe("the doctor operator rows", () => {
     expect((init.headers as Record<string, string>)["Last-Event-ID"]).toBe(
       "evt-9",
     );
-    // Streaming rows carry the caller's signal (none in a direct run —
-    // but never the fixed timeout that would kill a live stream).
-    expect(init.signal).toBeUndefined();
+    // Streaming rows carry the CALLER's signal — the dispatcher hands the
+    // mount Request's own, un-replaced (a row-manufactured timeout would
+    // kill a live stream mid-session; the caller's disconnect is the only
+    // abort source).
+    expect(init.signal).toBe(dialSignal);
   });
 
   test("messages and user-outcome posts carry their JSON bodies", async () => {

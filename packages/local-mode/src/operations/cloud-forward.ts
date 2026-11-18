@@ -4,20 +4,17 @@ import type { Fetch } from "@mycadet/shared/fetch";
 /**
  * The operator's CLOUD ARM: what the route table's rows don't claim, the
  * cloud answers. The renderer's auth is same-origin naive (the generated
- * allauth SDK speaks `/_allauth`, and `/accounts` hosts the full-page
- * flows) — the hosts that re-origin those paths forward them here.
+ * allauth SDK speaks `/_allauth`, `/accounts` hosts the full-page flows,
+ * and the releases catalog is the cloud's own read, auth riding the
+ * caller's own headers) — the hosts that re-origin those paths forward
+ * them here.
  */
-const CLOUD_PREFIXES = ["/_allauth", "/accounts"] as const;
-const RENDERER_ORIGIN_HEADER = "X-Cadet-Electron-Renderer-Origin";
+const CLOUD_PREFIXES = ["/_allauth", "/accounts", "/v1/releases"] as const;
 
 export function isCloudPath(pathname: string): boolean {
   return CLOUD_PREFIXES.some(
     (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`),
   );
-}
-
-function isUnsafeMethod(method: string): boolean {
-  return !["GET", "HEAD", "OPTIONS"].includes(method.toUpperCase());
 }
 
 function isSameOriginSource(value: string | null, url: URL): boolean {
@@ -34,23 +31,25 @@ function isSameOriginSource(value: string | null, url: URL): boolean {
 }
 
 /**
- * The initiator-trust verdict for an unsafe request: `trusted` forwards,
- * `untrusted` falls through to the sourceless signals (Chromium's missing
- * `Origin` case), `rejected` answers 403 — a PRESENT Origin or Referer
- * that names a DIFFERENT origin is itself the attack signal.
+ * The initiator-trust verdict, whole request in: safe methods are
+ * trivially trusted; unsafe methods trust only the unforgeable signals —
+ * a PRESENT `Origin` or `Referer` must name the request's origin (the
+ * browser sets both and page JS can fake neither, so a foreign value IS
+ * the attack signal), and source-less requests (the desktop's renderer:
+ * Chromium omits `Origin` on `app://`) trust only `sec-fetch-site:
+ * same-origin` — fetch metadata the network stack computes and a page
+ * cannot claim.
  */
-function getInitiatorTrust(
-  url: URL,
-  headers: Headers,
-): "trusted" | "untrusted" | "rejected" {
-  const source = headers.get("origin") ?? headers.get("referer");
-  if (source !== null) {
-    return isSameOriginSource(source, url) ? "trusted" : "rejected";
+function isTrustedRequest(req: Request): boolean {
+  if (["GET", "HEAD", "OPTIONS"].includes(req.method.toUpperCase())) {
+    return true;
   }
-  const sourceless =
-    headers.get(RENDERER_ORIGIN_HEADER) === `${url.protocol}//${url.host}` ||
-    headers.get("sec-fetch-site") === "same-origin";
-  return sourceless ? "trusted" : "untrusted";
+  const url = new URL(req.url);
+  const source = req.headers.get("origin") ?? req.headers.get("referer");
+  if (source !== null) {
+    return isSameOriginSource(source, url);
+  }
+  return req.headers.get("sec-fetch-site") === "same-origin";
 }
 
 /**
@@ -128,14 +127,12 @@ export async function forwardCloudRequest(
     return null;
   }
 
-  const unsafe = isUnsafeMethod(request.method);
-  if (unsafe && getInitiatorTrust(url, request.headers) !== "trusted") {
+  if (!isTrustedRequest(request)) {
     return new Response("Forbidden cloud proxy request", { status: 403 });
   }
 
   const target = cloudOrigin();
   const headers = new Headers(request.headers);
-  headers.delete(RENDERER_ORIGIN_HEADER);
   headers.set("origin", new URL(target).origin);
   const forwardUrl = `${target}${url.pathname}${url.search}`;
   const hasBody = request.method !== "GET" && request.method !== "HEAD";

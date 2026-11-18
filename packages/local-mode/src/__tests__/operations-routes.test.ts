@@ -114,7 +114,6 @@ const pairingCancelMock = mock((_handle?: unknown): boolean => true);
 import { readLockfile } from "../lockfile";
 import { forwardOperatorRequest } from "../operations/routes";
 import { stripSensitiveFields } from "../util";
-import { matchOperatorRequest } from "../operations/routes";
 import { MemoryCookieJar } from "./helpers/memory-cookie-jar";
 
 let tmpDir: string;
@@ -246,10 +245,6 @@ const dispatch = (
   body?: unknown,
   cookieJar?: MemoryCookieJar,
 ): Promise<Response | null> => {
-  const match = matchOperatorRequest(pathname, method);
-  if (!match) {
-    return Promise.reject(new Error(`no route for ${method} ${pathname}`));
-  }
   const request = new Request(`http://host.test${pathname}`, {
     method,
     headers:
@@ -345,15 +340,24 @@ describe("the hatch row — POST /v1/assistants/hatch", () => {
   });
 
   test("the hatch jars the pair for the entry's gateway origin", async () => {
-    hatchAssistantMock.mockImplementation(async () => ({
-      ok: true as const,
-      assistant: { assistantId: "hatched-1", cloud: "local", port: 7833 },
-      ready: true,
-      cookies: [
-        "cadet_web_access=edge-token-1; HttpOnly; Path=/; SameSite=Strict",
-        "cadet_web_refresh=edge-token-2; HttpOnly; Path=/; SameSite=Strict; Max-Age=3600",
-      ],
-    }));
+    hatchAssistantMock.mockImplementation(async () => {
+      // The leg's locked write registers the minted entry and switches the
+      // active pointer before the operation resolves — the dispatcher's
+      // post-run resolution reads exactly that state.
+      writeLockfile({
+        assistants: [{ assistantId: "hatched-1", cloud: "local", port: 7833 }],
+        activeAssistant: "hatched-1",
+      });
+      return {
+        ok: true as const,
+        assistant: { assistantId: "hatched-1", cloud: "local", port: 7833 },
+        ready: true,
+        cookies: [
+          "cadet_web_access=edge-token-1; HttpOnly; Path=/; SameSite=Strict",
+          "cadet_web_refresh=edge-token-2; HttpOnly; Path=/; SameSite=Strict; Max-Age=3600",
+        ],
+      };
+    });
     const jar = new MemoryCookieJar();
 
     const response = await dispatchAnswered(
@@ -421,6 +425,9 @@ describe("the hatch row — POST /v1/assistants/hatch", () => {
       jar,
     );
 
+    // The lockfile never learned the minted entry (the leg failed before
+    // its locked write), so the dispatcher has no assistant id to resolve
+    // an origin from — the pair is not jarred, and the headers still ride.
     expect(jar.store.size).toBe(0);
     expect(response.headers.getSetCookie()).toHaveLength(1);
     expect((await response.json()).ok).toBe(true);
@@ -445,10 +452,10 @@ describe("the unpair row — POST /v1/assistants/{id}/unpair", () => {
     expect(unpairAssistantMock).toHaveBeenCalledWith("asst-1");
   });
 
-  test("an id that is not an entry on this machine passes through", async () => {
+  test("an id that is not an entry on this machine answers 404", async () => {
     const response = await dispatch("/v1/assistants/ghost/unpair", "POST", {});
 
-    expect(response).toBeNull();
+    expect(response?.status).toBe(404);
     expect(unpairAssistantMock).not.toHaveBeenCalled();
   });
 
@@ -566,13 +573,13 @@ describe("the pairing rows — POST /v1/remote-web/pairing-*", () => {
       "/v1/devices",
       "/v1/devices/revoke",
     ]) {
-      const match = matchOperatorRequest(pathname, "POST")!;
-      const request = new Request(`http://host.test${pathname}`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: "{not json",
-      });
-      const response = await forwardOperatorRequest(request);
+      const response = await forwardOperatorRequest(
+        new Request(`http://host.test${pathname}`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: "{not json",
+        }),
+      );
       expect(response?.status).toBe(400);
       expect(await response?.json()).toEqual({
         ok: false,
@@ -682,14 +689,14 @@ describe("the upgrade row — POST /v1/assistants/{id}/upgrade", () => {
     expect(upgradeAssistantMock).not.toHaveBeenCalled();
   });
 
-  test("an id that is not an entry on this machine passes through", async () => {
+  test("an id that is not an entry on this machine answers 404", async () => {
     const response = await dispatch(
       "/v1/assistants/cloud-id/upgrade",
       "POST",
       {},
     );
 
-    expect(response).toBeNull();
+    expect(response?.status).toBe(404);
     expect(upgradeAssistantMock).not.toHaveBeenCalled();
   });
 });
@@ -711,62 +718,76 @@ describe("the avatar row — GET /v1/assistants/{id}/avatar/get", () => {
     expect(readLockfileAssistantAvatarMock).toHaveBeenCalledWith("asst-1");
   });
 
-  test("an id that is not an entry on this machine passes through", async () => {
+  test("an id that is not an entry on this machine answers 404", async () => {
     const response = await dispatch("/v1/assistants/ghost/avatar/get", "GET");
-    expect(response).toBeNull();
+    expect(response?.status).toBe(404);
     expect(readLockfileAssistantAvatarMock).not.toHaveBeenCalled();
   });
 });
 
 describe("the route table's method scoping", () => {
-  test("a method-mismatched request to a known path matches no row", () => {
-    expect(matchOperatorRequest("/v1/devices", "GET")).toBeNull();
-    expect(
-      matchOperatorRequest("/v1/remote-web/pairing-start", "DELETE"),
-    ).toBeNull();
+  test("a method-mismatched request to a known path passes to the host chain", async () => {
+    expect(await dispatch("/v1/devices", "GET")).toBeNull();
+    expect(await dispatch("/v1/remote-web/pairing-start", "DELETE")).toBeNull();
   });
 
-  test("a GET on a path-shaped id rides the resolution row's pattern", () => {
+  test("a GET on a path-shaped id rides the resolution row's pattern", async () => {
     // `/v1/assistants/hatch` is a legal resolution probe for an id literally
-    // named "hatch" — the id-scoped pattern owns it, the entry lookup
-    // pass-through decides.
-    const match = matchOperatorRequest("/v1/assistants/hatch", "GET");
-    expect(match?.assistantId).toBe("hatch");
-  });
-
-  test("no-capture patterns resolve the empty id", () => {
-    // Every body-only route's pattern has no capture group; the rows that
-    // read an id never match on those patterns.
-    const match = matchOperatorRequest("/v1/devices", "POST");
-    expect(match?.assistantId).toBe("");
+    // named "hatch" — the id-scoped pattern owns it (the hatch row is
+    // POST-only), the entry lookup decides. The health read fails fast for
+    // an unbound port, so the row answers its not-ready verdict rather
+    // than passing.
+    seedEntry({ assistantId: "hatch", cloud: "local", port: 7830 });
+    const response = await dispatch("/v1/assistants/hatch", "GET");
+    expect(response).not.toBeNull();
   });
 });
 
 describe("the webhook row — /webhooks/* bridges to the fronted gateway", () => {
-  test("matches the subtree at the root in every method, unscoped to the active entry", () => {
+  test("bridges the subtree at the root in every method, unscoped to the active entry", async () => {
     const entry = seedEntry({
       assistantId: "assistant-1",
       name: "Homelab",
       cloud: "local",
       port: 7830,
     });
-    for (const path of [
-      "/webhooks",
-      "/webhooks/telegram",
-      "/webhooks/twilio/voice",
-      "/webhooks/oauth/callback",
-    ]) {
-      for (const method of ["GET", "POST", "DELETE"]) {
-        const match = matchOperatorRequest(path, method);
-        expect(match?.assistantId).toBe(entry.assistantId);
+    const realFetch = globalThis.fetch;
+    globalThis.fetch = mock(
+      async (input: unknown, init?: unknown) => new Response("bridged"),
+    ) as unknown as typeof fetch;
+    try {
+      for (const path of [
+        "/webhooks",
+        "/webhooks/telegram",
+        "/webhooks/twilio/voice",
+        "/webhooks/oauth/callback",
+      ]) {
+        for (const method of ["GET", "POST", "DELETE"]) {
+          // The bridge forwards to the active entry's gateway — the dial
+          // rides the entry's port, the answer rides back verbatim.
+          const response = await dispatch(path, method);
+          expect(await response?.text()).toBe("bridged");
+        }
       }
+    } finally {
+      globalThis.fetch = realFetch;
     }
   });
 
-  test("near-miss roots match no row", () => {
+  test("near-miss roots match no row", async () => {
     seedEntry({ assistantId: "assistant-1", cloud: "local", port: 7830 });
-    expect(matchOperatorRequest("/webhooks/telegram", "POST")).not.toBeNull();
-    expect(matchOperatorRequest("/hooks/telegram", "POST")).toBeNull();
-    expect(matchOperatorRequest("/webhookss/telegram", "POST")).toBeNull();
+    // The matching assert dispatches for real — the webhook row owns the
+    // root, so the dial rides the same mock as the bridge test above.
+    const realFetch = globalThis.fetch;
+    globalThis.fetch = mock(
+      async () => new Response("bridged"),
+    ) as unknown as typeof fetch;
+    try {
+      expect(await dispatch("/webhooks/telegram", "POST")).not.toBeNull();
+    } finally {
+      globalThis.fetch = realFetch;
+    }
+    expect(await dispatch("/hooks/telegram", "POST")).toBeNull();
+    expect(await dispatch("/webhookss/telegram", "POST")).toBeNull();
   });
 });

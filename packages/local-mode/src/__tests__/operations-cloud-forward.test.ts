@@ -11,7 +11,6 @@ import {
 import type { Fetch } from "@mycadet/shared/fetch";
 
 const CLOUD = "https://cloud.mycadet.ai";
-const ELECTRON_RENDERER_ORIGIN_HEADER = "X-Cadet-Electron-Renderer-Origin";
 
 const request = (
   pathname: string,
@@ -87,20 +86,25 @@ describe("the operator's cloud arm", () => {
     expect(calls).toHaveLength(0);
   });
 
-  test("passes the operator's /v1 proxy arm through — rows own it", async () => {
+  test("forwards the releases catalog; the bare /v1 rides the host chain", async () => {
     const { calls, fetcher } = recorder();
-    expect(await dispatch(request("/v1/releases/"), fetcher)).toBeNull();
+    // The catalog is the cloud's own read — the caller's auth rides the
+    // forward. The bare /v1 is nobody's path here; the host chain answers.
+    expect(await dispatch(request("/v1/releases/"), fetcher)).not.toBeNull();
     expect(await dispatch(request("/v1"), fetcher)).toBeNull();
-    expect(calls).toHaveLength(0);
+    expect(calls).toHaveLength(1);
+    expect(calls[0]?.url).toBe("https://cloud.mycadet.ai/v1/releases/");
   });
 
-  test("a row's pass on a /v1 path hands back to the host chain", async () => {
+  test("a scoped request for an unknown id answers 404 from the dispatcher", async () => {
     const { calls, fetcher } = recorder();
-    // The catch-all matches the stale id and passes; the cloud arm only
-    // owns the account paths, so the host chain answers.
-    expect(
-      await dispatch(request("/v1/assistants/ghost/conversations"), fetcher),
-    ).toBeNull();
+    // The catch-all matches the stale id, but the dispatcher refuses to
+    // pass an id it cannot resolve — no row run, no arm dial.
+    const response = await dispatch(
+      request("/v1/assistants/ghost/conversations"),
+      fetcher,
+    );
+    expect(response?.status).toBe(404);
     expect(calls).toHaveLength(0);
   });
 
@@ -202,19 +206,6 @@ describe("the operator's cloud arm", () => {
     expect(calls).toHaveLength(0);
   });
 
-  test("trusts source-less unsafe requests with renderer-origin marker", async () => {
-    const { calls, fetcher } = recorder();
-    await dispatch(
-      request("/_allauth/app/v1/auth/sessions", {
-        method: "DELETE",
-        headers: { [ELECTRON_RENDERER_ORIGIN_HEADER]: "app://mycadet.ai" },
-      }),
-      fetcher,
-    );
-    expect(header(calls[0]?.init, "origin")).toBe("https://cloud.mycadet.ai");
-    expect(header(calls[0]?.init, ELECTRON_RENDERER_ORIGIN_HEADER)).toBeNull();
-  });
-
   test("trusts source-less unsafe requests with Sec-Fetch-Site same-origin", async () => {
     const { calls, fetcher } = recorder();
     const response = await dispatch(
@@ -244,22 +235,6 @@ describe("the operator's cloud arm", () => {
     const { calls, fetcher } = recorder();
     const response = await dispatch(
       request("/_allauth/app/v1/auth/sessions", { method: "DELETE" }),
-      fetcher,
-    );
-    expect(response?.status).toBe(403);
-    expect(calls).toHaveLength(0);
-  });
-
-  test("rejects source-less unsafe requests from a foreign request URL", async () => {
-    const { calls, fetcher } = recorder();
-    const response = await dispatch(
-      new Request("app://evil.example/_allauth/app/v1/auth/sessions", {
-        method: "DELETE",
-        headers: new Headers({
-          [ELECTRON_RENDERER_ORIGIN_HEADER]: "app://mycadet.ai",
-        }),
-        body: null,
-      }),
       fetcher,
     );
     expect(response?.status).toBe(403);
