@@ -68,3 +68,9 @@ export const memoryV3Selections = sqliteTable(
     index("idx_memory_v3_selections_conv").on(table.conversationId, table.turn),
   ],
 );
+
+export const activationSessions = sqliteTable("activation_sessions", {
+  conversationId: text("conversation_id").primaryKey(),
+  createdAt: integer("created_at").notNull(),
+  memoryInjectionOff: integer("memory_injection_off"),
+});

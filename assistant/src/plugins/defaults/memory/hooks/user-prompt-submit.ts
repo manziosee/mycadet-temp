@@ -280,6 +280,7 @@ const userPromptSubmitMemoryRetrieval: HookFunction<
   const retrieveMemory = shouldRetrieveTurnMemory({
     callSite: conversation?.currentCallSite,
     skipMemoryRetrieval: conversation?.currentTurnSkipMemoryRetrieval,
+    conversationId: ctx.conversationId,
   });
   if (!retrieveMemory && conversation) {
     conversation.graphMemory.recordPkbQueryVectors(undefined, undefined);
