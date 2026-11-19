@@ -22,6 +22,7 @@ import { Button } from "@mycadet/design-library/components/button";
 import { isElectron } from "@/runtime/is-electron";
 import { useTranslation } from "@/i18n";
 import { routes } from "@/utils/routes";
+import { hardNavigate } from "@/lib/auth/hard-navigate";
 
 export function GeneralPage() {
   const { t } = useTranslation("settings");
@@ -109,11 +110,7 @@ export function GeneralPage() {
         accessory={
           <Button
             variant="outlined"
-            disabled={!assistantId}
-            onClick={() =>
-              assistantId &&
-              void navigate(routes.account.assistantDetail(assistantId))
-            }
+            onClick={() => hardNavigate(routes.account.assistantDetail(assistantId))}
           >
             {t("generalPage.accountManage")}
           </Button>
