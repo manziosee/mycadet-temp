@@ -245,6 +245,17 @@ async function waitForPidExit(
 }
 
 /**
+ * Restart the machine-level app server: stop the running instance (a
+ * no-op when down) and bring it back up on the current build. The shared
+ * core of `cadet app restart` and the upgrade command's post-upgrade
+ * restart.
+ */
+export async function restartAppServer(): Promise<AppServer> {
+  await stopAppServer();
+  return ensureAppServer();
+}
+
+/**
  * Stop the running app server via its pidfile and clear the recorded state.
  * Returns true if a process was stopped.
  *

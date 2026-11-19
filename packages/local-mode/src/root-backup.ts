@@ -28,33 +28,20 @@ import { isDockerEntry } from "./lockfile-contract";
 import { DOCKER_STATEFUL_SET_SPEC } from "./remotes/docker/statefulset";
 import { getLocalInstanceDir } from "./remotes/local/instance";
 import { sleepAssistant } from "./operations/sleep";
+import { captureRoot } from "./operations/capture";
+import { dockerOps, type DockerBackupOps } from "./remotes/docker/capture";
+import { consoleLifecycleReporter, type LifecycleReporter } from "./lifecycle-reporter";
 import { wakeAssistant } from "./operations/wake";
 import type { DockerAssistant, LocalAssistant } from "./lockfile-contract";
 import type { LockfileAssistant } from "./lockfile-contract";
 import { getBackupsDir } from "./backup-ops";
+import {
+  pruneTransient,
+  persistent,
+  STATE_ROOTS,
+  type StateRoot,
+} from "./state-roots";
 import { execOutput } from "./exec";
-
-export const STATE_ROOTS = [
-  "workspace",
-  "gateway-security",
-  "ces-security",
-  "ces-data",
-] as const;
-type StateRoot = (typeof STATE_ROOTS)[number];
-const ROOT_SET = new Set<string>(STATE_ROOTS);
-const TRANSIENT_PATHS = new Set(["workspace/cadet.pid", "workspace/signals"]);
-
-function persistent(
-  path: string,
-  stat: import("node:fs").Stats | tar.ReadEntry,
-): boolean {
-  return (
-    !TRANSIENT_PATHS.has(path) &&
-    ("isFile" in stat
-      ? stat.isFile() || stat.isDirectory() || stat.isSymbolicLink()
-      : ["File", "Directory", "SymbolicLink", "Link"].includes(stat.type))
-  );
-}
 
 /** Plain tar root layout; no credential decoding or logical workspace transformation. */
 export async function packRoot(root: string, output: string): Promise<void> {
@@ -115,7 +102,7 @@ function archivePath(path: string): string {
     path.startsWith("/") ||
     /^[a-z]:/i.test(path) ||
     stripped.split("/").some((p) => p === ".." || p === "." || !p) ||
-    !ROOT_SET.has(stripped.split("/")[0]!)
+    !(STATE_ROOTS as readonly string[]).includes(stripped.split("/")[0]!)
   ) {
     throw new Error(`Invalid root archive path: ${path}`);
   }
@@ -244,7 +231,6 @@ export async function stageRootArchive(
 }
 
 export interface RootStorage {
-  capture(target: string): Promise<void>;
   replace(source: string): Promise<void>;
   prepareRestore?(source: string): Promise<void>;
   /**
@@ -274,33 +260,6 @@ export class LocalRootStorage implements RootStorage {
     }
   }
 
-  async capture(target: string): Promise<void> {
-    for (const root of STATE_ROOTS) {
-      const source = join(this.root, root);
-      const stat = await lstat(source).catch((error: NodeJS.ErrnoException) => {
-        if (error.code !== "ENOENT") throw error;
-        return undefined;
-      });
-      if (!stat) throw new Error(`Persistent state root is missing: ${root}`);
-      if (!stat.isDirectory())
-        throw new Error(`State root must be a directory: ${root}`);
-      await cp(source, join(target, root), {
-        recursive: true,
-        verbatimSymlinks: true,
-        filter: async (path) =>
-          persistent(
-            posix.join(
-              root,
-              path
-                .slice(source.length + 1)
-                .split("\\")
-                .join("/"),
-            ),
-            await lstat(path),
-          ),
-      });
-    }
-  }
   async replace(source: string): Promise<void> {
     // All renames stay on the instance's filesystem. A failed install rolls back
     // every root, including the root whose incoming rename failed.
@@ -369,47 +328,6 @@ const ContainerInspectionSchema = z.object({
 });
 type ContainerInspection = z.infer<typeof ContainerInspectionSchema>;
 
-export interface DockerBackupOps {
-  output: typeof execOutput;
-  copy: (container: string, path: string, target: string) => Promise<void>;
-  install: (args: string[], source: string) => Promise<void>;
-}
-
-const dockerOps: DockerBackupOps = {
-  output: execOutput,
-  copy: async (container, path, target) => {
-    await execOutput("docker", ["cp", `${container}:${path}/.`, target]);
-  },
-  install: async (args, source) => {
-    const child = spawn("docker", args, {
-      stdio: ["pipe", "ignore", "pipe"],
-      windowsHide: true,
-    });
-    let stderr = "";
-    child.stderr.on("data", (chunk: Buffer) => {
-      stderr += chunk.toString();
-    });
-    const exited = new Promise<void>((done, fail) => {
-      child.once("error", fail);
-      child.once("close", (code) =>
-        code === 0
-          ? done()
-          : fail(new Error(`Docker restore failed (${code}): ${stderr}`)),
-      );
-    });
-    const input = tar.c({ cwd: source, portable: true }, ["."]);
-    const transfer = pipeline(input, child.stdin).catch((error) => {
-      child.kill("SIGTERM");
-      throw error;
-    });
-    // Do not begin recovery while an earlier writer still owns the volume.
-    const results = await Promise.allSettled([transfer, exited]);
-    for (const result of results) {
-      if (result.status === "rejected") throw result.reason;
-    }
-  },
-};
-
 export class DockerRootStorage implements RootStorage {
   readonly containers: Record<StateRoot, string>;
   constructor(
@@ -438,18 +356,6 @@ export class DockerRootStorage implements RootStorage {
       throw new Error(`Invalid container inspection: ${container}`);
     }
     return result.data[0]!;
-  }
-  async capture(target: string): Promise<void> {
-    for (const root of STATE_ROOTS) {
-      await mkdir(join(target, root), { mode: 0o700 });
-      await this.ops.copy(
-        this.containers[root],
-        `/${root}`,
-        join(target, root),
-      );
-    }
-    // docker cp may retain sockets in its tar stream; remove only process artifacts.
-    await pruneTransient(target);
   }
   private async restoreMounts(_source: string) {
     const inspections = new Map<string, ContainerInspection>();
@@ -578,16 +484,6 @@ export class DockerRootStorage implements RootStorage {
   }
 }
 
-async function pruneTransient(root: string, relative = ""): Promise<void> {
-  for (const name of await readdir(join(root, relative))) {
-    const path = posix.join(relative, name);
-    const stat = await lstat(join(root, path));
-    if (!persistent(path, stat))
-      await rm(join(root, path), { recursive: true, force: true });
-    else if (stat.isDirectory()) await pruneTransient(root, path);
-  }
-}
-
 function storageFor(entry: LockfileAssistant): RootStorage {
   return entry.cloud === "docker"
     ? new DockerRootStorage(entry)
@@ -598,7 +494,7 @@ function storageFor(entry: LockfileAssistant): RootStorage {
 // the old resume's throw path, kept.
 async function wakeOrFail(
   entry: LockfileAssistant,
-  options: { log?: (line: string) => void } = {},
+  options: { reporter?: LifecycleReporter } = {},
 ): Promise<void> {
   const woken = await wakeAssistant(entry, options);
   if (!woken.ok) throw new Error(woken.error);
@@ -643,7 +539,7 @@ export async function withRootOperationLock<T>(
 export async function createRootBackup(
   entry: LockfileAssistant,
   output: string,
-  options: { log?: (line: string) => void } = {},
+  options: { reporter?: LifecycleReporter } = {},
 ): Promise<void> {
   return withRootOperationLock(entry, () => captureBackup(entry, output, options));
 }
@@ -663,9 +559,10 @@ export function newRootBackupPath(entry: LockfileAssistant): string {
 async function captureBackup(
   entry: LockfileAssistant,
   output: string,
-  options: { log?: (line: string) => void } = {},
+  options: { reporter?: LifecycleReporter } = {},
 ): Promise<void> {
-  const log = options.log ?? ((line: string): void => console.log(line));
+  const reporter = options.reporter ?? consoleLifecycleReporter;
+  const log = (line: string): void => reporter.log(line);
   const storage = storageFor(entry);
   storage.assertBackupTarget(output);
   const stage = await mkdtemp(join(tmpdir(), "cadet-backup-"));
@@ -679,23 +576,23 @@ async function captureBackup(
     // unconditionally (it is idempotent) and its structured failure throws
     // its own error.
     log("Stopping services for a consistent snapshot...");
-    const slept = await sleepAssistant(entry, { log });
+    const slept = await sleepAssistant(entry, { reporter });
     if (!slept.ok) throw new Error(slept.error);
     running = slept.wasRunning;
     stopped = true;
     log("Archiving workspace and databases (this can take a while)...");
-    await storage.capture(stage);
+    await captureRoot(entry, stage);
     log(`Snapshot staged at ${stage}`);
     if (running) {
       log("Restarting services...");
-      await wakeOrFail(entry, { log });
+      await wakeOrFail(entry, { reporter });
       stopped = false;
     }
     log("Packing backup archive...");
     await packRoot(stage, output);
   } finally {
     try {
-      if (running && stopped) await wakeOrFail(entry, { log });
+      if (running && stopped) await wakeOrFail(entry, { reporter });
     } finally {
       await rm(stage, { recursive: true, force: true });
     }
@@ -736,7 +633,12 @@ export async function initializeRootArchive(
 async function restoreBackup(
   entry: LockfileAssistant,
   file: string,
-  options: { dryRun?: boolean; recoveryPath?: string; resume?: boolean },
+  options: {
+    dryRun?: boolean;
+    recoveryPath?: string;
+    resume?: boolean;
+    reporter?: LifecycleReporter;
+  },
 ): Promise<string | undefined> {
   const storage = storageFor(entry);
   const stage = await stageRootArchive(file);
@@ -750,12 +652,12 @@ async function restoreBackup(
   try {
     await storage.prepareRestore?.(source);
     if (options.dryRun) return undefined;
-    const slept = await sleepAssistant(entry);
+    const slept = await sleepAssistant(entry, { reporter: options.reporter });
     if (!slept.ok) throw new Error(slept.error);
     running = slept.wasRunning;
     stopped = true;
     await mkdir(snapshot, { mode: 0o700 });
-    await storage.capture(snapshot);
+    await captureRoot(entry, snapshot);
     recoveryPath =
       options.recoveryPath ??
       join(

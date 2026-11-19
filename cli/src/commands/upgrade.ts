@@ -22,12 +22,10 @@ import {
 } from "../lib/cli-error.js";
 import { parseAssistantTargetArg } from "../lib/assistant-target-args.js";
 import {
-  ensureAppServer,
   isAppServerRunning,
-  stopAppServer,
+  restartAppServer,
 } from "../lib/servers/common.js";
-import { readRootProcesses } from "../lib/assistant-config.js";
-import { runProviderTunnel } from "../lib/tunnel.js";
+import { restartTunnel } from "../lib/tunnel.js";
 
 interface UpgradeArgs {
   name: string | null;
@@ -203,11 +201,10 @@ function ignoreHangupSignals(): void {
  * upgrade.
  */
 async function restartAppServerAfterUpgrade(): Promise<void> {
-  if (!isAppServerRunning()) return;
   try {
+    if (!isAppServerRunning()) return;
     console.log("🔄 Restarting the app server on the upgraded build...");
-    await stopAppServer();
-    await ensureAppServer();
+    await restartAppServer();
     console.log("✅ App server restarted.");
   } catch (err) {
     console.warn(
@@ -219,22 +216,19 @@ async function restartAppServerAfterUpgrade(): Promise<void> {
 }
 
 /**
- * Post-upgrade restore of a Cadet-managed tunnel: the recorded tunnel agent
- * dies with the stopped edge mid-upgrade, so bring it back on the
- * restarted app server (the saved domain is standing intent and is reused).
- * Best-effort — a failed restore warns but never fails the upgrade.
+ * Post-upgrade restart of the recorded Cadet-managed tunnel: the recorded
+ * agent usually dies with the stopped edge mid-upgrade, so bring it back
+ * (the saved domain is standing intent). A no-op when no tunnel is
+ * recorded; the tunnel layer owns the provider and port details.
+ * Best-effort — a failed restart warns but never fails the upgrade.
  */
 async function restoreTunnelAfterUpgrade(): Promise<void> {
-  const record = readRootProcesses().tunnel;
-  if (!record) return;
   try {
-    console.log("🔄 Restoring the tunnel...");
-    const edge = await ensureAppServer();
-    await runProviderTunnel(record.provider, { port: edge.port });
-    console.log(`✅ Tunnel restored: ${record.publicUrl}`);
+    const restored = await restartTunnel();
+    if (restored) console.log(`✅ Tunnel restored: ${restored.publicUrl}`);
   } catch (err) {
     console.warn(
-      `⚠️  Tunnel restore failed — run '${cliCommand()} tunnel start' manually: ${
+      `⚠️  Tunnel restart failed — run '${cliCommand()} tunnel start' manually: ${
         err instanceof Error ? err.message : String(err)
       }`,
     );
