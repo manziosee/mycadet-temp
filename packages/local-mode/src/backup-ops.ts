@@ -1,7 +1,7 @@
 import { existsSync, readdirSync, statSync, unlinkSync } from "node:fs";
 import { join } from "node:path";
 
-import { findAssistantByName } from "./operations/lookup";
+import { findAssistant } from "./operations/lookup";
 import { createRootBackup, restoreRootBackup } from "./root-backup.js";
 import { resolveDataDir } from "./config";
 
@@ -28,7 +28,7 @@ export async function createBackup(
   },
 ): Promise<string | null> {
   try {
-    const entry = findAssistantByName(assistantId);
+    const entry = findAssistant(assistantId);
     if (!entry)
       throw new Error(`No registered assistant found for '${assistantId}'.`);
     const prefix = options?.prefix ?? assistantId;
@@ -55,7 +55,7 @@ export async function restoreBackup(
   options: { resume?: boolean } = {},
 ): Promise<boolean> {
   try {
-    const entry = findAssistantByName(assistantId);
+    const entry = findAssistant(assistantId);
     if (!entry)
       throw new Error(`No registered assistant found for '${assistantId}'.`);
     await restoreRootBackup(entry, backupPath, options);

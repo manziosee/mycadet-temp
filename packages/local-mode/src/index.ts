@@ -87,10 +87,7 @@ export type {
   LockfileWriteResult,
 } from "./lockfile-contract";
 export { configureCliPaths, resolveCliInvocation } from "./cli-invocation";
-export {
-  forwardOperatorRequest,
-  matchOperatorRequest,
-} from "./operations/routes";
+export { forwardOperatorRequest } from "./operations/routes";
 export type { CookieJar } from "./operations/cookie-jar";
 
 export { retireAssistant } from "./operations/retire";
@@ -164,8 +161,7 @@ export {
 export { parseWaitDuration } from "./remotes/local/drain";
 export {
   loadAllAssistants,
-  lookupAssistantByIdentifier,
-  formatAssistantLookupError,
+  findAssistant,
   getAssistantDisplayName,
   removeLockfileAssistant,
   getActiveAssistant,

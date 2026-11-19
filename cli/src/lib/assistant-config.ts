@@ -97,12 +97,12 @@ export function readRootProcesses(): RootProcessRecords {
   return { tunnel: data.tunnel, app: data.app };
 }
 
+import { loadAllAssistants } from "@mycadet/local-mode";
+import { getActiveAssistant } from "@mycadet/local-mode";
 import {
   formatAssistantLookupError,
-  getActiveAssistant,
-  loadAllAssistants,
   lookupAssistantByIdentifier,
-} from "@mycadet/local-mode";
+} from "./assistant-lookup.js";
 
 export function loadLatestAssistant(): LockfileAssistant | null {
   const entries = loadAllAssistants();
@@ -117,45 +117,12 @@ export function loadLatestAssistant(): LockfileAssistant | null {
   return sorted[0];
 }
 
-export function findAssistantByName(name: string): LockfileAssistant | null {
-  return (
-    loadAllAssistants().find((entry) => entry.assistantId === name) ?? null
-  );
-}
-
 export function setActiveAssistant(assistantId: string): void {
   withCliLockfileLock(() => {
     const data = readLockfile();
     data.activeAssistant = assistantId;
     writeLockfileUnlocked(data);
   });
-}
-
-/**
- * Best-effort resolution of the target assistant. Returns null when no
- * match is found — callers decide how to handle the absence.
- *
- * Priority:
- * 1. Explicit name argument
- * 2. Active assistant set via `cadet use`
- * 3. Sole lockfile entry (any cloud)
- */
-export function resolveAssistant(nameArg?: string): LockfileAssistant | null {
-  if (nameArg) {
-    return findAssistantByName(nameArg);
-  }
-
-  const active = getActiveAssistant();
-  if (active) {
-    const entry = findAssistantByName(active);
-    if (entry) return entry;
-    // Active assistant no longer exists in lockfile — fall through
-  }
-
-  const all = loadAllAssistants();
-  if (all.length === 1) return all[0];
-
-  return null;
 }
 
 /**

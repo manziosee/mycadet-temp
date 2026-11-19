@@ -9,24 +9,23 @@ import {
   cliCommand,
   dockerResourceNames,
   fetchGatewayPs,
-  formatAssistantLookupError,
   getActiveAssistant,
   getAssistantDisplayName,
   loadAllAssistants,
   loadGuardianToken,
-  lookupAssistantByIdentifier,
   readCloudToken,
   resolveEnvironmentName,
   resolveLogDir,
   type GatewayHealth,
   type ManagedProcessEntry,
 } from "@mycadet/local-mode";
+import {
+  formatAssistantLookupError,
+  lookupAssistantByIdentifier,
+} from "../lib/assistant-lookup.js";
 
 import { type LockfileAssistant } from "@mycadet/local-mode/contract";
-import {
-  findAssistantByName,
-  readRootProcesses,
-} from "../lib/assistant-config";
+import { readRootProcesses } from "../lib/assistant-config";
 import { parseAssistantTargetArg } from "../lib/assistant-target-args.js";
 
 import { withStatusEmoji } from "../lib/status-emoji";
@@ -461,9 +460,7 @@ export async function listAllAssistants(verbose: boolean): Promise<void> {
 
   const assistants = loadAllAssistants();
   const activeId = getActiveAssistant();
-  const activeAssistantId = activeId
-    ? (findAssistantByName(activeId)?.assistantId ?? activeId)
-    : null;
+  const activeAssistantId = activeId;
 
   if (assistants.length === 0) {
     // No assistants, but the CLI may still manage root processes (the app

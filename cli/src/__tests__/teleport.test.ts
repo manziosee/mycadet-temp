@@ -1,5 +1,4 @@
 import { afterAll, afterEach, beforeEach, expect, spyOn, test } from "bun:test";
-import * as assistants from "../lib/assistant-config.js";
 import * as localMode from "@mycadet/local-mode";
 import { parseArgs, teleport } from "../commands/teleport.js";
 import type { LockfileAssistant } from "@mycadet/local-mode/contract";
@@ -11,7 +10,7 @@ const entry: LockfileAssistant = {
   port: 7830,
   hatchedAt: "2026-01-01T00:00:00Z",
 };
-const find = spyOn(assistants, "findAssistantByName");
+const find = spyOn(localMode, "findAssistant");
 const teleportOp = spyOn(localMode, "teleportAssistant");
 const exit = spyOn(process, "exit").mockImplementation((code): never => {
   throw new Error(`exit:${code}`);
@@ -22,14 +21,7 @@ beforeEach(() => {
   find.mockReturnValue(entry);
   teleportOp.mockReset();
   errors.mockClear();
-  process.argv = [
-    "bun",
-    "cadet",
-    "teleport",
-    "--from",
-    "source",
-    "--docker",
-  ];
+  process.argv = ["bun", "cadet", "teleport", "--from", "source", "--docker"];
 });
 afterEach(() => {
   process.argv = argv;

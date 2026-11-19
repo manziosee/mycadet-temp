@@ -22,15 +22,14 @@ const testDir = mkdtempSync(join(tmpdir(), "cli-assistant-config-test-"));
 const prevConfigHome = process.env.XDG_CONFIG_HOME;
 process.env.XDG_CONFIG_HOME = testDir;
 
-import {
-  findAssistantByName,
-  loadLatestAssistant,
-} from "../lib/assistant-config.js";
+import { loadLatestAssistant } from "../lib/assistant-config.js";
 import {
   formatAssistantLookupError,
+  lookupAssistantByIdentifier,
+} from "../lib/assistant-lookup.js";
+import {
   getAssistantDisplayName,
   loadAllAssistants,
-  lookupAssistantByIdentifier,
   removeLockfileAssistant,
   saveLockfileAssistant,
 } from "@mycadet/local-mode";
@@ -140,28 +139,12 @@ describe("assistant-config", () => {
     }
   });
 
-  test("findAssistantByName returns matching entry", () => {
-    makeEntry({ assistantId: "alpha" });
-    makeEntry({ assistantId: "beta" });
-    const result = findAssistantByName("beta");
-    expect(result).not.toBeNull();
-    expect(result!.assistantId).toBe("beta");
-  });
-
   test("getAssistantDisplayName prefers the entry's name", () => {
     makeEntry({ assistantId: "assistant-1", name: "Alice" });
     expect(getAssistantDisplayName(readEntry("assistant-1")!)).toBe("Alice");
     expect(
       getAssistantDisplayName(makeEntryObject({ assistantId: "assistant-3" })),
     ).toBe("assistant-3");
-  });
-
-  test("findAssistantByName only resolves assistant IDs", () => {
-    makeEntry({ assistantId: "assistant-1", name: "Alice" });
-    makeEntry({ assistantId: "assistant-2", name: "Bob" });
-
-    expect(findAssistantByName("Alice")).toBeNull();
-    expect(findAssistantByName("assistant-1")?.assistantId).toBe("assistant-1");
   });
 
   test("lookupAssistantByIdentifier resolves a unique display name", () => {
@@ -192,18 +175,12 @@ describe("assistant-config", () => {
 
     const result = lookupAssistantByIdentifier("Alice");
     expect(result.status).toBe("ambiguous");
-    expect(findAssistantByName("Alice")).toBeNull();
     expect(formatAssistantLookupError("Alice", result)).toContain(
       "assistant-1",
     );
     expect(formatAssistantLookupError("Alice", result)).toContain(
       "assistant-2",
     );
-  });
-
-  test("findAssistantByName returns null for non-existent name", () => {
-    makeEntry({ assistantId: "alpha" });
-    expect(findAssistantByName("missing")).toBeNull();
   });
 
   test("removeLockfileAssistant removes matching entry", () => {

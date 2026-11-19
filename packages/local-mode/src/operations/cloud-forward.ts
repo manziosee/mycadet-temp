@@ -1,5 +1,5 @@
 import { cloudOrigin } from "./cloud-proxy";
-import type { Fetch } from "@mycadet/shared/fetch";
+import type { OperatorRequest } from "./routes";
 
 /**
  * The operator's CLOUD ARM: what the route table's rows don't claim, the
@@ -11,45 +11,19 @@ import type { Fetch } from "@mycadet/shared/fetch";
  */
 const CLOUD_PREFIXES = ["/_allauth", "/accounts", "/v1/releases"] as const;
 
+/**
+ * The cloud arm's row pattern: the OR-union of the cloud's own prefixes —
+ * the arm is just another operator row, last in match order, so the
+ * dispatcher has no special-cased cloud tail.
+ */
+export const CLOUD_ARM_PATTERN = new RegExp(
+  `^(?:${CLOUD_PREFIXES.map((prefix) => prefix.replace(/\//g, "\\/")).join("|")})(?:$|/)`,
+);
+
 export function isCloudPath(pathname: string): boolean {
   return CLOUD_PREFIXES.some(
     (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`),
   );
-}
-
-function isSameOriginSource(value: string | null, url: URL): boolean {
-  if (!value) return false;
-  try {
-    const parsed = new URL(value);
-    // Protocol and host separately: `.origin` is the opaque "null" for
-    // non-special schemes (`app://`), so origin-string equality can't
-    // express same-source for the desktop's handler.
-    return parsed.protocol === url.protocol && parsed.host === url.host;
-  } catch {
-    return false;
-  }
-}
-
-/**
- * The initiator-trust verdict, whole request in: safe methods are
- * trivially trusted; unsafe methods trust only the unforgeable signals —
- * a PRESENT `Origin` or `Referer` must name the request's origin (the
- * browser sets both and page JS can fake neither, so a foreign value IS
- * the attack signal), and source-less requests (the desktop's renderer:
- * Chromium omits `Origin` on `app://`) trust only `sec-fetch-site:
- * same-origin` — fetch metadata the network stack computes and a page
- * cannot claim.
- */
-function isTrustedRequest(req: Request): boolean {
-  if (["GET", "HEAD", "OPTIONS"].includes(req.method.toUpperCase())) {
-    return true;
-  }
-  const url = new URL(req.url);
-  const source = req.headers.get("origin") ?? req.headers.get("referer");
-  if (source !== null) {
-    return isSameOriginSource(source, url);
-  }
-  return req.headers.get("sec-fetch-site") === "same-origin";
 }
 
 /**
@@ -108,45 +82,28 @@ export function buildProxyNetworkErrorResponse(): Response {
 }
 
 /**
- * The cloud arm for one dispatcher pass: `null` when the path isn't the
- * cloud's (the host's own chain answers), the cloud's answer otherwise.
- * The dial rides the host's `fetch` when it brings one (the desktop's
- * `net.fetch`: the main process's network stack, system proxy and cert
- * store), the ambient one otherwise. Best-effort retries cover the
- * transient net errors; exhausted or non-transient failures collapse into
- * the structured 502 instead of rejecting. Only bodiless idempotent
- * requests retry — a body streams `request.body`, which is single-use,
- * and non-idempotent methods must not be silently replayed.
+ * The cloud arm's run — the caller's request rides to the cloud verbatim
+ * (same-origin origin stamp, transient-retry, structured 502).
  */
 export async function forwardCloudRequest(
-  request: Request,
-  fetcher?: Fetch,
+  request: OperatorRequest,
 ): Promise<Response | null> {
-  const url = new URL(request.url);
-  if (!isCloudPath(url.pathname)) {
-    return null;
-  }
-
-  if (!isTrustedRequest(request)) {
-    return new Response("Forbidden cloud proxy request", { status: 403 });
-  }
-
   const target = cloudOrigin();
   const headers = new Headers(request.headers);
   headers.set("origin", new URL(target).origin);
-  const forwardUrl = `${target}${url.pathname}${url.search}`;
+  const forwardUrl = `${target}${request.path}`;
   const hasBody = request.method !== "GET" && request.method !== "HEAD";
   const retryable =
     !hasBody && ["GET", "HEAD"].includes(request.method.toUpperCase());
-  const doFetch = fetcher ?? fetch;
 
   for (let attempt = 0; ; attempt++) {
     try {
-      return await doFetch(forwardUrl, {
+      return await fetch(forwardUrl, {
         method: request.method,
         headers,
         body: hasBody ? request.body : undefined,
         ...(hasBody ? { duplex: "half" as const } : {}),
+        signal: request.signal ?? undefined,
         redirect: "manual",
       });
     } catch (err) {
