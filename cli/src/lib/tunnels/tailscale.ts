@@ -1,4 +1,4 @@
-import { stampRootProcess } from "../assistant-config.js";
+import { readRootProcesses, stampRootProcess } from "../assistant-config.js";
 import { readProcessCommandLine, stopProcess } from "@mycadet/local-mode";
 import type {
   TunnelProvider,
@@ -225,11 +225,6 @@ function serveFailureMessage(result: TailscaleCommandResult): string {
 
 // ── Tailscale serve lifecycle ───────────────────────────────────────────────
 
-export interface RunTailscaleTunnelOptions {
-  /** Local edge port to serve. Defaults to the global GATEWAY_PORT. */
-  port?: number;
-}
-
 export interface TailscaleServeInfo {
   publicUrl: string;
   port: number;
@@ -245,7 +240,6 @@ export interface TailscaleServeInfo {
  * (binary missing, logged out, serve not enabled) with actionable guidance.
  */
 export async function startTailscaleServe(
-  opts: RunTailscaleTunnelOptions = {},
   deps: TailscaleDeps = realTailscaleDeps(),
 ): Promise<TailscaleServeInfo> {
   const binary = await deps.findBinary();
@@ -266,7 +260,9 @@ export async function startTailscaleServe(
   const hostname = resolveServeHostname(statusResult.stdout);
   const publicUrl = `https://${hostname}`;
 
-  const port = opts.port ?? GATEWAY_PORT;
+  // The tunnel always fronts the app edge, whose port the lockfile's `app`
+  // entry stamps — never caller-controlled.
+  const port = readRootProcesses().app?.port ?? GATEWAY_PORT;
 
   const serveResult = deps.run(binary, ["serve", "--bg", String(port)]);
   if (serveResult.status !== 0) {
@@ -311,13 +307,11 @@ export function stopTailscaleServe(
  * The tailnet URL carries a real LetsEncrypt certificate but is reachable only
  * from devices signed in to the same tailnet: no public exposure.
  */
-export async function runTailscaleTunnel(
-  opts: RunTailscaleTunnelOptions = {},
-): Promise<ProviderTunnelResult> {
+export async function runTailscaleTunnel(): Promise<ProviderTunnelResult> {
   const deps = realTailscaleDeps();
 
   console.log("Setting up tailscale serve...");
-  const { publicUrl, port } = await startTailscaleServe(opts, deps);
+  const { publicUrl, port } = await startTailscaleServe(deps);
 
   console.log("");
   console.log(`Tunnel established: ${publicUrl}`);

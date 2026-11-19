@@ -11,21 +11,21 @@ export const STATE_ROOTS = [
 ] as const;
 export type StateRoot = (typeof STATE_ROOTS)[number];
 
-const TRANSIENT_PATHS = new Set(["workspace/cadet.pid", "workspace/signals"]);
-
+/**
+ * What counts as worth capturing: regular files, directories and symlinks.
+ * Sockets and other process artifacts never read as persistent; runtime
+ * file hygiene belongs to the harness side, not this layer.
+ */
 export function persistent(
   path: string,
   stat: import("node:fs").Stats | tar.ReadEntry,
 ): boolean {
-  return (
-    !TRANSIENT_PATHS.has(path) &&
-    ("isFile" in stat
-      ? stat.isFile() || stat.isDirectory() || stat.isSymbolicLink()
-      : ["File", "Directory", "SymbolicLink", "Link"].includes(stat.type))
-  );
+  return "isFile" in stat
+    ? stat.isFile() || stat.isDirectory() || stat.isSymbolicLink()
+    : ["File", "Directory", "SymbolicLink", "Link"].includes(stat.type);
 }
 
-/** Remove process artifacts (sockets, pid files) a capture may have carried. */
+/** Remove non-regular entries (sockets, fifos) a docker-cp tar may carry. */
 export async function pruneTransient(root: string, relative = ""): Promise<void> {
   for (const name of await readdir(join(root, relative))) {
     const path = posix.join(relative, name);
