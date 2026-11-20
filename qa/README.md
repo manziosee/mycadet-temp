@@ -6,14 +6,35 @@ inside it, delete it. The image carries the toolchain and pulls the
 open-source repo into `/qa` at build time; what you QA is what you run inside
 the session, not a flag on the manager.
 
+## The docker hatch integration suite
+
+`docker-hatch.test.ts` hatches a real instance from the three service images
+(assistant, gateway, credential-executor) — fresh network, fresh volumes —
+and exercises it solely through `cadet-test` cli commands: the same public
+surface a user drives, never docker or implementation details. The release
+pipeline's `run-docker-integration-tests` job feeds it the digests it just
+pushed before any manifest may tag them; `pr-qa.yaml` builds the images from
+the PR and runs only the tests that PR edited.
+
+**Only integration tests for logic that cannot be protected by unit tests
+belong in this suite.** The bar is a bug that lives in the gap between build
+time and run time: an instruction that succeeds while the image builds, but
+is contradicted the moment a fresh container starts against fresh volumes.
+No unit test can ever catch that class — everything the unit test can see
+(build-time state, static file contents) is still consistent. Static
+file-content assertions (grepping a Dockerfile for the right value) are code
+analysis, not tests, and do not belong here either. If a unit test could
+protect the logic, put it next to the code it protects; bring it here only
+when a booted container is the only witness.
+
 ## What the image carries
 
-| Layer    | Contents                                                                                             |
-| -------- | ---------------------------------------------------------------------------------------------------- |
-| shared   | git, jq, openssl, curl, unzip, ripgrep, procps, iproute2, lsof, less — the "look around inside" kit    |
-| desktop  | Xvfb + the Electron/Chromium runtime libs (one set serves both — Playwright's browser needs the same) |
-| android  | OpenJDK 21, Android cmdline-tools (pinned), platform-36, build-tools 36.0.0, emulator, platform-tools, a `google_apis` x86_64 system image — **best-effort, see below** |
-| all      | bun (the release pipeline's pin) + the sandbox-api server (same digest pin as the cadet sandbox image) |
+| Layer   | Contents                                                                                                                                                                |
+| ------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| shared  | git, jq, openssl, curl, unzip, ripgrep, procps, iproute2, lsof, less — the "look around inside" kit                                                                     |
+| desktop | Xvfb + the Electron/Chromium runtime libs (one set serves both — Playwright's browser needs the same)                                                                   |
+| android | OpenJDK 21, Android cmdline-tools (pinned), platform-36, build-tools 36.0.0, emulator, platform-tools, a `google_apis` x86_64 system image — **best-effort, see below** |
+| all     | bun (the release pipeline's pin) + the sandbox-api server (same digest pin as the cadet sandbox image)                                                                  |
 
 `google_apis`, not `google_apis_playstore` (what `clients/android/scripts/dev.ts`
 uses on dev machines): Play-licensed images refuse adb root and buy a QA farm
