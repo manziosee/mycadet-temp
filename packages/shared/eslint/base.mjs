@@ -31,15 +31,23 @@ export const mycadetPlugin = {
  * Warning-level countdowns (cast bans, mock.module, namespace imports)
  * stay per-service — their pins are local.
  *
- * @param {{ ignores?: string[] }} [options]
- * Extra global ignores for service build output (e.g. `drizzle/**`).
- * `dist/**` is always ignored.
+ * The floor carries the repo's build-output ignores so no service repeats
+ * them: `dist/**`, `node_modules/**`, `.next/**`, `next-env.d.ts`,
+ * `out/**`, `src/generated/**`, `storybook-static/**`, `drizzle/**`.
  */
-export function baseEslintConfig(options = {}) {
-  const { ignores = [] } = options;
+export function baseEslintConfig() {
   return defineConfig([
     ...tseslint.configs.recommended,
-    globalIgnores(["dist/**", ...ignores]),
+    globalIgnores([
+      "dist/**",
+      "node_modules/**",
+      ".next/**",
+      "next-env.d.ts",
+      "out/**",
+      "src/generated/**",
+      "storybook-static/**",
+      "drizzle/**",
+    ]),
     {
       plugins: { "@mycadet": mycadetPlugin },
       rules: {

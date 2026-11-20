@@ -1,13 +1,13 @@
-import { defineConfig, globalIgnores } from "eslint/config";
+import { defineConfig } from "eslint/config";
 import nextCoreWebVitals from "eslint-config-next/core-web-vitals";
-import tseslint from "typescript-eslint";
-import { noReExports } from "@mycadet/shared/eslint/no-re-exports";
+
+import { baseEslintConfig } from "@mycadet/shared/eslint/base";
 
 const eslintConfig = defineConfig([
   ...nextCoreWebVitals,
-  // Adds 19 typescript-eslint rules that core-web-vitals does not enable.
-  ...tseslint.configs.recommended,
-  globalIgnores(["node_modules/**", ".next/**", "next-env.d.ts"]),
+  // Adds 19 typescript-eslint rules that core-web-vitals does not enable,
+  // plus the repo's lint floor.
+  ...baseEslintConfig(),
   {
     languageOptions: {
       parserOptions: {
@@ -22,18 +22,7 @@ const eslintConfig = defineConfig([
     rules: {
       // Braces on every control-statement body; see root AGENTS.md.
       curly: ["error", "all"],
-      "@typescript-eslint/no-unused-vars": [
-        "error",
-        { argsIgnorePattern: "^_", varsIgnorePattern: "^_" },
-      ],
     },
-  },
-  {
-    // Re-export shims are outlawed: consumers import from the defining
-    // module, and only index files aggregate a public surface. Warning
-    // level with a pinned count — each PR chips away at the remainder.
-    plugins: { "@mycadet": { rules: { "no-re-exports": noReExports } } },
-    rules: { "@mycadet/no-re-exports": "error" },
   },
 ]);
 
