@@ -43,7 +43,11 @@ import {
 import { isValidReleaseVersion } from "../../upgrade";
 import { stripVersionPrefix } from "../../version";
 import { openLogFile, openRuntimeLogFile, pipeToLogFile } from "../../xdg-log";
-import { getDaemonPidPath, getLocalInstanceDir } from "./instance";
+import {
+  getDaemonPidPath,
+  getGatewayPidPath,
+  getLocalInstanceDir,
+} from "./instance";
 
 const _require = createRequire(import.meta.url);
 
@@ -1406,9 +1410,7 @@ export async function startGateway(
   // Without this, crashed/stale gateways accumulate as zombies — the old
   // process holds the port (or lingers after losing it), and every restart
   // attempt spawns yet another process that fails with EADDRINUSE.
-  const gwPidDir = getLocalInstanceDir(entry);
-  const gwPidFile = join(gwPidDir, "gateway.pid");
-  await stopProcessByPidFile(gwPidFile, "gateway");
+  await stopProcessByPidFile(getGatewayPidPath(entry), "gateway");
 
   const publicUrl = await discoverPublicUrl(effectiveGatewayPort);
 
@@ -1474,8 +1476,7 @@ export async function startGateway(
   gateway.unref();
 
   if (gateway.pid) {
-    const gwPidDir = getLocalInstanceDir(entry);
-    writeFileSync(join(gwPidDir, "gateway.pid"), String(gateway.pid), "utf-8");
+    writeFileSync(getGatewayPidPath(entry), String(gateway.pid), "utf-8");
   }
 
   const gatewayUrl = publicUrl || `http://localhost:${effectiveGatewayPort}`;
