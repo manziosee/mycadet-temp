@@ -14,9 +14,12 @@ import log from "@mycadet/electron-desktop/app-logger";
 import { installDock } from "./dock";
 import { createHostCuExecutor } from "./executors/host-cu-executor";
 import { shutdownSharedCuHelper } from "./sidecar/shared-cu-helper";
-import { trayIcon } from "./tray-icon";
 import { installEscapeMonitor, setDictationRecording } from "./escape-monitor";
-import { installHotkeyHelper } from "./hotkey-helper";
+import {
+  handleHotkeyHelperState,
+  installHotkeyHelper,
+  makeClient,
+} from "./hotkey-helper";
 import { showCompanionCoachmarks } from "./companion-window";
 import {
   replayCompanionIntro,
@@ -84,7 +87,6 @@ startApp({
     },
   },
   tray: {
-    icon: trayIcon,
     companion: {
       // Every build of this shell has the companion surface; the tray
       // preference is the only thing that turns it off.
@@ -95,11 +97,20 @@ startApp({
       setSize: setCompanionSurfaceSize,
       replayIntro: replayCompanionIntro,
     },
-    removePairedLabel: "Remove from this Mac\u2026",
   },
   share: { present: shareMenuPresenter() },
   permissions: permissionsShell,
   permissionGuide,
+  dictation: {
+    client: makeClient,
+    onState: handleHotkeyHelperState,
+    // The hold outlives the process boundary only if the helper is told —
+    // the key must not survive a quit still believing it is armed.
+    shutdownRequest: {
+      method: "hotkey.modifierHold",
+      params: { enable: false },
+    },
+  },
   precheck: async () => {
     if (hasPendingFiles() || hasPendingDeepLinks()) {
       markRelocationSkipped();
