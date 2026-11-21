@@ -29,9 +29,18 @@ handleSync("cadet:config:get", () => ({
 
 startApp({
   platform: "win-electron",
+  interfaceId: "windows",
   titleBarMode: "hiddenOverlay",
-  hostProxy: { interfaceId: "windows" },
-  taskbar: true,
+  permissions: {
+    settingsUris: {
+      screen: "ms-settings:privacy-graphicscaptureprogrammatic",
+      microphone: "ms-settings:privacy-microphone",
+      speechRecognition: "ms-settings:privacy-speech",
+      notifications: "ms-settings:notifications",
+      // No automation pane here — the privacy hub is the landing page.
+      automation: "ms-settings:privacy",
+    },
+  },
   helperToastExecutable: "Cadet.WindowsHelper.exe",
   helperToastOverrideEnvVar: "CADET_WINDOWS_HELPER_PATH",
   helperToastName: "windows-helper",

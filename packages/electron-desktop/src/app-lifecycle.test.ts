@@ -117,6 +117,7 @@ mock.module("./features/login-item", () => ({
 }));
 mock.module("./features/permissions", () => ({
   install: recorder("permissions"),
+  getPermissionsService: () => null,
 }));
 mock.module("./features/tray", () => ({ install: recorder("tray") }));
 mock.module("./features/share", () => ({ install: recorder("share") }));
@@ -167,10 +168,11 @@ const universalSurface = [
   "host-proxy",
   "tray",
   "share",
+  "permissions",
 ];
 
 /** The classic-only composition, appended on the classic platforms. */
-const classicSurface = ["dictation", "permissions", "voice-mode-chord"];
+const classicSurface = ["dictation", "voice-mode-chord"];
 
 describe("startApp", () => {
   test("logs ready, assembles the universal surface in order, and runs setup once Electron is ready", async () => {
@@ -178,7 +180,7 @@ describe("startApp", () => {
     startApp({
       platform: "test-electron",
       titleBarMode: "hidden",
-      hostProxy: { interfaceId: "test" },
+      interfaceId: "test",
       setup: () => {
         ran = true;
       },
@@ -205,7 +207,7 @@ describe("startApp", () => {
     startApp({
       platform: "test-electron",
       titleBarMode: "hidden",
-      hostProxy: { interfaceId: "test" },
+      interfaceId: "test",
       setup: () => {
         ran = true;
       },
@@ -225,7 +227,7 @@ describe("startApp", () => {
     startApp({
       platform: "test-electron",
       titleBarMode: "hidden",
-      hostProxy: { interfaceId: "test" },
+      interfaceId: "test",
     });
 
     const secondInstance = appListeners.get("second-instance") ?? [];
@@ -239,7 +241,7 @@ describe("startApp", () => {
     startApp({
       platform: "test-electron",
       titleBarMode: "hidden",
-      hostProxy: { interfaceId: "test" },
+      interfaceId: "test",
       setup: () => {
         ran = true;
       },
@@ -262,7 +264,7 @@ describe("startApp", () => {
     startApp({
       platform: "test-electron",
       titleBarMode: "hidden",
-      hostProxy: { interfaceId: "test" },
+      interfaceId: "test",
       setup: () => {
         throw boom;
       },
