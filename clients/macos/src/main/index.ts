@@ -1,14 +1,9 @@
-import { installAuxiliaryWindowConfiguration } from "./auxiliary-windows.client";
 import { app, Notification } from "electron";
 
 import {
-  configureNativeAuth,
   hasPendingDeepLinks,
   hasPendingFiles,
   installDictationOverlay,
-  installLoginItem,
-  installLoginItemIpc,
-  installNativeAuth,
   openAboutWindow,
   registerCompanionSurfaceSync,
   startApp,
@@ -21,10 +16,9 @@ import { installHostProxyBridge } from "./host-proxy-adapter";
 import { installEscapeMonitor, setDictationRecording } from "./escape-monitor";
 import { installHotkeyHelper } from "./hotkey-helper";
 import {
-  ensureVisible as ensureMainWindowVisible,
-  installMainWindow,
-  toggleVisibility as toggleMainWindowVisibility,
-} from "./main-window";
+  ensureMainWindowVisible,
+  toggleMainWindowVisibility,
+} from "@mycadet/electron-desktop";
 import {
   promptToRelocateIfStranded,
   relocateToApplicationsFolder,
@@ -48,8 +42,6 @@ import {
 import { installTextInsertionIpc } from "./textInsertion";
 import { installTray } from "./tray.client";
 
-installAuxiliaryWindowConfiguration();
-
 const isDev = !app.isPackaged;
 
 // Dev-only: skip the real macOS Keychain for Chromium's `os_crypt` /
@@ -72,6 +64,8 @@ const nativeNotifications = isNotifierSupported()
 // ---------------------------------------------------------------------------
 
 startApp({
+  platform: "mac-electron",
+  titleBarMode: "hidden",
   precheck: async () => {
     if (hasPendingFiles() || hasPendingDeepLinks()) {
       markRelocationSkipped();
@@ -79,20 +73,22 @@ startApp({
     }
     return relocateToApplicationsFolder();
   },
-  ensureVisible: ensureMainWindowVisible,
-  initialArgv: [],
-  rendererUsesAppProtocol: () => true,
   ...(nativeNotifications ? { notifications: nativeNotifications } : {}),
   async setup() {
-    installLoginItem();
-    installLoginItemIpc();
+    // The dock — this shell's launcher icon/badge — stays client-side.
+    installDock();
+
+    // The installs below are this shell's own product surfaces (the helper
+    // bridge, the companion support modules, the share sheet, the native
+    // notification plumbing, the tray, relocation); their shared logic
+    // folds into the package in later rounds.
+
     installHotkeyHelper();
     installCompanionPermissionGuide();
     installTextInsertionIpc();
     registerCompanionSurfaceSync(setCompanionSurfaceVisible);
     installDictationOverlay({ onRecordingLifecycle: setDictationRecording });
     installCompanionWindow();
-    installDock();
     installShare();
     if (nativeNotifications) {
       Notification.isSupported();
@@ -108,14 +104,6 @@ startApp({
       ensureMainWindow: ensureMainWindowVisible,
       openAbout: openAboutWindow,
     });
-    configureNativeAuth({
-      activateWindow: () => {
-        app.focus({ steal: true });
-        ensureMainWindowVisible();
-      },
-    });
-    installNativeAuth();
-    installMainWindow();
     syncCompanionSurface();
     void promptToRelocateIfStranded().catch((err: unknown) => {
       log.error("[app] relocation prompt failed:", err);

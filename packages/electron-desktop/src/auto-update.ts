@@ -6,11 +6,9 @@ import log from "./app-logger";
 import { resolveEnvironmentName } from "@mycadet/shared";
 import type { UpdateState, UpdateStatus } from "@mycadet/ipc-contract";
 
-import type { UpdateFeedPlatform } from "./auto-update-contract";
 import { handle } from "./ipc";
 
 export type { UpdateState, UpdateStatus };
-export type { UpdateFeedPlatform } from "./auto-update-contract";
 
 /**
  * Platform- and architecture-isolated generic feed URL for this build's
@@ -18,7 +16,7 @@ export type { UpdateFeedPlatform } from "./auto-update-contract";
  * the same baked define the packaged build ships with).
  */
 export const resolveUpdateFeedUrl = (
-  platform: UpdateFeedPlatform,
+  platform: string,
   arch: string,
 ): string => {
   const environment = resolveEnvironmentName();
@@ -26,21 +24,14 @@ export const resolveUpdateFeedUrl = (
   return `https://storage.googleapis.com/mycadet-${bucketEnv}-releases/${platform}/${arch}/`;
 };
 
-export interface AutoUpdateOptions {
+interface AutoUpdateOptions {
   /**
-   * The updater feed's platform bucket, e.g. `linux-electron`. Defaults to
-   * this process's platform, which is all the three shells ever passed.
+   * The updater feed's platform bucket the shell ships its updates in,
+   * e.g. `linux-electron`. A plain string — the shell passes it, the
+   * package never derives one from the OS it happens to run on.
    */
-  platform?: UpdateFeedPlatform;
+  platform: string;
 }
-
-/** The feed bucket for this process's platform. */
-export const resolveUpdateFeedPlatform = (): UpdateFeedPlatform =>
-  process.platform === "darwin"
-    ? "mac-electron"
-    : process.platform === "win32"
-      ? "win-electron"
-      : "linux-electron";
 
 let currentState: UpdateState = { status: "idle" };
 
@@ -69,8 +60,8 @@ export const checkForUpdates = (): void => {
 };
 
 /** Installs the updater, its IPC surface, and the periodic check. */
-export const installAutoUpdate = (options: AutoUpdateOptions = {}): void => {
-  const platform = options.platform ?? resolveUpdateFeedPlatform();
+export const installAutoUpdate = (options: AutoUpdateOptions): void => {
+  const platform = options.platform;
   handle("cadet:update:getState", z.tuple([]), () => currentState);
   handle("cadet:update:check", z.tuple([]), () => checkForUpdates());
   handle("cadet:update:install", z.tuple([]), () =>
