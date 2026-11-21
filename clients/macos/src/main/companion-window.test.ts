@@ -309,7 +309,7 @@ mock.module("electron", () =>
       },
     },
   }),
-);;
+);
 
 /** Every text main has put on the pasteboard, most recent last. */
 const copied: string[] = [];
@@ -506,7 +506,7 @@ mock.module("./companion-permission-guide", () => ({
   },
 }));
 
-mock.module("./ipc", () => ({
+mock.module("@mycadet/electron-desktop/ipc", () => ({
   on: register(listeners),
   handle: register(invocable),
 }));

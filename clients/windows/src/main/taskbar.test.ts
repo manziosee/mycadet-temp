@@ -15,7 +15,7 @@ mock.module("electron", () =>
     },
     nativeImage: { createFromBitmap, createFromPath: () => bundleIcon },
   }),
-);;
+);
 
 let avatarListener: (() => void) | null = null;
 mock.module("@mycadet/electron-desktop/avatar", () => ({
@@ -33,7 +33,7 @@ mock.module("@mycadet/electron-desktop/avatar", () => ({
 }));
 
 let badgeHandler: ((args: [number]) => void) | null = null;
-mock.module("./ipc.client", () => ({
+mock.module("@mycadet/electron-desktop/ipc", () => ({
   on: (
     _channel: string,
     _schema: unknown,

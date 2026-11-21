@@ -24,10 +24,11 @@ mock.module("electron", () =>
       on: (channel: string, l: RawHandler) => listeners.set(channel, l),
     },
   }),
-);;
+);
 
-const { handle, on } = await import("./ipc");
-const { resolveAllowedOrigin } = await import("./app-origin");
+const { handle, on } = await import("@mycadet/electron-desktop/ipc");
+const { resolveAllowedOrigin } =
+  await import("@mycadet/electron-desktop/app-origin");
 
 // The guard derives the allowed origin from the same resolver the
 // production code uses — the constant `app://mycadet.ai` origin — so the

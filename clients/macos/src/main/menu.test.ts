@@ -47,7 +47,7 @@ mock.module("electron", () =>
       openExternal: mock(() => Promise.resolve()),
     },
   }),
-);;
+);
 
 mock.module("@mycadet/electron-desktop/about", () => ({
   configureAboutRuntime: () => undefined,
@@ -87,7 +87,7 @@ mock.module("@mycadet/electron-desktop/command-palette-window", () => ({
   openCommandPaletteWindow: () => undefined,
 }));
 
-mock.module("./ipc", () => ({
+mock.module("@mycadet/electron-desktop/ipc", () => ({
   handle: () => undefined,
 }));
 

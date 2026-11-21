@@ -205,7 +205,7 @@ mock.module("electron", () =>
     ipcMain: { handle: ipcHandleMock },
     shell: { openExternal: () => Promise.resolve() },
   }),
-);;
+);
 
 // What the mocked `restoreBounds()` returns. Defaults to a saved windowed
 // state; tests exercising the fresh-install maximized default or a saved
@@ -251,7 +251,8 @@ const {
   setOnboarding,
   toggleVisibility,
 } = await import("./main-window");
-const { resolveAllowedOrigin } = await import("./app-origin");
+const { resolveAllowedOrigin } =
+  await import("@mycadet/electron-desktop/app-origin");
 
 // The IPC wrapper rejects any sender whose frame origin isn't the
 // app renderer's, so the handler must be invoked with a frame at the

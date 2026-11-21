@@ -8,7 +8,9 @@
     ".": "./src/index.ts",
     "./about": "./src/about.ts",
     "./app-logger": "./src/app-logger.ts",
+    "./app-name": "./src/app-name.ts",
     "./app-origin": "./src/app-origin.ts",
+    "./ipc": "./src/ipc.ts",
     "./auto-update": "./src/auto-update.ts",
     "./avatar": "./src/avatar.ts",
     "./avatar-image": "./src/avatar-image.ts",
@@ -34,7 +36,8 @@
     "./windows": "./src/windows.ts"
   },
   "scripts": {
-    "lint": "eslint . --max-warnings 33",
+    "lint": "prettier --check src scripts test-setup.ts && eslint . --max-warnings 33",
+    "format:check": "prettier --check src scripts test-setup.ts",
     "test": "bun scripts/run-tests.ts",
     "typecheck": "bunx tsc --noEmit"
   },
@@ -54,6 +57,7 @@
     "zod": ">=4.0.0"
   },
   "devDependencies": {
+    "prettier": "3.8.1",
     "@mycadet/shared": "workspace:*",
     "@types/bun": "1.3.14",
     "@types/node": "22.10.5",

@@ -140,7 +140,7 @@ mock.module("electron", () =>
       getAnimationSettings: () => ({ prefersReducedMotion: true }),
     },
   }),
-);;
+);
 mock.module("@mycadet/electron-desktop/floating-window", () => ({
   listFloatingWindows: () => undefined,
   repositionFloatingWindow: () => undefined,
@@ -153,7 +153,7 @@ mock.module("@mycadet/electron-desktop/floating-window", () => ({
     return win;
   },
 }));
-mock.module("./ipc", () => ({
+mock.module("@mycadet/electron-desktop/ipc", () => ({
   handle: (
     channel: string,
     schema: { parse: (...args: any[]) => any },
