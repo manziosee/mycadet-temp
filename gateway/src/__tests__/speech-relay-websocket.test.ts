@@ -1,11 +1,23 @@
-import { afterAll, beforeAll, describe, test, expect, mock } from "bun:test";
+import {
+  afterAll,
+  afterEach,
+  beforeAll,
+  describe,
+  test,
+  expect,
+  mock,
+} from "bun:test";
 import type { GatewayConfig } from "../config.js";
 import { mintToken } from "../auth/token-service.js";
 import { CURRENT_POLICY_EPOCH } from "../auth/policy.js";
 import type { CredentialCache } from "../credential-cache.js";
 import {
-  createSpeechRelayUpgradeHandler,
-  getSpeechRelayWebsocketHandlers,
+  closeSpeechRelayWebsocket,
+  handleSpeechRelaySttWs,
+  handleSpeechRelaySttV2Ws,
+  handleSpeechRelayTtsWs,
+  messageSpeechRelayWebsocket,
+  openSpeechRelayWebsocket,
   tunnelOriginForPlatformHost,
   type SpeechRelaySocketData,
 } from "../http/routes/speech-relay-websocket.js";
@@ -57,6 +69,17 @@ function makeCredentials(apiKey: string | undefined): CredentialCache {
   } as unknown as CredentialCache;
 }
 
+// The handlers read config and the credential cache at call time; the tests
+// swap both through module-level holders.
+let testConfig = makeConfig();
+let testCredentials = makeCredentials("vk-1");
+mock.module("../config.js", () => ({
+  getConfig: () => testConfig,
+}));
+mock.module("../credential-cache.js", () => ({
+  getCredentials: () => testCredentials,
+}));
+
 async function bodyOf(
   res: Response,
 ): Promise<{ code: string; detail: string }> {
@@ -107,15 +130,11 @@ describe("tunnel origin derivation", () => {
   test("derives the tunnel origin from CADET_CLOUD_URL when TUNNEL_BASE_URL is unset", async () => {
     const server = makeFakeServer();
     process.env.CADET_CLOUD_URL = "https://staging-cloud.mycadet.ai";
-    const handler = createSpeechRelayUpgradeHandler(
-      makeConfig({ tunnelBaseUrl: undefined }),
-      "stt",
-      {
-        credentials: makeKeyedCredentials({
-          "credential/cadet/assistant_api_key": "vk-1",
-        }),
-      },
-    );
+    testConfig = makeConfig({ tunnelBaseUrl: undefined });
+    testCredentials = makeKeyedCredentials({
+      "credential/cadet/assistant_api_key": "vk-1",
+    });
+    const handler = handleSpeechRelaySttWs;
     const req = new Request(
       `http://127.0.0.1:7830/v1/speech/stt/stream?key=${TOKEN}`,
       { headers: { upgrade: "websocket" } },
@@ -143,15 +162,11 @@ describe("tunnel origin derivation", () => {
       } else {
         process.env.CADET_CLOUD_URL = cloudBaseUrl;
       }
-      const handler = createSpeechRelayUpgradeHandler(
-        makeConfig({ tunnelBaseUrl: undefined }),
-        "stt",
-        {
-          credentials: makeKeyedCredentials({
-            "credential/cadet/assistant_api_key": "vk-1",
-          }),
-        },
-      );
+      testConfig = makeConfig({ tunnelBaseUrl: undefined });
+      testCredentials = makeKeyedCredentials({
+        "credential/cadet/assistant_api_key": "vk-1",
+      });
+      const handler = handleSpeechRelaySttWs;
       const req = new Request(
         `http://127.0.0.1:7830/v1/speech/stt/stream?key=${TOKEN}`,
         { headers: { upgrade: "websocket" } },
@@ -168,11 +183,11 @@ describe("tunnel origin derivation", () => {
   test("an explicit TUNNEL_BASE_URL wins over CADET_CLOUD_URL", async () => {
     const server = makeFakeServer();
     process.env.CADET_CLOUD_URL = "https://staging-cloud.mycadet.ai";
-    const handler = createSpeechRelayUpgradeHandler(makeConfig(), "stt", {
-      credentials: makeKeyedCredentials({
-        "credential/cadet/assistant_api_key": "vk-1",
-      }),
+    testConfig = makeConfig();
+    testCredentials = makeKeyedCredentials({
+      "credential/cadet/assistant_api_key": "vk-1",
     });
+    const handler = handleSpeechRelaySttWs;
     const req = new Request(
       `http://127.0.0.1:7830/v1/speech/stt/stream?key=${TOKEN}`,
       { headers: { upgrade: "websocket" } },
@@ -184,12 +199,12 @@ describe("tunnel origin derivation", () => {
   });
 });
 
-describe("createSpeechRelayUpgradeHandler — gate", () => {
+describe("speech relay upgrades — gate", () => {
   test("upgrades a daemon service connection and strips the key param", async () => {
     const server = makeFakeServer();
-    const handler = createSpeechRelayUpgradeHandler(makeConfig(), "stt", {
-      credentials: makeCredentials("vk-1"),
-    });
+    testConfig = makeConfig();
+    testCredentials = makeCredentials("vk-1");
+    const handler = handleSpeechRelaySttWs;
     const req = new Request(
       `http://127.0.0.1:7830/v1/speech/stt/stream?key=${TOKEN}&encoding=linear16&sample_rate=16000&channels=1`,
       { headers: { upgrade: "websocket" } },
@@ -209,12 +224,9 @@ describe("createSpeechRelayUpgradeHandler — gate", () => {
 
   test("routes managed STT v2 to tunnel's v2 path with the Flux params", async () => {
     const server = makeFakeServer();
-    const handler = createSpeechRelayUpgradeHandler(
-      makeConfig(),
-      "stt",
-      { credentials: makeCredentials("vk-1") },
-      "v2",
-    );
+    testConfig = makeConfig();
+    testCredentials = makeCredentials("vk-1");
+    const handler = handleSpeechRelaySttV2Ws;
     const req = new Request(
       `http://127.0.0.1:7830/v2/speech/stt/stream?key=${TOKEN}&encoding=linear16&sample_rate=16000&language=multi&contract=flux&eot_threshold=0.7&eager_eot_threshold=0.5&eot_timeout_ms=5000`,
       { headers: { upgrade: "websocket" } },
@@ -237,9 +249,9 @@ describe("createSpeechRelayUpgradeHandler — gate", () => {
   test("v1 STT still rejects the Flux-only params", async () => {
     // A nova-3 session must not be able to forward params its upstream does
     // not accept.
-    const handler = createSpeechRelayUpgradeHandler(makeConfig(), "stt", {
-      credentials: makeCredentials("vk-1"),
-    });
+    testConfig = makeConfig();
+    testCredentials = makeCredentials("vk-1");
+    const handler = handleSpeechRelaySttWs;
     for (const param of ["contract=flux", "eager_eot_threshold=0.5"]) {
       const req = new Request(
         `http://127.0.0.1:7830/v1/speech/stt/stream?key=${TOKEN}&${param}`,
@@ -253,9 +265,9 @@ describe("createSpeechRelayUpgradeHandler — gate", () => {
 
   test("routes the tts operation to tunnel's tts path", async () => {
     const server = makeFakeServer();
-    const handler = createSpeechRelayUpgradeHandler(makeConfig(), "tts", {
-      credentials: makeCredentials("vk-1"),
-    });
+    testConfig = makeConfig();
+    testCredentials = makeCredentials("vk-1");
+    const handler = handleSpeechRelayTtsWs;
     const req = new Request(
       `http://127.0.0.1:7830/v1/speech/tts/stream?key=${TOKEN}&encoding=linear16`,
       { headers: { upgrade: "websocket" } },
@@ -271,9 +283,9 @@ describe("createSpeechRelayUpgradeHandler — gate", () => {
     // a gateway that rejects it silently breaks voice selection (the
     // daemon's synthesis fails before tunnel ever sees the session).
     const server = makeFakeServer();
-    const handler = createSpeechRelayUpgradeHandler(makeConfig(), "tts", {
-      credentials: makeCredentials("vk-1"),
-    });
+    testConfig = makeConfig();
+    testCredentials = makeCredentials("vk-1");
+    const handler = handleSpeechRelayTtsWs;
     const req = new Request(
       `http://127.0.0.1:7830/v1/speech/tts/stream?key=${TOKEN}&encoding=linear16&sample_rate=16000&container=none&model=cjVigY5qzO86Huf0OWal`,
       { headers: { upgrade: "websocket" } },
@@ -286,9 +298,9 @@ describe("createSpeechRelayUpgradeHandler — gate", () => {
   });
 
   test("rejects a missing token", async () => {
-    const handler = createSpeechRelayUpgradeHandler(makeConfig(), "stt", {
-      credentials: makeCredentials("vk-1"),
-    });
+    testConfig = makeConfig();
+    testCredentials = makeCredentials("vk-1");
+    const handler = handleSpeechRelaySttWs;
     const req = new Request("http://127.0.0.1:7830/v1/speech/stt/stream", {
       headers: { upgrade: "websocket" },
     });
@@ -299,9 +311,9 @@ describe("createSpeechRelayUpgradeHandler — gate", () => {
   });
 
   test("rejects an actor token — daemon service principal only", async () => {
-    const handler = createSpeechRelayUpgradeHandler(makeConfig(), "stt", {
-      credentials: makeCredentials("vk-1"),
-    });
+    testConfig = makeConfig();
+    testCredentials = makeCredentials("vk-1");
+    const handler = handleSpeechRelaySttWs;
     const req = new Request(
       `http://127.0.0.1:7830/v1/speech/stt/stream?key=${mintEdgeToken()}`,
       { headers: { upgrade: "websocket" } },
@@ -313,9 +325,9 @@ describe("createSpeechRelayUpgradeHandler — gate", () => {
   });
 
   test("rejects a daemon token with the broad gateway_service_v1 profile (ATL-1033)", async () => {
-    const handler = createSpeechRelayUpgradeHandler(makeConfig(), "stt", {
-      credentials: makeCredentials("vk-1"),
-    });
+    testConfig = makeConfig();
+    testCredentials = makeCredentials("vk-1");
+    const handler = handleSpeechRelaySttWs;
     const req = new Request(
       `http://127.0.0.1:7830/v1/speech/stt/stream?key=${mintOverScopedDaemonToken()}`,
       { headers: { upgrade: "websocket" } },
@@ -327,9 +339,9 @@ describe("createSpeechRelayUpgradeHandler — gate", () => {
   });
 
   test("rejects non-allowlisted query parameters at the gateway boundary", async () => {
-    const handler = createSpeechRelayUpgradeHandler(makeConfig(), "stt", {
-      credentials: makeCredentials("vk-1"),
-    });
+    testConfig = makeConfig();
+    testCredentials = makeCredentials("vk-1");
+    const handler = handleSpeechRelaySttWs;
     const req = new Request(
       `http://127.0.0.1:7830/v1/speech/stt/stream?key=${TOKEN}&encoding=linear16&model=nova-3`,
       { headers: { upgrade: "websocket" } },
@@ -344,9 +356,9 @@ describe("createSpeechRelayUpgradeHandler — gate", () => {
   });
 
   test("rejects tunnel-forwarded requests regardless of token", async () => {
-    const handler = createSpeechRelayUpgradeHandler(makeConfig(), "stt", {
-      credentials: makeCredentials("vk-1"),
-    });
+    testConfig = makeConfig();
+    testCredentials = makeCredentials("vk-1");
+    const handler = handleSpeechRelaySttWs;
     const req = new Request(
       `http://127.0.0.1:7830/v1/speech/stt/stream?key=${TOKEN}`,
       { headers: { upgrade: "websocket", [TUNNEL_FORWARDED_HEADER]: "1" } },
@@ -358,11 +370,18 @@ describe("createSpeechRelayUpgradeHandler — gate", () => {
   });
 });
 
-describe("createSpeechRelayUpgradeHandler — probe (non-upgrade GET)", () => {
+describe("speech relay upgrades — probe (non-upgrade GET)", () => {
+  // The upgrade handler probes through the global fetch; stub it here and
+  // restore after each test.
+  const realFetch = globalThis.fetch;
+  afterEach(() => {
+    globalThis.fetch = realFetch;
+  });
+
   test("returns missing_platform_connection without a stored API key", async () => {
-    const handler = createSpeechRelayUpgradeHandler(makeConfig(), "stt", {
-      credentials: makeCredentials(undefined),
-    });
+    testConfig = makeConfig();
+    testCredentials = makeCredentials(undefined);
+    const handler = handleSpeechRelaySttWs;
     const req = new Request(
       `http://127.0.0.1:7830/v1/speech/stt/stream?key=${TOKEN}`,
     );
@@ -380,10 +399,10 @@ describe("createSpeechRelayUpgradeHandler — probe (non-upgrade GET)", () => {
           { status: 402 },
         ),
     ) as unknown as typeof fetch;
-    const handler = createSpeechRelayUpgradeHandler(makeConfig(), "stt", {
-      credentials: makeCredentials("vk-1"),
-      fetchImpl,
-    });
+    globalThis.fetch = fetchImpl;
+    testConfig = makeConfig();
+    testCredentials = makeCredentials("vk-1");
+    const handler = handleSpeechRelaySttWs;
     const req = new Request(
       `http://127.0.0.1:7830/v1/speech/stt/stream?key=${TOKEN}&encoding=linear16`,
     );
@@ -410,10 +429,10 @@ describe("createSpeechRelayUpgradeHandler — probe (non-upgrade GET)", () => {
     const fetchImpl = mock(
       async () => new Response("Upgrade Required", { status: 426 }),
     ) as unknown as typeof fetch;
-    const handler = createSpeechRelayUpgradeHandler(makeConfig(), "stt", {
-      credentials: makeCredentials("vk-1"),
-      fetchImpl,
-    });
+    globalThis.fetch = fetchImpl;
+    testConfig = makeConfig();
+    testCredentials = makeCredentials("vk-1");
+    const handler = handleSpeechRelaySttWs;
     const req = new Request(
       `http://127.0.0.1:7830/v1/speech/stt/stream?key=${TOKEN}`,
     );
@@ -521,10 +540,9 @@ const tick = () => new Promise<void>((r) => setTimeout(r, 0));
 describe("getSpeechRelayWebsocketHandlers", () => {
   test("dials tunnel with the Api-Key header and pipes frames both ways", async () => {
     FakeUpstreamWebSocket.instances = [];
-    const handlers = getSpeechRelayWebsocketHandlers();
     const ws = new FakeDownstreamSocket(makeSocketData());
 
-    await handlers.open(ws as never);
+    await openSpeechRelayWebsocket(ws as never);
     const upstream = FakeUpstreamWebSocket.instances[0]!;
     expect(upstream.url).toBe(
       "wss://tunnel.test/v1/speech/stt/stream?encoding=linear16",
@@ -532,12 +550,12 @@ describe("getSpeechRelayWebsocketHandlers", () => {
     expect(upstream.options?.headers?.Authorization).toBe("Api-Key vk-1");
 
     // Frames sent before upstream opens are buffered, then flushed.
-    handlers.message(ws as never, "early-audio");
+    messageSpeechRelayWebsocket(ws as never, "early-audio");
     expect(upstream.sent).toHaveLength(0);
     upstream.emitOpen();
     expect(upstream.sent).toEqual(["early-audio"]);
 
-    handlers.message(ws as never, "more-audio");
+    messageSpeechRelayWebsocket(ws as never, "more-audio");
     expect(upstream.sent).toEqual(["early-audio", "more-audio"]);
 
     upstream.emitMessage('{"type":"Results"}');
@@ -546,28 +564,26 @@ describe("getSpeechRelayWebsocketHandlers", () => {
 
   test("closes downstream with 1008 when pre-open buffered bytes exceed the cap", async () => {
     FakeUpstreamWebSocket.instances = [];
-    const handlers = getSpeechRelayWebsocketHandlers();
     const ws = new FakeDownstreamSocket(makeSocketData());
-    await handlers.open(ws as never);
+    await openSpeechRelayWebsocket(ws as never);
 
     // The tunnel leg never opens; pump binary frames up to the 1 MiB cap.
     const frame = new Uint8Array(64 * 1024);
     for (let i = 0; i < 16; i++) {
-      handlers.message(ws as never, frame);
+      messageSpeechRelayWebsocket(ws as never, frame);
     }
     expect(ws.closeCalled).toBeNull();
 
     // The next frame exceeds the cap.
-    handlers.message(ws as never, frame);
+    messageSpeechRelayWebsocket(ws as never, frame);
     expect(ws.closeCalled).toEqual({ code: 1008, reason: "Buffer overflow" });
   });
 
   test("forwards upstream close codes and reasons to the daemon", async () => {
     FakeUpstreamWebSocket.instances = [];
-    const handlers = getSpeechRelayWebsocketHandlers();
     const ws = new FakeDownstreamSocket(makeSocketData());
 
-    await handlers.open(ws as never);
+    await openSpeechRelayWebsocket(ws as never);
     const upstream = FakeUpstreamWebSocket.instances[0]!;
     upstream.emitOpen();
     upstream.emitMessage(
@@ -585,10 +601,9 @@ describe("getSpeechRelayWebsocketHandlers", () => {
 
   test("sets arraybuffer binary mode on the upstream socket", async () => {
     FakeUpstreamWebSocket.instances = [];
-    const handlers = getSpeechRelayWebsocketHandlers();
     const ws = new FakeDownstreamSocket(makeSocketData());
 
-    await handlers.open(ws as never);
+    await openSpeechRelayWebsocket(ws as never);
     expect(FakeUpstreamWebSocket.instances[0]!.binaryType).toBe("arraybuffer");
   });
 
@@ -596,7 +611,6 @@ describe("getSpeechRelayWebsocketHandlers", () => {
     // A rejected handshake can emit close (or error+close) before the async
     // probe resolves; the raw close must not beat the synthesized frame.
     FakeUpstreamWebSocket.instances = [];
-    const handlers = getSpeechRelayWebsocketHandlers();
     const fetchImpl = mock(
       async () =>
         new Response(
@@ -608,7 +622,7 @@ describe("getSpeechRelayWebsocketHandlers", () => {
     data.deps.fetchImpl = fetchImpl;
     const ws = new FakeDownstreamSocket(data);
 
-    await handlers.open(ws as never);
+    await openSpeechRelayWebsocket(ws as never);
     const upstream = FakeUpstreamWebSocket.instances[0]!;
     upstream.emitError();
     upstream.emitClose(1006);
@@ -625,7 +639,6 @@ describe("getSpeechRelayWebsocketHandlers", () => {
 
   test("a failed tunnel dial synthesizes a tunnel_error from the HTTP probe", async () => {
     FakeUpstreamWebSocket.instances = [];
-    const handlers = getSpeechRelayWebsocketHandlers();
     const fetchImpl = mock(
       async () =>
         new Response(JSON.stringify({ code: "invalid_key", detail: "bad" }), {
@@ -636,7 +649,7 @@ describe("getSpeechRelayWebsocketHandlers", () => {
     data.deps.fetchImpl = fetchImpl;
     const ws = new FakeDownstreamSocket(data);
 
-    await handlers.open(ws as never);
+    await openSpeechRelayWebsocket(ws as never);
     FakeUpstreamWebSocket.instances[0]!.emitError();
     await tick();
 
@@ -651,12 +664,11 @@ describe("getSpeechRelayWebsocketHandlers", () => {
 
   test("missing API key closes with a synthesized tunnel_error, no dial", async () => {
     FakeUpstreamWebSocket.instances = [];
-    const handlers = getSpeechRelayWebsocketHandlers();
     const data = makeSocketData();
     data.deps.credentials = makeCredentials(undefined);
     const ws = new FakeDownstreamSocket(data);
 
-    await handlers.open(ws as never);
+    await openSpeechRelayWebsocket(ws as never);
 
     expect(FakeUpstreamWebSocket.instances).toHaveLength(0);
     expect(JSON.parse(ws.sent[0] as string).code).toBe(
@@ -667,11 +679,9 @@ describe("getSpeechRelayWebsocketHandlers", () => {
 
   test("a ws:// relay base still yields a fetchable probe URL", async () => {
     const server = makeFakeServer();
-    const handler = createSpeechRelayUpgradeHandler(
-      makeConfig({ tunnelBaseUrl: "wss://tunnel.test" } as never),
-      "stt",
-      { credentials: makeCredentials("vk-1") },
-    );
+    testConfig = makeConfig({ tunnelBaseUrl: "wss://tunnel.test" } as never);
+    testCredentials = makeCredentials("vk-1");
+    const handler = handleSpeechRelaySttWs;
     const req = new Request(
       `http://127.0.0.1:7830/v1/speech/stt/stream?key=${TOKEN}&encoding=linear16`,
       { headers: { upgrade: "websocket" } },
@@ -685,7 +695,6 @@ describe("getSpeechRelayWebsocketHandlers", () => {
 
   test("a daemon close during the credential read prevents the tunnel dial", async () => {
     FakeUpstreamWebSocket.instances = [];
-    const handlers = getSpeechRelayWebsocketHandlers();
     let releaseRead: (v: string) => void = () => {};
     const data = makeSocketData();
     data.deps.credentials = {
@@ -693,9 +702,9 @@ describe("getSpeechRelayWebsocketHandlers", () => {
     } as unknown as CredentialCache;
     const ws = new FakeDownstreamSocket(data);
 
-    const opening = handlers.open(ws as never);
+    const opening = openSpeechRelayWebsocket(ws as never);
     // The daemon hangs up while the CES/keychain read is still pending.
-    handlers.close(ws as never, 1001, "going away");
+    closeSpeechRelayWebsocket(ws as never, 1001, "going away");
     releaseRead("vk-1");
     await opening;
 
@@ -706,14 +715,13 @@ describe("getSpeechRelayWebsocketHandlers", () => {
 
   test("daemon close is forwarded to tunnel", async () => {
     FakeUpstreamWebSocket.instances = [];
-    const handlers = getSpeechRelayWebsocketHandlers();
     const ws = new FakeDownstreamSocket(makeSocketData());
 
-    await handlers.open(ws as never);
+    await openSpeechRelayWebsocket(ws as never);
     const upstream = FakeUpstreamWebSocket.instances[0]!;
     upstream.emitOpen();
 
-    handlers.close(ws as never, 1000, "client done");
+    closeSpeechRelayWebsocket(ws as never, 1000, "client done");
     expect(upstream.closeCalled).toEqual({ code: 1000, reason: "client done" });
   });
 });

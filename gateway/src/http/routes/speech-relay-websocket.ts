@@ -20,14 +20,20 @@
  *   HTTP rejection, so the daemon's dial-failure probe works end-to-end
  */
 
+import { Server, ServerWebSocket } from "bun";
+import { z } from "zod";
+
 import type { OutgoingHttpHeaders } from "node:http";
 
 import { tunnelHostForCloudHost } from "@mycadet/service-contracts/ingress";
 
 import { resolveScopeProfile } from "../../auth/scopes.js";
 import { validateEdgeToken } from "../../auth/token-exchange.js";
-import type { GatewayConfig } from "../../config.js";
-import type { CredentialCache } from "../../credential-cache.js";
+import { getConfig, type GatewayConfig } from "../../config.js";
+import {
+  getCredentials,
+  type CredentialCache,
+} from "../../credential-cache.js";
 import { credentialKey } from "../../credential-key.js";
 import { getLogger } from "../../logger.js";
 import { getCloudBaseUrl } from "../../cloud-url.js";
@@ -129,26 +135,35 @@ export interface SpeechRelayDeps {
   fetchImpl?: typeof fetch;
 }
 
-export type SpeechRelaySocketData = {
-  wsType: "speech-relay";
-  operation: SpeechRelayOperation;
-  /** wss URL of the tunnel speech endpoint, params already attached. */
-  upstreamWsUrl: string;
-  /** https twin of upstreamWsUrl, for failure probes. */
-  upstreamHttpUrl: string;
-  deps: SpeechRelayDeps;
-  upstream?: WebSocket;
-  upstreamOpened?: boolean;
-  /**
-   * Set by the close handler; open() re-checks it after its async
-   * credential read so a daemon that hung up mid-read doesn't leave a
-   * dialed tunnel session with no close left to forward.
-   */
-  downstreamClosed?: boolean;
-  pendingMessages?: (string | ArrayBuffer | Uint8Array)[];
-  /** Total bytes held in pendingMessages, checked against MAX_PENDING_BYTES. */
-  pendingBytes?: number;
-};
+export const speechRelaySocketDataSchema = z.object({
+  wsType: z.literal("speech-relay"),
+  operation: z.enum(["stt", "tts"]),
+  upstreamWsUrl: z.string(),
+  upstreamHttpUrl: z.string(),
+  deps: z.custom<SpeechRelayDeps>(() => true),
+  upstream: z.custom<WebSocket>(() => true).optional(),
+  upstreamOpened: z.boolean().optional(),
+  downstreamClosed: z.boolean().optional(),
+  pendingMessages: z
+    .array(
+      z.union([
+        z.string(),
+        z.instanceof(ArrayBuffer),
+        z.custom<Uint8Array>((v) => v instanceof Uint8Array),
+      ]),
+    )
+    .optional(),
+  pendingBytes: z.number().optional(),
+});
+
+export type SpeechRelaySocketData = z.infer<typeof speechRelaySocketDataSchema>;
+
+/** Discriminate an untyped socket as a speech relay socket. */
+export function isSpeechRelaySocketData(
+  ws: ServerWebSocket<unknown>,
+): ws is ServerWebSocket<SpeechRelaySocketData> {
+  return speechRelaySocketDataSchema.safeParse(ws.data).success;
+}
 
 function jsonError(status: number, code: string, detail: string): Response {
   return new Response(JSON.stringify({ code, detail }), {
@@ -252,123 +267,145 @@ async function probeTunnel(
 }
 
 /**
- * Create the upgrade handler for one speech-relay path. Async: the
+ * The upgrade handler shared by the three speech-relay paths. Async: the
  * non-upgrade probe branch awaits tunnel.
  */
-export function createSpeechRelayUpgradeHandler(
-  config: GatewayConfig,
+async function handleSpeechRelayUpgrade(
+  req: Request,
+  server: Server<unknown>,
   operation: SpeechRelayOperation,
-  deps: SpeechRelayDeps,
   version: SpeechRelayVersion = "v1",
-) {
-  return async function handleUpgrade(
-    req: Request,
-    server: import("bun").Server<unknown>,
-  ): Promise<Response | undefined> {
-    if (req.method !== "GET") {
-      return jsonError(405, "method_not_allowed", "GET only");
-    }
+): Promise<Response | undefined> {
+  const config = getConfig();
+  const deps: SpeechRelayDeps = { credentials: getCredentials() };
 
-    // This is a daemon-loopback service path. Anything that arrived
-    // through tunnel's inbound tunnel (or the edge proxy) is categorically
-    // rejected — the relay must never be reachable from outside.
-    if (
-      req.headers.get(TUNNEL_FORWARDED_HEADER) !== null ||
-      requestHasTunnelBridgeAuth(req)
-    ) {
-      log.warn("Speech relay: rejected tunnel-forwarded request");
-      return jsonError(403, "forbidden", "not reachable via ingress");
-    }
+  if (req.method !== "GET") {
+    return jsonError(405, "method_not_allowed", "GET only");
+  }
 
-    const url = new URL(req.url);
-    const params = url.searchParams;
-    const rawToken = params.get("key");
-    if (!rawToken) {
-      return jsonError(401, "invalid_token", "missing service token");
-    }
-    const result = validateEdgeToken(rawToken);
-    if (
-      !result.ok ||
-      result.claims.sub !== DAEMON_SERVICE_SUB ||
-      !resolveScopeProfile(result.claims.scope_profile).has("speech.relay")
-    ) {
-      log.warn(
-        {
-          reason: !result.ok
-            ? result.reason
-            : result.claims.sub !== DAEMON_SERVICE_SUB
-              ? "wrong_sub"
-              : "missing_speech_scope",
-        },
-        "Speech relay: authentication failed",
-      );
-      return jsonError(401, "invalid_token", "service token rejected");
-    }
+  // This is a daemon-loopback service path. Anything that arrived
+  // through tunnel's inbound tunnel (or the edge proxy) is categorically
+  // rejected — the relay must never be reachable from outside.
+  if (
+    req.headers.get(TUNNEL_FORWARDED_HEADER) !== null ||
+    requestHasTunnelBridgeAuth(req)
+  ) {
+    log.warn("Speech relay: rejected tunnel-forwarded request");
+    return jsonError(403, "forbidden", "not reachable via ingress");
+  }
 
-    // ?key= is the daemon→gateway auth carrier, not a tunnel param.
-    params.delete("key");
-    const allowed = allowedParams(operation, version);
-    for (const param of params.keys()) {
-      if (!allowed.has(param)) {
-        return jsonError(
-          400,
-          "invalid_request",
-          `unsupported query parameter: ${param}`,
-        );
-      }
-    }
-    const { wsUrl, httpUrl } = tunnelSpeechUrls(
-      await resolveTunnelBaseUrl(config),
-      operation,
-      params,
-      version,
+  const url = new URL(req.url);
+  const params = url.searchParams;
+  const rawToken = params.get("key");
+  if (!rawToken) {
+    return jsonError(401, "invalid_token", "missing service token");
+  }
+  const result = validateEdgeToken(rawToken);
+  if (
+    !result.ok ||
+    result.claims.sub !== DAEMON_SERVICE_SUB ||
+    !resolveScopeProfile(result.claims.scope_profile).has("speech.relay")
+  ) {
+    log.warn(
+      {
+        reason: !result.ok
+          ? result.reason
+          : result.claims.sub !== DAEMON_SERVICE_SUB
+            ? "wrong_sub"
+            : "missing_speech_scope",
+      },
+      "Speech relay: authentication failed",
     );
+    return jsonError(401, "invalid_token", "service token rejected");
+  }
 
-    // Non-upgrade request: this is the daemon's dial-failure probe.
-    // Replay the gate and hand back tunnel's own rejection.
-    if (!isWebsocketUpgradeRequest(req)) {
-      const apiKey = await readAssistantApiKey(deps);
-      if (!apiKey) {
-        return jsonError(
-          401,
-          "missing_platform_connection",
-          "no Cadet assistant API key is stored — connect the cloud account",
-        );
-      }
-      const rejection = await probeTunnel(
-        httpUrl,
-        apiKey,
-        deps.fetchImpl ?? fetch,
-      );
-      if (rejection) {
-        return jsonError(rejection.status, rejection.code, rejection.detail);
-      }
+  // ?key= is the daemon→gateway auth carrier, not a tunnel param.
+  params.delete("key");
+  const allowed = allowedParams(operation, version);
+  for (const param of params.keys()) {
+    if (!allowed.has(param)) {
       return jsonError(
-        426,
-        "upgrade_required",
-        "the gate passed; connect with a WebSocket upgrade",
+        400,
+        "invalid_request",
+        `unsupported query parameter: ${param}`,
       );
     }
+  }
+  const { wsUrl, httpUrl } = tunnelSpeechUrls(
+    await resolveTunnelBaseUrl(config),
+    operation,
+    params,
+    version,
+  );
 
-    const upgraded = server.upgrade(req, {
-      data: {
-        wsType: "speech-relay",
-        operation,
-        upstreamWsUrl: wsUrl,
-        upstreamHttpUrl: httpUrl,
-        deps,
-      } satisfies SpeechRelaySocketData,
-    });
-    if (!upgraded) {
-      return jsonError(500, "upgrade_failed", "WebSocket upgrade failed");
+  // Non-upgrade request: this is the daemon's dial-failure probe.
+  // Replay the gate and hand back tunnel's own rejection.
+  if (!isWebsocketUpgradeRequest(req)) {
+    const apiKey = await readAssistantApiKey(deps);
+    if (!apiKey) {
+      return jsonError(
+        401,
+        "missing_platform_connection",
+        "no Cadet assistant API key is stored — connect the cloud account",
+      );
     }
-    return undefined;
-  };
+    const rejection = await probeTunnel(
+      httpUrl,
+      apiKey,
+      deps.fetchImpl ?? fetch,
+    );
+    if (rejection) {
+      return jsonError(rejection.status, rejection.code, rejection.detail);
+    }
+    return jsonError(
+      426,
+      "upgrade_required",
+      "the gate passed; connect with a WebSocket upgrade",
+    );
+  }
+
+  const upgraded = server.upgrade(req, {
+    data: {
+      wsType: "speech-relay",
+      operation,
+      upstreamWsUrl: wsUrl,
+      upstreamHttpUrl: httpUrl,
+      deps,
+    } satisfies SpeechRelaySocketData,
+  });
+  if (!upgraded) {
+    return jsonError(500, "upgrade_failed", "WebSocket upgrade failed");
+  }
+  return undefined;
+}
+
+export function handleSpeechRelaySttWs(
+  req: Request,
+  server: Server<unknown>,
+): Promise<Response | undefined> {
+  return handleSpeechRelayUpgrade(req, server, "stt");
+}
+
+// Managed STT v2 (Flux). Separate handler rather than a param on v1: the
+// contract version is the endpoint, and v2 accepts query params v1 must
+// keep rejecting.
+export function handleSpeechRelaySttV2Ws(
+  req: Request,
+  server: Server<unknown>,
+): Promise<Response | undefined> {
+  return handleSpeechRelayUpgrade(req, server, "stt", "v2");
+}
+
+export function handleSpeechRelayTtsWs(
+  req: Request,
+  server: Server<unknown>,
+): Promise<Response | undefined> {
+  return handleSpeechRelayUpgrade(req, server, "tts");
 }
 
 /** Send a tunnel_error control frame downstream (best-effort). */
 function sendRelayError(
-  ws: import("bun").ServerWebSocket<SpeechRelaySocketData>,
+  ws: ServerWebSocket<SpeechRelaySocketData>,
   code: string,
   detail: string,
 ): void {
@@ -385,158 +422,161 @@ function sendRelayError(
  * `tunnel_error` frame (probing tunnel for the real rejection) so the daemon
  * adapter's existing error mapping applies unchanged.
  */
-export function getSpeechRelayWebsocketHandlers() {
-  return {
-    async open(ws: import("bun").ServerWebSocket<SpeechRelaySocketData>) {
-      const { deps, upstreamWsUrl, upstreamHttpUrl, operation } = ws.data;
-      ws.data.pendingMessages = [];
-      ws.data.pendingBytes = 0;
-      ws.data.upstreamOpened = false;
+export async function openSpeechRelayWebsocket(
+  ws: ServerWebSocket<SpeechRelaySocketData>,
+) {
+  const { deps, upstreamWsUrl, upstreamHttpUrl, operation } = ws.data;
+  ws.data.pendingMessages = [];
+  ws.data.pendingBytes = 0;
+  ws.data.upstreamOpened = false;
 
-      const apiKey = await readAssistantApiKey(deps);
-      if (ws.data.downstreamClosed) {
-        // The daemon hung up while the credential read was pending; there
-        // is no close left to forward, so dialing now would leak a tunnel
-        // session until its timeout.
-        log.info({ operation }, "Speech relay: daemon closed before dial");
-        return;
-      }
-      if (!apiKey) {
-        log.warn({ operation }, "Speech relay: no assistant API key stored");
+  const apiKey = await readAssistantApiKey(deps);
+  if (ws.data.downstreamClosed) {
+    // The daemon hung up while the credential read was pending; there
+    // is no close left to forward, so dialing now would leak a tunnel
+    // session until its timeout.
+    log.info({ operation }, "Speech relay: daemon closed before dial");
+    return;
+  }
+  if (!apiKey) {
+    log.warn({ operation }, "Speech relay: no assistant API key stored");
+    sendRelayError(
+      ws,
+      "missing_platform_connection",
+      "no Cadet assistant API key is stored — connect the cloud account",
+    );
+    ws.close(1011, "missing_platform_connection");
+    return;
+  }
+
+  const WsCtor = (deps.webSocketConstructor ??
+    WebSocket) as WebSocketConstructorWithHeaders;
+  const upstream = new WsCtor(upstreamWsUrl, {
+    headers: { Authorization: `Api-Key ${apiKey}` },
+  });
+  // TTS audio arrives as binary frames; without this they surface as
+  // Blobs and the downstream forward would crash.
+  try {
+    upstream.binaryType = "arraybuffer";
+  } catch {
+    // Test fakes may not implement the setter.
+  }
+  ws.data.upstream = upstream;
+
+  // A rejected handshake can emit error and close (in either order,
+  // sometimes both) before the async rejection probe resolves —
+  // forwarding that raw close would beat the synthesized tunnel_error
+  // frame to the daemon. Route every pre-open failure through one
+  // guarded path instead.
+  let dialFailureHandled = false;
+  const handleDialFailure = () => {
+    if (dialFailureHandled) {
+      return;
+    }
+    dialFailureHandled = true;
+    void probeTunnel(upstreamHttpUrl, apiKey, deps.fetchImpl ?? fetch).then(
+      (rejection) => {
+        log.error(
+          { operation, code: rejection?.code },
+          "Speech relay upstream dial failed",
+        );
         sendRelayError(
           ws,
-          "missing_platform_connection",
-          "no Cadet assistant API key is stored — connect the cloud account",
+          rejection?.code ?? "provider_unreachable",
+          rejection?.detail ?? "could not reach the speech relay",
         );
-        ws.close(1011, "missing_platform_connection");
-        return;
-      }
-
-      const WsCtor = (deps.webSocketConstructor ??
-        WebSocket) as WebSocketConstructorWithHeaders;
-      const upstream = new WsCtor(upstreamWsUrl, {
-        headers: { Authorization: `Api-Key ${apiKey}` },
-      });
-      // TTS audio arrives as binary frames; without this they surface as
-      // Blobs and the downstream forward would crash.
-      try {
-        upstream.binaryType = "arraybuffer";
-      } catch {
-        // Test fakes may not implement the setter.
-      }
-      ws.data.upstream = upstream;
-
-      // A rejected handshake can emit error and close (in either order,
-      // sometimes both) before the async rejection probe resolves —
-      // forwarding that raw close would beat the synthesized tunnel_error
-      // frame to the daemon. Route every pre-open failure through one
-      // guarded path instead.
-      let dialFailureHandled = false;
-      const handleDialFailure = () => {
-        if (dialFailureHandled) {
-          return;
-        }
-        dialFailureHandled = true;
-        void probeTunnel(upstreamHttpUrl, apiKey, deps.fetchImpl ?? fetch).then(
-          (rejection) => {
-            log.error(
-              { operation, code: rejection?.code },
-              "Speech relay upstream dial failed",
-            );
-            sendRelayError(
-              ws,
-              rejection?.code ?? "provider_unreachable",
-              rejection?.detail ?? "could not reach the speech relay",
-            );
-            ws.close(1011, rejection?.code ?? "upstream_error");
-          },
-        );
-      };
-
-      upstream.addEventListener("open", () => {
-        log.info({ operation }, "Speech relay upstream connected to tunnel");
-        ws.data.upstreamOpened = true;
-        const pending = ws.data.pendingMessages;
-        if (pending) {
-          for (const msg of pending) {
-            upstream.send(msg);
-          }
-          ws.data.pendingMessages = undefined;
-        }
-      });
-
-      upstream.addEventListener("message", (event) => {
-        const data =
-          typeof event.data === "string"
-            ? event.data
-            : new Uint8Array(event.data as ArrayBuffer);
-        ws.send(data);
-      });
-
-      upstream.addEventListener("close", (event) => {
-        if (!ws.data.upstreamOpened) {
-          handleDialFailure();
-          return;
-        }
-        log.info(
-          { code: event.code, operation },
-          "Speech relay upstream closed",
-        );
-        ws.close(event.code, event.reason);
-      });
-
-      upstream.addEventListener("error", () => {
-        if (!ws.data.upstreamOpened) {
-          handleDialFailure();
-          return;
-        }
-        // Mid-session transport failure; tunnel already sent its own
-        // tunnel_error frame if it had one.
-        log.error({ operation }, "Speech relay upstream error");
-        ws.close(1011, "upstream_error");
-      });
-    },
-
-    message(
-      ws: import("bun").ServerWebSocket<SpeechRelaySocketData>,
-      message: string | ArrayBuffer | Uint8Array,
-    ) {
-      const upstream = ws.data.upstream;
-      if (upstream && upstream.readyState === WebSocket.OPEN) {
-        upstream.send(message);
-      } else if (ws.data.pendingMessages) {
-        const size =
-          typeof message === "string"
-            ? Buffer.byteLength(message)
-            : message.byteLength;
-        if ((ws.data.pendingBytes ?? 0) + size > MAX_PENDING_BYTES) {
-          log.warn(
-            "Speech relay pending message buffer overflow — closing connection",
-          );
-          ws.close(1008, "Buffer overflow");
-          return;
-        }
-        ws.data.pendingBytes = (ws.data.pendingBytes ?? 0) + size;
-        ws.data.pendingMessages.push(message);
-      }
-    },
-
-    close(
-      ws: import("bun").ServerWebSocket<SpeechRelaySocketData>,
-      code: number,
-      reason: string,
-    ) {
-      ws.data.downstreamClosed = true;
-      const { upstream, operation } = ws.data;
-      log.info({ code, reason, operation }, "Speech relay downstream closed");
-      ws.data.pendingMessages = undefined;
-      if (
-        upstream &&
-        (upstream.readyState === WebSocket.OPEN ||
-          upstream.readyState === WebSocket.CONNECTING)
-      ) {
-        upstream.close(code, reason);
-      }
-    },
+        ws.close(1011, rejection?.code ?? "upstream_error");
+      },
+    );
   };
+
+  upstream.addEventListener("open", () => {
+    log.info({ operation }, "Speech relay upstream connected to tunnel");
+    ws.data.upstreamOpened = true;
+    const pending = ws.data.pendingMessages;
+    if (pending) {
+      for (const msg of pending) {
+        upstream.send(msg);
+      }
+      ws.data.pendingMessages = undefined;
+    }
+  });
+
+  upstream.addEventListener("message", (event) => {
+    const data =
+      typeof event.data === "string"
+        ? event.data
+        : new Uint8Array(event.data as ArrayBuffer);
+    ws.send(data);
+  });
+
+  upstream.addEventListener("close", (event) => {
+    if (!ws.data.upstreamOpened) {
+      handleDialFailure();
+      return;
+    }
+    log.info({ code: event.code, operation }, "Speech relay upstream closed");
+    ws.close(event.code, event.reason);
+  });
+
+  upstream.addEventListener("error", () => {
+    if (!ws.data.upstreamOpened) {
+      handleDialFailure();
+      return;
+    }
+    // Mid-session transport failure; tunnel already sent its own
+    // tunnel_error frame if it had one.
+    log.error({ operation }, "Speech relay upstream error");
+    ws.close(1011, "upstream_error");
+  });
+}
+
+/**
+ * The speech relay message arm: forward downstream frames upstream,
+ * byte-capped buffering while the tunnel dial connects.
+ */
+export function messageSpeechRelayWebsocket(
+  ws: ServerWebSocket<SpeechRelaySocketData>,
+  message: string | ArrayBuffer | Uint8Array,
+) {
+  const upstream = ws.data.upstream;
+  if (upstream && upstream.readyState === WebSocket.OPEN) {
+    upstream.send(message);
+  } else if (ws.data.pendingMessages) {
+    const size =
+      typeof message === "string"
+        ? Buffer.byteLength(message)
+        : message.byteLength;
+    if ((ws.data.pendingBytes ?? 0) + size > MAX_PENDING_BYTES) {
+      log.warn(
+        "Speech relay pending message buffer overflow — closing connection",
+      );
+      ws.close(1008, "Buffer overflow");
+      return;
+    }
+    ws.data.pendingBytes = (ws.data.pendingBytes ?? 0) + size;
+    ws.data.pendingMessages.push(message);
+  }
+}
+
+/**
+ * The speech relay close arm: mark the downstream closed, drop the pending
+ * buffer, and close the upstream dial unless it already finished.
+ */
+export function closeSpeechRelayWebsocket(
+  ws: ServerWebSocket<SpeechRelaySocketData>,
+  code: number,
+  reason: string,
+) {
+  ws.data.downstreamClosed = true;
+  const { upstream, operation } = ws.data;
+  log.info({ code, reason, operation }, "Speech relay downstream closed");
+  ws.data.pendingMessages = undefined;
+  if (
+    upstream &&
+    (upstream.readyState === WebSocket.OPEN ||
+      upstream.readyState === WebSocket.CONNECTING)
+  ) {
+    upstream.close(code, reason);
+  }
 }

@@ -17,43 +17,58 @@ import {
   type CredentialChangeEvent,
 } from "./credential-watcher.js";
 import {
-  createTwilioMediaWebsocketHandler,
-  getMediaStreamWebsocketHandlers,
-  type MediaStreamSocketData,
+  closeTwilioMediaStream,
+  handleTwilioMediaWs,
+  isMediaStreamSocketData,
+  messageTwilioMediaStream,
+  openTwilioMediaWebsocket,
 } from "./http/routes/twilio-media-websocket.js";
 import {
-  createSttStreamWebsocketHandler,
-  getSttStreamWebsocketHandlers,
-  type SttStreamSocketData,
+  closeSttStreamWebsocket,
+  handleSttStreamWs,
+  isSttStreamSocketData,
+  messageSttStreamWebsocket,
+  openSttStreamWebsocket,
 } from "./http/routes/stt-stream-websocket.js";
 import {
-  createWatchStreamWebsocketHandler,
-  getWatchStreamWebsocketHandlers,
-  type WatchStreamSocketData,
+  closeWatchStreamWebsocket,
+  handleWatchStreamWs,
+  isWatchStreamSocketData,
+  messageWatchStreamWebsocket,
+  openWatchStreamWebsocket,
 } from "./http/routes/watch-stream-websocket.js";
 import {
-  createDesktopStreamWebsocketHandler,
-  getDesktopStreamWebsocketHandlers,
-  type DesktopStreamSocketData,
+  closeDesktopStreamWebsocket,
+  handleDesktopStreamWs,
+  isDesktopStreamSocketData,
+  messageDesktopStreamWebsocket,
+  openDesktopStreamWebsocket,
 } from "./http/routes/desktop-stream-websocket.js";
 import {
-  createSpeechRelayUpgradeHandler,
-  getSpeechRelayWebsocketHandlers,
-  type SpeechRelaySocketData,
+  closeSpeechRelayWebsocket,
+  handleSpeechRelaySttWs,
+  handleSpeechRelaySttV2Ws,
+  handleSpeechRelayTtsWs,
+  isSpeechRelaySocketData,
+  messageSpeechRelayWebsocket,
+  openSpeechRelayWebsocket,
 } from "./http/routes/speech-relay-websocket.js";
 import {
-  createLiveVoiceWebsocketHandler,
-  getLiveVoiceWebsocketHandlers,
-  type LiveVoiceSocketData,
+  closeLiveVoiceWebsocket,
+  handleLiveVoiceWs,
+  isLiveVoiceSocketData,
+  messageLiveVoiceWebsocket,
+  openLiveVoiceWebsocket,
 } from "./http/routes/live-voice-websocket.js";
 import { initTrustRuleCache } from "./risk/trust-rule-cache.js";
 import { initAdmissionPolicyCache } from "./risk/admission-policy-cache.js";
 import {
-  createPluginWebhookWebsocketHandler,
-  getPluginWebhookWebsocketHandlers,
+  closePluginWebhookWebsocket,
+  handlePluginWebhookWs,
   isPluginWebhookSocketData,
+  messagePluginWebhookWebsocket,
+  openPluginWebhookWebsocket,
 } from "./http/routes/plugin-webhook-websocket.js";
-import { resolveCachedPluginIngress } from "./channels/plugin-ingress-approvals.js";
 import {
   reconcilePluginWebhookRoutes,
   watchPluginIngressForWebhookRoutes,
@@ -127,15 +142,21 @@ import { admissionPolicyRoutes } from "./ipc/admission-policy-handlers.js";
 import { channelPermissionRoutes } from "./ipc/channel-permission-handlers.js";
 import { trustVerdictRoutes } from "./ipc/trust-verdict-handlers.js";
 import { guardianDeliveryRoutes } from "./ipc/guardian-delivery-handlers.js";
-import { createLogTailRoutes } from "./ipc/log-tail-handlers.js";
-import { createChannelSocketHealthRoutes } from "./ipc/channel-socket-health-handlers.js";
-import { createCredentialRequestIpcRoutes } from "./ipc/credential-request-handlers.js";
+import { logTailRoutes } from "./ipc/log-tail-handlers.js";
+import {
+  channelSocketHealthRoutes,
+  setChannelSocketHealthSources,
+} from "./ipc/channel-socket-health-handlers.js";
+import {
+  credentialRequestRoutes,
+  setEnsurePublicIngressLiveForCredentialLinks,
+} from "./ipc/credential-request-handlers.js";
 import { slackThreadRoutes } from "./ipc/slack-thread-handlers.js";
 import { thresholdRoutes } from "./ipc/threshold-handlers.js";
 import { trustRulesRoutes } from "./ipc/trust-rules-handlers.js";
 import { riskClassificationRoutes } from "./ipc/risk-classification-handlers.js";
-import { createTunnelRoutes } from "./ipc/tunnel-handlers.js";
-import { createWebhookRouteRoutes } from "./ipc/webhook-route-handlers.js";
+import { tunnelRoutes } from "./ipc/tunnel-handlers.js";
+import { webhookRouteRoutes } from "./ipc/webhook-route-handlers.js";
 import { refreshRouteSchema } from "./ipc/route-schema-cache.js";
 import { initGatewayDb } from "./db/connection.js";
 import { cleanupExpiredInboundEvents } from "./db/inbound-dedup-store.js";
@@ -193,56 +214,6 @@ function detectCredentialChanges(
 
 // Shared rate limiter for auth failures and unauthenticated endpoints
 const authRateLimiter = getAuthRateLimiter();
-
-function isMediaStreamSocketData(data: unknown): data is MediaStreamSocketData {
-  return (
-    !!data &&
-    typeof data === "object" &&
-    (data as { wsType?: unknown }).wsType === "twilio-media-stream"
-  );
-}
-
-function isSttStreamSocketData(data: unknown): data is SttStreamSocketData {
-  return (
-    !!data &&
-    typeof data === "object" &&
-    (data as { wsType?: unknown }).wsType === "stt-stream"
-  );
-}
-
-function isWatchStreamSocketData(data: unknown): data is WatchStreamSocketData {
-  return (
-    !!data &&
-    typeof data === "object" &&
-    (data as { wsType?: unknown }).wsType === "watch-stream"
-  );
-}
-
-function isDesktopStreamSocketData(
-  data: unknown,
-): data is DesktopStreamSocketData {
-  return (
-    !!data &&
-    typeof data === "object" &&
-    (data as { wsType?: unknown }).wsType === "desktop-stream"
-  );
-}
-
-function isLiveVoiceSocketData(data: unknown): data is LiveVoiceSocketData {
-  return (
-    !!data &&
-    typeof data === "object" &&
-    (data as { wsType?: unknown }).wsType === "live-voice"
-  );
-}
-
-function isSpeechRelaySocketData(data: unknown): data is SpeechRelaySocketData {
-  return (
-    !!data &&
-    typeof data === "object" &&
-    (data as { wsType?: unknown }).wsType === "speech-relay"
-  );
-}
 
 /** Log-safe socket-type discriminant for unknown-socket diagnostics. */
 function extractWsType(data: unknown): unknown {
@@ -459,17 +430,6 @@ async function main() {
 
   const isTelegramConfigured = () => telegramReady;
 
-  const handleTwilioMediaWs = createTwilioMediaWebsocketHandler(config);
-  const handlePluginWebhookWs = createPluginWebhookWebsocketHandler({
-    config,
-    resolve: resolveCachedPluginIngress,
-    credentials: credentialCache,
-  });
-  const handleSttStreamWs = createSttStreamWebsocketHandler(config);
-  const handleWatchStreamWs = createWatchStreamWebsocketHandler(config);
-  const handleDesktopStreamWs = createDesktopStreamWebsocketHandler(config);
-  const handleLiveVoiceWs = createLiveVoiceWebsocketHandler(config);
-
   // Assistant-scoped mirrors of the browser stream sockets: the scoped data
   // plane emits /v1/assistants/<id>/<route> — the same verbatim shape every
   // scoped forwarder carries — so the upgrade pre-router admits the scoped
@@ -500,32 +460,6 @@ async function main() {
       upgrade: handleDesktopStreamWs,
     },
   ];
-  const handleSpeechRelaySttWs = createSpeechRelayUpgradeHandler(
-    config,
-    "stt",
-    { credentials: credentialCache },
-  );
-  // Managed STT v2 (Flux). Separate handler rather than a param on v1: the
-  // contract version is the endpoint, and v2 accepts query params v1 must
-  // keep rejecting.
-  const handleSpeechRelaySttV2Ws = createSpeechRelayUpgradeHandler(
-    config,
-    "stt",
-    { credentials: credentialCache },
-    "v2",
-  );
-  const handleSpeechRelayTtsWs = createSpeechRelayUpgradeHandler(
-    config,
-    "tts",
-    { credentials: credentialCache },
-  );
-  const twilioMediaStreamWebsocketHandlers = getMediaStreamWebsocketHandlers();
-  const pluginWebhookWebsocketHandlers = getPluginWebhookWebsocketHandlers();
-  const sttStreamWebsocketHandlers = getSttStreamWebsocketHandlers();
-  const watchStreamWebsocketHandlers = getWatchStreamWebsocketHandlers();
-  const desktopStreamWebsocketHandlers = getDesktopStreamWebsocketHandlers();
-  const liveVoiceWebsocketHandlers = getLiveVoiceWebsocketHandlers();
-  const speechRelayWebsocketHandlers = getSpeechRelayWebsocketHandlers();
   // ── Route table ──
   // One routes array, owned by the routes barrel: every HTTP route is
   // declared in a per-domain ROUTES array and concatenated there, in
@@ -554,95 +488,100 @@ async function main() {
     // to accommodate large app package uploads.
     maxRequestBodySize: 512 * 1024 * 1024,
     websocket: {
+      // Every stream's socket data carries a `wsType` discriminant, and
+      // each websocket module owns a zod-parsed `isXSocketData` predicate —
+      // the narrowest type discrimination, no casts. A WS route table like
+      // the HTTP one below falls out of this shape when a seventh stream
+      // makes the if-chain worth a table.
       open(ws) {
-        if (isMediaStreamSocketData(ws.data)) {
-          twilioMediaStreamWebsocketHandlers.open(ws as never);
+        if (isMediaStreamSocketData(ws)) {
+          openTwilioMediaWebsocket(ws);
           return;
         }
-        if (isPluginWebhookSocketData(ws.data)) {
-          pluginWebhookWebsocketHandlers.open(ws as never);
+        if (isPluginWebhookSocketData(ws)) {
+          openPluginWebhookWebsocket(ws);
           return;
         }
-        if (isSttStreamSocketData(ws.data)) {
-          sttStreamWebsocketHandlers.open(ws as never);
+        if (isSttStreamSocketData(ws)) {
+          openSttStreamWebsocket(ws);
           return;
         }
-        if (isWatchStreamSocketData(ws.data)) {
-          watchStreamWebsocketHandlers.open(ws as never);
+        if (isWatchStreamSocketData(ws)) {
+          openWatchStreamWebsocket(ws);
           return;
         }
-        if (isDesktopStreamSocketData(ws.data)) {
-          desktopStreamWebsocketHandlers.open(ws as never);
+        if (isDesktopStreamSocketData(ws)) {
+          openDesktopStreamWebsocket(ws);
           return;
         }
-        if (isLiveVoiceSocketData(ws.data)) {
-          liveVoiceWebsocketHandlers.open(ws as never);
+        if (isLiveVoiceSocketData(ws)) {
+          openLiveVoiceWebsocket(ws);
           return;
         }
-        if (isSpeechRelaySocketData(ws.data)) {
-          void speechRelayWebsocketHandlers.open(ws as never);
+        if (isSpeechRelaySocketData(ws)) {
+          void openSpeechRelayWebsocket(ws);
           return;
         }
         closeUnknownSocket(ws, "open");
       },
       message(ws, message) {
-        if (isMediaStreamSocketData(ws.data)) {
-          twilioMediaStreamWebsocketHandlers.message(ws as never, message);
+        if (isMediaStreamSocketData(ws)) {
+          messageTwilioMediaStream(ws, message);
           return;
         }
-        if (isPluginWebhookSocketData(ws.data)) {
-          pluginWebhookWebsocketHandlers.message(ws as never, message);
+        if (isPluginWebhookSocketData(ws)) {
+          messagePluginWebhookWebsocket(ws, message);
           return;
         }
-        if (isSttStreamSocketData(ws.data)) {
-          sttStreamWebsocketHandlers.message(ws as never, message);
+        if (isSttStreamSocketData(ws)) {
+          messageSttStreamWebsocket(ws, message);
           return;
         }
-        if (isWatchStreamSocketData(ws.data)) {
-          watchStreamWebsocketHandlers.message(ws as never, message);
+        if (isWatchStreamSocketData(ws)) {
+          messageWatchStreamWebsocket(ws, message);
           return;
         }
-        if (isDesktopStreamSocketData(ws.data)) {
-          desktopStreamWebsocketHandlers.message(ws as never, message);
+        if (isDesktopStreamSocketData(ws)) {
+          messageDesktopStreamWebsocket(ws, message);
           return;
         }
-        if (isLiveVoiceSocketData(ws.data)) {
-          liveVoiceWebsocketHandlers.message(ws as never, message);
+        if (isLiveVoiceSocketData(ws)) {
+          messageLiveVoiceWebsocket(ws, message);
           return;
         }
-        if (isSpeechRelaySocketData(ws.data)) {
-          speechRelayWebsocketHandlers.message(ws as never, message);
+        if (isSpeechRelaySocketData(ws)) {
+          messageSpeechRelayWebsocket(ws, message);
           return;
         }
         closeUnknownSocket(ws, "message");
       },
       close(ws, code, reason) {
-        if (isMediaStreamSocketData(ws.data)) {
-          twilioMediaStreamWebsocketHandlers.close(ws as never, code, reason);
+        if (isMediaStreamSocketData(ws)) {
+          closeTwilioMediaStream(ws, code, reason);
           return;
         }
-        if (isPluginWebhookSocketData(ws.data)) {
-          pluginWebhookWebsocketHandlers.close(ws as never, code, reason);
+        if (isPluginWebhookSocketData(ws)) {
+          closePluginWebhookWebsocket(ws, code, reason);
           return;
         }
-        if (isSttStreamSocketData(ws.data)) {
-          sttStreamWebsocketHandlers.close(ws as never, code, reason);
+        if (isSttStreamSocketData(ws)) {
+          closeSttStreamWebsocket(ws, code, reason);
           return;
         }
-        if (isWatchStreamSocketData(ws.data)) {
-          watchStreamWebsocketHandlers.close(ws as never, code, reason);
+        if (isWatchStreamSocketData(ws)) {
+          closeWatchStreamWebsocket(ws, code, reason);
           return;
         }
-        if (isDesktopStreamSocketData(ws.data)) {
-          desktopStreamWebsocketHandlers.close(ws as never, code, reason);
+        if (isDesktopStreamSocketData(ws)) {
+          closeDesktopStreamWebsocket(ws, code, reason);
           return;
         }
-        if (isLiveVoiceSocketData(ws.data)) {
-          liveVoiceWebsocketHandlers.close(ws as never, code, reason);
+        if (isLiveVoiceSocketData(ws)) {
+          closeLiveVoiceWebsocket(ws, code, reason);
           return;
         }
-        if (isSpeechRelaySocketData(ws.data)) {
-          speechRelayWebsocketHandlers.close(ws as never, code, reason);
+        if (isSpeechRelaySocketData(ws)) {
+          closeSpeechRelayWebsocket(ws, code, reason);
           return;
         }
         log.error(
@@ -1599,6 +1538,19 @@ async function main() {
 
   configFileWatcher.start();
 
+  // Wire the two stateless IPC route constants' live dependencies once: the
+  // channel clients and the ingress hook are entrypoint-owned (torn down and
+  // rebuilt as credentials and the tunnel come and go), and the routes read
+  // them at request time — the same call-time resolution `getConfig()` gives
+  // the config-shaped deps.
+  setChannelSocketHealthSources({
+    slack: () => slackSocketClient,
+    discord: () => discordGatewayClient,
+  });
+  setEnsurePublicIngressLiveForCredentialLinks(
+    ensurePublicIngressLiveForCredentialLink,
+  );
+
   // ── IPC server ──
   const ipcServer = new GatewayIpcServer([
     ...contactRoutes,
@@ -1612,19 +1564,12 @@ async function main() {
     ...trustVerdictRoutes,
     ...guardianDeliveryRoutes,
     ...riskClassificationRoutes,
-    ...createLogTailRoutes(config),
-    ...createChannelSocketHealthRoutes({
-      slack: () => slackSocketClient,
-      discord: () => discordGatewayClient,
-    }),
+    ...logTailRoutes,
+    ...channelSocketHealthRoutes,
     ...trustRulesRoutes,
-    ...createTunnelRoutes(tunnelClient),
-    ...createWebhookRouteRoutes(),
-    ...createCredentialRequestIpcRoutes(
-      config,
-      configFileCache,
-      ensurePublicIngressLiveForCredentialLink,
-    ),
+    ...tunnelRoutes,
+    ...webhookRouteRoutes,
+    ...credentialRequestRoutes,
   ]);
   ipcServer.start();
 

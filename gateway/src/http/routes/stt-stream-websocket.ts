@@ -20,41 +20,44 @@
  * upstream.
  */
 
+import { Server, ServerWebSocket } from "bun";
+import { z } from "zod";
+
 import {
   authorizeRuntimeAudioStream,
   createRuntimeAudioStreamHandlers,
-  type RuntimeAudioStreamState,
+  runtimeAudioStreamSocketState,
 } from "./runtime-audio-stream.js";
 import {
   acceptsTunnelAttestation,
   extractTunnelAttestedContext,
 } from "./guardian-pin.js";
-import type { GatewayConfig } from "../../config.js";
+import { getConfig } from "../../config.js";
 import { getLogger } from "../../logger.js";
 import { requestHasTunnelBridgeAuth } from "../../tunnel/bridge-auth.js";
 
 const log = getLogger("stt-stream-ws");
 
-export type SttStreamSocketData = RuntimeAudioStreamState & {
-  wsType: "stt-stream";
-  /**
-   * Optional provider identifier for the STT streaming session (e.g.
-   * "deepgram", "google-gemini"). The runtime is config-authoritative —
-   * it always resolves the streaming transcriber from `services.stt.provider`
-   * regardless of this value. When supplied, it is forwarded as compatibility
-   * metadata and the runtime logs a mismatch warning if it disagrees with
-   * the configured provider.
-   */
-  provider?: string;
-  /** MIME type of the audio being streamed (e.g. "audio/webm;codecs=opus"). */
-  mimeType: string;
-  /** Sample rate in Hz, when applicable. */
-  sampleRate?: number;
-};
+export const sttStreamSocketDataSchema = z.object({
+  wsType: z.literal("stt-stream"),
+  ...runtimeAudioStreamSocketState,
+  provider: z.string().optional(),
+  mimeType: z.string(),
+  sampleRate: z.number().optional(),
+});
+
+export type SttStreamSocketData = z.infer<typeof sttStreamSocketDataSchema>;
+
+/** Discriminate an untyped socket as an STT stream socket. */
+export function isSttStreamSocketData(
+  ws: ServerWebSocket<unknown>,
+): ws is ServerWebSocket<SttStreamSocketData> {
+  return sttStreamSocketDataSchema.safeParse(ws.data).success;
+}
 
 /**
- * Create a WebSocket upgrade handler that proxies client STT audio frames
- * to the runtime's /v1/stt/stream endpoint.
+ * The `/v1/stt/stream` WebSocket upgrade handler: proxies client STT audio
+ * frames to the runtime's /v1/stt/stream endpoint.
  *
  * The gateway authenticates the downstream client using an edge JWT and
  * then opens an upstream connection to the runtime with a short-lived
@@ -62,102 +65,106 @@ export type SttStreamSocketData = RuntimeAudioStreamState & {
  * public internet while allowing authenticated clients to stream audio
  * for real-time transcription.
  */
-export function createSttStreamWebsocketHandler(config: GatewayConfig) {
-  return function handleUpgrade(
-    req: Request,
-    server: import("bun").Server<unknown>,
-  ): Response | undefined {
-    // Any valid actor, deliberately. Dictation is the user's own words going
-    // to a transcriber and back; it is not a guardian-only surface, and the
-    // watch stream's `guardian-pin` check is exactly what this route does not
-    // want.
-    //
-    // The tunnel path first, as live voice and watch take it. A direct
-    // request to a reachable gateway can spoof the X-Tunnel-* names but cannot
-    // know the bridge proof, and an attestation without the proof falls
-    // through to the token gate rather than being trusted.
-    let managedCaller = false;
-    if (acceptsTunnelAttestation(config) && config.runtimeProxyRequireAuth) {
-      const tunnelContext = extractTunnelAttestedContext(req);
-      if (tunnelContext) {
-        if (requestHasTunnelBridgeAuth(req)) {
-          log.info(
-            { userId: tunnelContext.userId, orgId: tunnelContext.orgId },
-            "STT stream WS: authenticated via tunnel-attested managed context",
-          );
-          managedCaller = true;
-        } else {
-          log.warn(
-            "STT stream WS: ignoring tunnel context without bridge proof",
-          );
-        }
+export function handleSttStreamWs(
+  req: Request,
+  server: Server<unknown>,
+): Response | undefined {
+  const config = getConfig();
+  // Any valid actor, deliberately. Dictation is the user's own words going
+  // to a transcriber and back; it is not a guardian-only surface, and the
+  // watch stream's `guardian-pin` check is exactly what this route does not
+  // want.
+  //
+  // The tunnel path first, as live voice and watch take it. A direct
+  // request to a reachable gateway can spoof the X-Tunnel-* names but cannot
+  // know the bridge proof, and an attestation without the proof falls
+  // through to the token gate rather than being trusted.
+  let managedCaller = false;
+  if (acceptsTunnelAttestation(config) && config.runtimeProxyRequireAuth) {
+    const tunnelContext = extractTunnelAttestedContext(req);
+    if (tunnelContext) {
+      if (requestHasTunnelBridgeAuth(req)) {
+        log.info(
+          { userId: tunnelContext.userId, orgId: tunnelContext.orgId },
+          "STT stream WS: authenticated via tunnel-attested managed context",
+        );
+        managedCaller = true;
+      } else {
+        log.warn("STT stream WS: ignoring tunnel context without bridge proof");
       }
     }
-    if (!managedCaller) {
-      const auth = authorizeRuntimeAudioStream(req, config, log);
-      if (!auth.ok) {
-        return auth.response;
-      }
+  }
+  if (!managedCaller) {
+    const auth = authorizeRuntimeAudioStream(req, config, log);
+    if (!auth.ok) {
+      return auth.response;
     }
+  }
 
-    // ── Query parameters ──
-    // mimeType is required; provider is optional compatibility metadata
-    // (the runtime resolves the transcriber from config, not from the query).
-    const url = new URL(req.url);
-    const provider = url.searchParams.get("provider") ?? undefined;
-    const mimeType = url.searchParams.get("mimeType");
+  // ── Query parameters ──
+  // mimeType is required; provider is optional compatibility metadata
+  // (the runtime resolves the transcriber from config, not from the query).
+  const url = new URL(req.url);
+  const provider = url.searchParams.get("provider") ?? undefined;
+  const mimeType = url.searchParams.get("mimeType");
 
-    if (!mimeType) {
-      return new Response("Missing required query parameter: mimeType", {
-        status: 400,
-      });
-    }
-
-    const sampleRateRaw = url.searchParams.get("sampleRate");
-    const sampleRate = sampleRateRaw ? parseInt(sampleRateRaw, 10) : undefined;
-
-    const upgraded = server.upgrade(req, {
-      data: {
-        wsType: "stt-stream",
-        config,
-        provider,
-        mimeType,
-        sampleRate,
-      } satisfies SttStreamSocketData,
+  if (!mimeType) {
+    return new Response("Missing required query parameter: mimeType", {
+      status: 400,
     });
+  }
 
-    if (!upgraded) {
-      return new Response("WebSocket upgrade failed", { status: 500 });
-    }
+  const sampleRateRaw = url.searchParams.get("sampleRate");
+  const sampleRate = sampleRateRaw ? parseInt(sampleRateRaw, 10) : undefined;
 
-    // Return undefined to indicate upgrade was handled
-    return undefined;
-  };
+  const upgraded = server.upgrade(req, {
+    data: {
+      wsType: "stt-stream",
+      provider,
+      mimeType,
+      sampleRate,
+    } satisfies SttStreamSocketData,
+  });
+
+  if (!upgraded) {
+    return new Response("WebSocket upgrade failed", { status: 500 });
+  }
+
+  // Return undefined to indicate upgrade was handled
+  return undefined;
 }
 
 /**
  * WebSocket handler config for Bun.serve() that proxies STT audio
  * frames to the runtime's /v1/stt/stream endpoint.
  */
-export function getSttStreamWebsocketHandlers() {
-  return createRuntimeAudioStreamHandlers<SttStreamSocketData>({
-    upstreamPath: "/v1/stt/stream",
-    log,
-    label: "STT stream",
-    upstreamParams: ({ provider, mimeType, sampleRate }) => {
-      const params: Record<string, string> = { mimeType };
-      if (provider) {
-        params.provider = provider;
-      }
-      if (sampleRate !== undefined) {
-        params.sampleRate = String(sampleRate);
-      }
-      return params;
-    },
-    logContext: ({ provider, mimeType, sampleRate }) => ({
-      provider,
-      mimeType,
-      sampleRate,
-    }),
-  });
-}
+const {
+  open: openSttStreamWebsocket,
+  message: messageSttStreamWebsocket,
+  close: closeSttStreamWebsocket,
+} = createRuntimeAudioStreamHandlers<SttStreamSocketData>({
+  upstreamPath: "/v1/stt/stream",
+  log,
+  label: "STT stream",
+  upstreamParams: ({ provider, mimeType, sampleRate }) => {
+    const params: Record<string, string> = { mimeType };
+    if (provider) {
+      params.provider = provider;
+    }
+    if (sampleRate !== undefined) {
+      params.sampleRate = String(sampleRate);
+    }
+    return params;
+  },
+  logContext: ({ provider, mimeType, sampleRate }) => ({
+    provider,
+    mimeType,
+    sampleRate,
+  }),
+});
+
+export {
+  openSttStreamWebsocket,
+  messageSttStreamWebsocket,
+  closeSttStreamWebsocket,
+};

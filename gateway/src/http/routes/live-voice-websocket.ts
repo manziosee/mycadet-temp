@@ -1,3 +1,4 @@
+import { Server, ServerWebSocket } from "bun";
 import {
   buildWsUpstreamUrl,
   forwardedIdentityHeaders,
@@ -7,7 +8,9 @@ import { validateEdgeToken } from "../../auth/token-exchange.js";
 import { admitActorToken } from "../../auth/actor-token-revocation.js";
 import { findCadetGuardian } from "../../auth/guardian-bootstrap.js";
 import { parseSub } from "../../auth/subject.js";
-import type { GatewayConfig } from "../../config.js";
+import { getConfig, type GatewayConfig } from "../../config.js";
+import { z } from "zod";
+
 import { getLogger } from "../../logger.js";
 import { requestHasTunnelBridgeAuth } from "../../tunnel/bridge-auth.js";
 import { getRemoteWebAccessCookie } from "../browser-auth-cookies.js";
@@ -17,6 +20,7 @@ import {
   requireBoundGuardian,
   requireManagedGuardian,
 } from "./guardian-pin.js";
+import { runtimeAudioStreamSocketState } from "./runtime-audio-stream.js";
 import { isWebsocketUpgradeRequest } from "../utils.js";
 
 const log = getLogger("live-voice-ws");
@@ -28,57 +32,51 @@ const MAX_PENDING_MESSAGES = 100;
 // `guardian-pin.js`, shared with the watch stream so the two guardian-only
 // surfaces cannot drift into two ideas of who owns them.
 
-export type LiveVoiceSocketData = {
-  wsType: "live-voice";
-  config: GatewayConfig;
-  /**
-   * The guardian this socket was admitted for, read from the gateway's own
-   * binding at admission.
-   *
-   * The daemon cannot work this out for itself. It is reached through a
-   * service token, so every socket looks the same to it, and any answer it
-   * resolved independently would be a second, later reading of a binding that
-   * can change in between. This is the one the admission decision was
-   * actually made against.
-   */
-  guardianPrincipalId?: string;
-  upstream?: WebSocket;
-  pendingMessages?: (string | ArrayBuffer | Uint8Array)[];
-};
+export const liveVoiceSocketDataSchema = z.object({
+  wsType: z.literal("live-voice"),
+  ...runtimeAudioStreamSocketState,
+  guardianPrincipalId: z.string().optional(),
+});
+
+export type LiveVoiceSocketData = z.infer<typeof liveVoiceSocketDataSchema>;
+
+/** Discriminate an untyped socket as a live voice socket. */
+export function isLiveVoiceSocketData(
+  ws: ServerWebSocket<unknown>,
+): ws is ServerWebSocket<LiveVoiceSocketData> {
+  return liveVoiceSocketDataSchema.safeParse(ws.data).success;
+}
 
 /**
- * Create a WebSocket upgrade handler that proxies live voice frames between
- * gateway clients and the runtime's /v1/live-voice endpoint.
+ * The `/v1/live-voice` WebSocket upgrade handler: proxies live voice frames
+ * between gateway clients and the runtime's /v1/live-voice endpoint.
  */
-export function createLiveVoiceWebsocketHandler(config: GatewayConfig) {
-  return async function handleUpgrade(
-    req: Request,
-    server: import("bun").Server<unknown>,
-  ): Promise<Response | undefined> {
-    if (!isWebsocketUpgradeRequest(req)) {
-      return new Response("Upgrade Required", { status: 426 });
-    }
+export async function handleLiveVoiceWs(
+  req: Request,
+  server: Server<unknown>,
+): Promise<Response | undefined> {
+  if (!isWebsocketUpgradeRequest(req)) {
+    return new Response("Upgrade Required", { status: 426 });
+  }
 
-    const url = new URL(req.url);
-    const admission = await checkLiveVoiceAuth(req, url, config);
-    if (admission.response) return admission.response;
+  const url = new URL(req.url);
+  const admission = await checkLiveVoiceAuth(req, url, getConfig());
+  if (admission.response) return admission.response;
 
-    const upgraded = server.upgrade(req, {
-      data: {
-        wsType: "live-voice",
-        config,
-        ...(admission.guardianPrincipalId
-          ? { guardianPrincipalId: admission.guardianPrincipalId }
-          : {}),
-      } satisfies LiveVoiceSocketData,
-    });
+  const upgraded = server.upgrade(req, {
+    data: {
+      wsType: "live-voice",
+      ...(admission.guardianPrincipalId
+        ? { guardianPrincipalId: admission.guardianPrincipalId }
+        : {}),
+    } satisfies LiveVoiceSocketData,
+  });
 
-    if (!upgraded) {
-      return new Response("WebSocket upgrade failed", { status: 500 });
-    }
+  if (!upgraded) {
+    return new Response("WebSocket upgrade failed", { status: 500 });
+  }
 
-    return undefined;
-  };
+  return undefined;
 }
 
 /**
@@ -212,110 +210,116 @@ async function checkLiveVoiceAuth(
  * WebSocket handler config for Bun.serve() that opaquely proxies live voice
  * protocol and audio frames to the runtime.
  */
-export function getLiveVoiceWebsocketHandlers() {
-  return {
-    open(ws: import("bun").ServerWebSocket<LiveVoiceSocketData>) {
-      const { config } = ws.data;
+export function openLiveVoiceWebsocket(
+  ws: ServerWebSocket<LiveVoiceSocketData>,
+) {
+  const config = getConfig();
 
-      ws.data.pendingMessages = [];
+  ws.data.pendingMessages = [];
 
-      const { url: upstreamUrl, logSafeUrl: logSafeUpstreamUrl } =
-        buildWsUpstreamUrl({
-          baseUrl: config.assistantRuntimeBaseUrl,
-          path: "/v1/live-voice",
-          // The guardian this socket was admitted for, so the daemon stamps
-          // its turns with the identity the admission decision was made
-          // against rather than resolving one of its own a moment later.
-          // Gateway-resolved and carried on a service-token authenticated
-          // dial the client cannot reach, which is what makes it safe to
-          // trust; it is never a header the caller supplied.
-          ...(ws.data.guardianPrincipalId
-            ? {
-                extraParams: {
-                  guardianPrincipalId: ws.data.guardianPrincipalId,
-                },
-              }
-            : {}),
-        });
-
-      log.info(
-        { upstreamUrl: logSafeUpstreamUrl },
-        "Opening upstream live voice WS to runtime",
-      );
-
-      // The DOM lib's WebSocket declaration shadows Bun's here — it only
-      // knows the subprotocols overload, so the headers-init rides past it
-      // untyped. (Dropping the DOM lib is not a drive-by: the gateway's
-      // tests lean on DOM-typed fetch, ~300 errors.)
-      const upstream = new WebSocket(upstreamUrl, {
-        headers: forwardedIdentityHeaders(),
-      } as never);
-      ws.data.upstream = upstream;
-
-      upstream.addEventListener("open", () => {
-        log.info("Upstream live voice WS connected");
-        const pending = ws.data.pendingMessages;
-        if (pending) {
-          for (const msg of pending) {
-            upstream.send(msg);
+  const { url: upstreamUrl, logSafeUrl: logSafeUpstreamUrl } =
+    buildWsUpstreamUrl({
+      baseUrl: config.assistantRuntimeBaseUrl,
+      path: "/v1/live-voice",
+      // The guardian this socket was admitted for, so the daemon stamps
+      // its turns with the identity the admission decision was made
+      // against rather than resolving one of its own a moment later.
+      // Gateway-resolved and carried on a service-token authenticated
+      // dial the client cannot reach, which is what makes it safe to
+      // trust; it is never a header the caller supplied.
+      ...(ws.data.guardianPrincipalId
+        ? {
+            extraParams: {
+              guardianPrincipalId: ws.data.guardianPrincipalId,
+            },
           }
-          ws.data.pendingMessages = undefined;
-        }
-      });
+        : {}),
+    });
 
-      upstream.addEventListener("message", (event) => {
-        const data =
-          typeof event.data === "string"
-            ? event.data
-            : new Uint8Array(event.data as ArrayBuffer);
-        ws.send(data);
-      });
+  log.info(
+    { upstreamUrl: logSafeUpstreamUrl },
+    "Opening upstream live voice WS to runtime",
+  );
 
-      upstream.addEventListener("close", (event) => {
-        log.info({ code: event.code }, "Upstream live voice WS closed");
-        ws.close(event.code, event.reason);
-      });
+  // The DOM lib's WebSocket declaration shadows Bun's here — it only
+  // knows the subprotocols overload, so the headers-init rides past it
+  // untyped. (Dropping the DOM lib is not a drive-by: the gateway's
+  // tests lean on DOM-typed fetch, ~300 errors.)
+  const upstream = new WebSocket(upstreamUrl, {
+    headers: forwardedIdentityHeaders(),
+  } as never);
+  ws.data.upstream = upstream;
 
-      upstream.addEventListener("error", (event) => {
-        log.error({ error: event }, "Upstream live voice WS error");
-        ws.close(1011, "Upstream error");
-      });
-    },
-
-    message(
-      ws: import("bun").ServerWebSocket<LiveVoiceSocketData>,
-      message: string | ArrayBuffer | Uint8Array,
-    ) {
-      const upstream = ws.data.upstream;
-      if (upstream && upstream.readyState === WebSocket.OPEN) {
-        upstream.send(message);
-      } else if (ws.data.pendingMessages) {
-        if (ws.data.pendingMessages.length >= MAX_PENDING_MESSAGES) {
-          log.warn(
-            "Live voice pending message buffer overflow — closing connection",
-          );
-          ws.close(1008, "Buffer overflow");
-          return;
-        }
-        ws.data.pendingMessages.push(message);
+  upstream.addEventListener("open", () => {
+    log.info("Upstream live voice WS connected");
+    const pending = ws.data.pendingMessages;
+    if (pending) {
+      for (const msg of pending) {
+        upstream.send(msg);
       }
-    },
-
-    close(
-      ws: import("bun").ServerWebSocket<LiveVoiceSocketData>,
-      code: number,
-      reason: string,
-    ) {
-      const { upstream } = ws.data;
-      log.info({ code, reason }, "Live voice downstream WS closed");
       ws.data.pendingMessages = undefined;
-      if (
-        upstream &&
-        (upstream.readyState === WebSocket.OPEN ||
-          upstream.readyState === WebSocket.CONNECTING)
-      ) {
-        upstream.close(code, reason);
-      }
-    },
-  };
+    }
+  });
+
+  upstream.addEventListener("message", (event) => {
+    const data =
+      typeof event.data === "string"
+        ? event.data
+        : new Uint8Array(event.data as ArrayBuffer);
+    ws.send(data);
+  });
+
+  upstream.addEventListener("close", (event) => {
+    log.info({ code: event.code }, "Upstream live voice WS closed");
+    ws.close(event.code, event.reason);
+  });
+
+  upstream.addEventListener("error", (event) => {
+    log.error({ error: event }, "Upstream live voice WS error");
+    ws.close(1011, "Upstream error");
+  });
+}
+
+/**
+ * The live voice message arm: forward downstream frames upstream, buffering
+ * until the upstream dial connects.
+ */
+export function messageLiveVoiceWebsocket(
+  ws: ServerWebSocket<LiveVoiceSocketData>,
+  message: string | ArrayBuffer | Uint8Array,
+) {
+  const upstream = ws.data.upstream;
+  if (upstream && upstream.readyState === WebSocket.OPEN) {
+    upstream.send(message);
+  } else if (ws.data.pendingMessages) {
+    if (ws.data.pendingMessages.length >= MAX_PENDING_MESSAGES) {
+      log.warn(
+        "Live voice pending message buffer overflow — closing connection",
+      );
+      ws.close(1008, "Buffer overflow");
+      return;
+    }
+    ws.data.pendingMessages.push(message);
+  }
+}
+
+/**
+ * The live voice close arm: drop the pending buffer and close the upstream
+ * dial unless it already finished.
+ */
+export function closeLiveVoiceWebsocket(
+  ws: ServerWebSocket<LiveVoiceSocketData>,
+  code: number,
+  reason: string,
+) {
+  const { upstream } = ws.data;
+  log.info({ code, reason }, "Live voice downstream WS closed");
+  ws.data.pendingMessages = undefined;
+  if (
+    upstream &&
+    (upstream.readyState === WebSocket.OPEN ||
+      upstream.readyState === WebSocket.CONNECTING)
+  ) {
+    upstream.close(code, reason);
+  }
 }

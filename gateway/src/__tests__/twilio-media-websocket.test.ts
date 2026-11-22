@@ -3,11 +3,18 @@ import type { GatewayConfig } from "../config.js";
 import { initSigningKey, mintToken } from "../auth/token-service.js";
 import { CURRENT_POLICY_EPOCH } from "../auth/policy.js";
 import { setTestSigningKey } from "./helpers/signing-key.js";
-import {
-  createTwilioMediaWebsocketHandler,
+let testConfig = makeConfig();
+mock.module("../config.js", () => ({
+  getConfig: () => testConfig,
+}));
+
+const {
+  closeTwilioMediaStream,
+  handleTwilioMediaWs,
   extractMediaStreamMetadata,
-  getMediaStreamWebsocketHandlers,
-} from "../http/routes/twilio-media-websocket.js";
+  messageTwilioMediaStream,
+  openTwilioMediaWebsocket,
+} = await import("../http/routes/twilio-media-websocket.js");
 
 // ---------------------------------------------------------------------------
 // Auth setup — initialize signing key so JWT minting/validation works
@@ -204,18 +211,17 @@ describe("extractMediaStreamMetadata", () => {
 // Upgrade handler tests
 // ---------------------------------------------------------------------------
 
-describe("createTwilioMediaWebsocketHandler", () => {
+describe("handleTwilioMediaWs", () => {
   const TEST_TOKEN = mintEdgeToken();
 
   test("returns 400 when callSessionId is missing from both path and query", () => {
-    const handler = createTwilioMediaWebsocketHandler(makeConfig());
     const req = new Request(
       "http://localhost:7830/webhooks/twilio/media-stream",
     );
     const fakeServer = {
       upgrade: mock(() => true),
     } as unknown as import("bun").Server<any>;
-    const res = handler(req, fakeServer);
+    const res = handleTwilioMediaWs(req, fakeServer);
 
     expect(res).toBeInstanceOf(Response);
     expect(res!.status).toBe(400);
@@ -224,14 +230,14 @@ describe("createTwilioMediaWebsocketHandler", () => {
 
   test("succeeds with path-based callSessionId and token", () => {
     const config = makeConfig({});
-    const handler = createTwilioMediaWebsocketHandler(config);
+    testConfig = config;
     const req = new Request(
       `http://localhost:7830/webhooks/twilio/media-stream/sess-42/${TEST_TOKEN}`,
     );
     const fakeServer = {
       upgrade: mock(() => true),
     } as unknown as import("bun").Server<any>;
-    const res = handler(req, fakeServer);
+    const res = handleTwilioMediaWs(req, fakeServer);
 
     expect(res).toBeUndefined();
     expect(fakeServer.upgrade).toHaveBeenCalledTimes(1);
@@ -257,14 +263,14 @@ describe("createTwilioMediaWebsocketHandler", () => {
 
   test("legacy: succeeds with query-based callSessionId and token", () => {
     const config = makeConfig({});
-    const handler = createTwilioMediaWebsocketHandler(config);
+    testConfig = config;
     const req = new Request(
       `http://localhost:7830/webhooks/twilio/media-stream?callSessionId=sess-42&token=${TEST_TOKEN}`,
     );
     const fakeServer = {
       upgrade: mock(() => true),
     } as unknown as import("bun").Server<any>;
-    const res = handler(req, fakeServer);
+    const res = handleTwilioMediaWs(req, fakeServer);
 
     expect(res).toBeUndefined();
     expect(fakeServer.upgrade).toHaveBeenCalledTimes(1);
@@ -281,7 +287,7 @@ describe("createTwilioMediaWebsocketHandler", () => {
 
   test("calls server.upgrade when Authorization header provides valid token", () => {
     const config = makeConfig({});
-    const handler = createTwilioMediaWebsocketHandler(config);
+    testConfig = config;
     const req = new Request(
       "http://localhost:7830/webhooks/twilio/media-stream/sess-42",
       { headers: { authorization: `Bearer ${TEST_TOKEN}` } },
@@ -289,7 +295,7 @@ describe("createTwilioMediaWebsocketHandler", () => {
     const fakeServer = {
       upgrade: mock(() => true),
     } as unknown as import("bun").Server<any>;
-    const res = handler(req, fakeServer);
+    const res = handleTwilioMediaWs(req, fakeServer);
 
     expect(res).toBeUndefined();
     expect(fakeServer.upgrade).toHaveBeenCalledTimes(1);
@@ -297,14 +303,14 @@ describe("createTwilioMediaWebsocketHandler", () => {
 
   test("returns 500 when server.upgrade fails", () => {
     const config = makeConfig({});
-    const handler = createTwilioMediaWebsocketHandler(config);
+    testConfig = config;
     const req = new Request(
       `http://localhost:7830/webhooks/twilio/media-stream/sess-1/${TEST_TOKEN}`,
     );
     const fakeServer = {
       upgrade: mock(() => false),
     } as unknown as import("bun").Server<any>;
-    const res = handler(req, fakeServer);
+    const res = handleTwilioMediaWs(req, fakeServer);
 
     expect(res).toBeInstanceOf(Response);
     expect(res!.status).toBe(500);
@@ -313,14 +319,13 @@ describe("createTwilioMediaWebsocketHandler", () => {
   // --- Auth tests ---
 
   test("returns 401 when no token provided via path, query, or header", () => {
-    const handler = createTwilioMediaWebsocketHandler(makeConfig());
     const req = new Request(
       "http://localhost:7830/webhooks/twilio/media-stream/sess-1",
     );
     const fakeServer = {
       upgrade: mock(() => true),
     } as unknown as import("bun").Server<any>;
-    const res = handler(req, fakeServer);
+    const res = handleTwilioMediaWs(req, fakeServer);
 
     expect(res).toBeInstanceOf(Response);
     expect(res!.status).toBe(401);
@@ -329,14 +334,14 @@ describe("createTwilioMediaWebsocketHandler", () => {
 
   test("returns 401 when token is missing from legacy query request", () => {
     const config = makeConfig({});
-    const handler = createTwilioMediaWebsocketHandler(config);
+    testConfig = config;
     const req = new Request(
       "http://localhost:7830/webhooks/twilio/media-stream?callSessionId=sess-1",
     );
     const fakeServer = {
       upgrade: mock(() => true),
     } as unknown as import("bun").Server<any>;
-    const res = handler(req, fakeServer);
+    const res = handleTwilioMediaWs(req, fakeServer);
 
     expect(res).toBeInstanceOf(Response);
     expect(res!.status).toBe(401);
@@ -354,14 +359,13 @@ describe("createTwilioMediaWebsocketHandler", () => {
       "local:self:oauth-proxy.stripe_link",
       "oauth_proxy_v1",
     );
-    const handler = createTwilioMediaWebsocketHandler(makeConfig());
     const req = new Request(
       `http://localhost:7830/webhooks/twilio/media-stream/sess-1/${grant}`,
     );
     const fakeServer = {
       upgrade: mock(() => true),
     } as unknown as import("bun").Server<any>;
-    const res = handler(req, fakeServer);
+    const res = handleTwilioMediaWs(req, fakeServer);
 
     expect(res).toBeInstanceOf(Response);
     expect(res!.status).toBe(401);
@@ -373,7 +377,6 @@ describe("createTwilioMediaWebsocketHandler", () => {
       "actor:asst_1:user_1",
       "actor_client_v1",
     );
-    const handler = createTwilioMediaWebsocketHandler(makeConfig());
     const req = new Request(
       "http://localhost:7830/webhooks/twilio/media-stream/sess-1",
       { headers: { authorization: `Bearer ${actorToken}` } },
@@ -381,7 +384,7 @@ describe("createTwilioMediaWebsocketHandler", () => {
     const fakeServer = {
       upgrade: mock(() => true),
     } as unknown as import("bun").Server<any>;
-    const res = handler(req, fakeServer);
+    const res = handleTwilioMediaWs(req, fakeServer);
 
     expect(res).toBeInstanceOf(Response);
     expect(res!.status).toBe(401);
@@ -390,14 +393,13 @@ describe("createTwilioMediaWebsocketHandler", () => {
 
   test("returns 401 for a gateway-minted token on another profile", () => {
     const uiPageToken = mintNonRelayToken("svc:gateway:self", "ui_page_v1");
-    const handler = createTwilioMediaWebsocketHandler(makeConfig());
     const req = new Request(
       `http://localhost:7830/webhooks/twilio/media-stream/sess-1/${uiPageToken}`,
     );
     const fakeServer = {
       upgrade: mock(() => true),
     } as unknown as import("bun").Server<any>;
-    const res = handler(req, fakeServer);
+    const res = handleTwilioMediaWs(req, fakeServer);
 
     expect(res).toBeInstanceOf(Response);
     expect(res!.status).toBe(401);
@@ -406,14 +408,14 @@ describe("createTwilioMediaWebsocketHandler", () => {
 
   test("returns 401 when path-based token is invalid", () => {
     const config = makeConfig({});
-    const handler = createTwilioMediaWebsocketHandler(config);
+    testConfig = config;
     const req = new Request(
       "http://localhost:7830/webhooks/twilio/media-stream/sess-1/wrong-token",
     );
     const fakeServer = {
       upgrade: mock(() => true),
     } as unknown as import("bun").Server<any>;
-    const res = handler(req, fakeServer);
+    const res = handleTwilioMediaWs(req, fakeServer);
 
     expect(res).toBeInstanceOf(Response);
     expect(res!.status).toBe(401);
@@ -425,10 +427,9 @@ describe("createTwilioMediaWebsocketHandler", () => {
 // WebSocket handler tests
 // ---------------------------------------------------------------------------
 
-describe("getMediaStreamWebsocketHandlers", () => {
+describe("the twilio media stream websocket handlers", () => {
   const OriginalWebSocket = globalThis.WebSocket;
   let fakeUpstream: ReturnType<typeof createFakeUpstreamWs>;
-  let handlers: ReturnType<typeof getMediaStreamWebsocketHandlers>;
 
   beforeEach(() => {
     fakeUpstream = createFakeUpstreamWs();
@@ -443,7 +444,6 @@ describe("getMediaStreamWebsocketHandlers", () => {
       CLOSED: WS_CLOSED,
     });
     globalThis.WebSocket = MockWS as unknown as typeof WebSocket;
-    handlers = getMediaStreamWebsocketHandlers();
   });
 
   // Restore after each file-level describe to avoid leaking
@@ -459,7 +459,7 @@ describe("getMediaStreamWebsocketHandlers", () => {
       callSessionId: "sess-1",
       assistantRuntimeBaseUrl: "http://localhost:7821",
     });
-    handlers.open(ws as never);
+    openTwilioMediaWebsocket(ws as never);
 
     expect(ws.data.pendingMessages).toEqual([]);
   });
@@ -470,7 +470,7 @@ describe("getMediaStreamWebsocketHandlers", () => {
       callSessionId: "s&id=1",
       assistantRuntimeBaseUrl: "http://runtime:8000",
     });
-    handlers.open(ws as never);
+    openTwilioMediaWebsocket(ws as never);
 
     const ctorCall = (
       globalThis.WebSocket as unknown as ReturnType<typeof mock>
@@ -492,13 +492,13 @@ describe("getMediaStreamWebsocketHandlers", () => {
       callSessionId: "sess-1",
       assistantRuntimeBaseUrl: "http://localhost:7821",
     });
-    handlers.open(ws as never);
+    openTwilioMediaWebsocket(ws as never);
 
     // Upstream is still CONNECTING
     fakeUpstream.readyState = WS_CONNECTING;
 
-    handlers.message(ws as never, "msg-1");
-    handlers.message(ws as never, "msg-2");
+    messageTwilioMediaStream(ws as never, "msg-1");
+    messageTwilioMediaStream(ws as never, "msg-2");
 
     expect(ws.data.pendingMessages).toEqual(["msg-1", "msg-2"]);
     expect(fakeUpstream.sent).toHaveLength(0);
@@ -510,11 +510,11 @@ describe("getMediaStreamWebsocketHandlers", () => {
       callSessionId: "sess-1",
       assistantRuntimeBaseUrl: "http://localhost:7821",
     });
-    handlers.open(ws as never);
+    openTwilioMediaWebsocket(ws as never);
 
     // Buffer a couple of messages while CONNECTING
-    handlers.message(ws as never, "msg-a");
-    handlers.message(ws as never, "msg-b");
+    messageTwilioMediaStream(ws as never, "msg-a");
+    messageTwilioMediaStream(ws as never, "msg-b");
 
     // Simulate upstream open event
     fakeUpstream.readyState = WS_OPEN;
@@ -532,13 +532,13 @@ describe("getMediaStreamWebsocketHandlers", () => {
       callSessionId: "sess-1",
       assistantRuntimeBaseUrl: "http://localhost:7821",
     });
-    handlers.open(ws as never);
+    openTwilioMediaWebsocket(ws as never);
 
     // Mark upstream as OPEN
     fakeUpstream.readyState = WS_OPEN;
     fakeUpstream.emit("open");
 
-    handlers.message(ws as never, "direct-msg");
+    messageTwilioMediaStream(ws as never, "direct-msg");
 
     expect(fakeUpstream.sent).toContain("direct-msg");
   });
@@ -551,15 +551,15 @@ describe("getMediaStreamWebsocketHandlers", () => {
       callSessionId: "sess-1",
       assistantRuntimeBaseUrl: "http://localhost:7821",
     });
-    handlers.open(ws as never);
+    openTwilioMediaWebsocket(ws as never);
 
     // Fill the buffer to capacity (MAX_PENDING_MESSAGES = 100)
     for (let i = 0; i < 100; i++) {
-      handlers.message(ws as never, `msg-${i}`);
+      messageTwilioMediaStream(ws as never, `msg-${i}`);
     }
 
     // One more should trigger overflow
-    handlers.message(ws as never, "overflow");
+    messageTwilioMediaStream(ws as never, "overflow");
 
     expect(ws.closes).toHaveLength(1);
     expect(ws.closes[0].code).toBe(1008);
@@ -574,14 +574,14 @@ describe("getMediaStreamWebsocketHandlers", () => {
       callSessionId: "sess-1",
       assistantRuntimeBaseUrl: "http://localhost:7821",
     });
-    handlers.open(ws as never);
+    openTwilioMediaWebsocket(ws as never);
 
     // Buffer some messages
-    handlers.message(ws as never, "pending-1");
+    messageTwilioMediaStream(ws as never, "pending-1");
 
     // Downstream closes before upstream opens
     fakeUpstream.readyState = WS_CONNECTING;
-    handlers.close(ws as never, 1000, "client gone");
+    closeTwilioMediaStream(ws as never, 1000, "client gone");
 
     // Buffer should be cleared
     expect(ws.data.pendingMessages).toBeUndefined();
@@ -599,7 +599,7 @@ describe("getMediaStreamWebsocketHandlers", () => {
       callSessionId: "sess-1",
       assistantRuntimeBaseUrl: "http://localhost:7821",
     });
-    handlers.open(ws as never);
+    openTwilioMediaWebsocket(ws as never);
 
     fakeUpstream.emit("close", { code: 1001, reason: "going away" });
 
@@ -616,7 +616,7 @@ describe("getMediaStreamWebsocketHandlers", () => {
       callSessionId: "sess-1",
       assistantRuntimeBaseUrl: "http://localhost:7821",
     });
-    handlers.open(ws as never);
+    openTwilioMediaWebsocket(ws as never);
 
     fakeUpstream.emit("error", new Event("error"));
 
@@ -633,7 +633,7 @@ describe("getMediaStreamWebsocketHandlers", () => {
       callSessionId: "sess-1",
       assistantRuntimeBaseUrl: "http://localhost:7821",
     });
-    handlers.open(ws as never);
+    openTwilioMediaWebsocket(ws as never);
 
     fakeUpstream.emit("message", { data: "hello from runtime" });
 
@@ -647,7 +647,7 @@ describe("getMediaStreamWebsocketHandlers", () => {
       callSessionId: "sess-1",
       assistantRuntimeBaseUrl: "http://localhost:7821",
     });
-    handlers.open(ws as never);
+    openTwilioMediaWebsocket(ws as never);
 
     const buf = new ArrayBuffer(4);
     fakeUpstream.emit("message", { data: buf });
@@ -664,11 +664,11 @@ describe("getMediaStreamWebsocketHandlers", () => {
       callSessionId: "sess-1",
       assistantRuntimeBaseUrl: "http://localhost:7821",
     });
-    handlers.open(ws as never);
+    openTwilioMediaWebsocket(ws as never);
 
     fakeUpstream.readyState = WS_OPEN;
 
-    handlers.close(ws as never, 1000, "normal");
+    closeTwilioMediaStream(ws as never, 1000, "normal");
 
     expect(fakeUpstream.closes).toHaveLength(1);
     expect(fakeUpstream.closes[0].code).toBe(1000);
@@ -683,11 +683,11 @@ describe("getMediaStreamWebsocketHandlers", () => {
       callSessionId: "sess-1",
       assistantRuntimeBaseUrl: "http://localhost:7821",
     });
-    handlers.open(ws as never);
+    openTwilioMediaWebsocket(ws as never);
 
     fakeUpstream.readyState = WS_CLOSED;
 
-    handlers.close(ws as never, 1000, "done");
+    closeTwilioMediaStream(ws as never, 1000, "done");
 
     expect(fakeUpstream.closes).toHaveLength(0);
   });

@@ -19,24 +19,30 @@ mock.module("../auth/guardian-bootstrap.js", () => ({
   findCadetGuardian: async () => ({ principalId: GUARDIAN_PRINCIPAL }),
 }));
 
+let testConfig = makeConfig();
+mock.module("../config.js", () => ({
+  getConfig: () => testConfig,
+}));
+
 const {
-  createDesktopStreamWebsocketHandler,
-  getDesktopStreamWebsocketHandlers,
+  closeDesktopStreamWebsocket,
+  handleDesktopStreamWs,
+  messageDesktopStreamWebsocket,
+  openDesktopStreamWebsocket,
 } = await import("../http/routes/desktop-stream-websocket.js");
 
 // ---------------------------------------------------------------------------
-// createDesktopStreamWebsocketHandler: upgrade handler tests
+// handleDesktopStreamWs: upgrade handler tests
 // ---------------------------------------------------------------------------
 
-describe("createDesktopStreamWebsocketHandler", () => {
+describe("handleDesktopStreamWs", () => {
   const upgrade = async (token: string, upgradeResult = true) => {
-    const handler = createDesktopStreamWebsocketHandler(makeConfig());
     const server = makeFakeServer(upgradeResult);
     const req = new Request(
       `http://localhost:7830/v1/desktop/stream?token=${token}`,
       { headers: { upgrade: "websocket" } },
     );
-    return { res: await handler(req, server), server };
+    return { res: await handleDesktopStreamWs(req, server), server };
   };
 
   test("upgrades the bound guardian", async () => {
@@ -80,12 +86,12 @@ describe("createDesktopStreamWebsocketHandler", () => {
 describe("getDesktopStreamWebsocketHandlers", () => {
   /** A viewer socket whose pump dials `runtime`. */
   function makeViewerWs(runtime: FakeRuntime, sendStatus?: number) {
+    testConfig = makeConfig({
+      assistantRuntimeBaseUrl: `http://127.0.0.1:${runtime.server.port}`,
+    });
     return createFakeDownstreamWs<DesktopStreamSocketData>(
       {
         wsType: "desktop-stream",
-        config: makeConfig({
-          assistantRuntimeBaseUrl: `http://127.0.0.1:${runtime.server.port}`,
-        }),
       },
       { sendStatus },
     );
@@ -101,10 +107,9 @@ describe("getDesktopStreamWebsocketHandlers", () => {
 
   test("dials the runtime's /v1/desktop/stream with forwarded identity and no token param", async () => {
     runtime = startFakeRuntime();
-    const handlers = getDesktopStreamWebsocketHandlers();
     const ws = makeViewerWs(runtime);
 
-    handlers.open(ws as never);
+    openDesktopStreamWebsocket(ws as never);
     await runtime.connected;
 
     const url = runtime.upgradeUrl()!;
@@ -118,10 +123,9 @@ describe("getDesktopStreamWebsocketHandlers", () => {
 
   test("delivers the runtime's bytes downstream byte-identical", async () => {
     runtime = startFakeRuntime(RFB_BANNER);
-    const handlers = getDesktopStreamWebsocketHandlers();
     const ws = makeViewerWs(runtime);
 
-    handlers.open(ws as never);
+    openDesktopStreamWebsocket(ws as never);
     await waitFor(() => ws.sent.length > 0);
 
     const frame = ws.sent[0]!;
@@ -137,10 +141,9 @@ describe("getDesktopStreamWebsocketHandlers", () => {
    */
   test("closes both sides when a downstream send is dropped", async () => {
     runtime = startFakeRuntime(RFB_BANNER);
-    const handlers = getDesktopStreamWebsocketHandlers();
     const ws = makeViewerWs(runtime, 0);
 
-    handlers.open(ws as never);
+    openDesktopStreamWebsocket(ws as never);
     const upstreamClose = mock(ws.data.upstream!.close.bind(ws.data.upstream));
     ws.data.upstream!.close = upstreamClose;
     await waitFor(() => ws.closes.length > 0);
@@ -156,10 +159,9 @@ describe("getDesktopStreamWebsocketHandlers", () => {
    */
   test("does not treat an empty frame as a dropped one", async () => {
     runtime = startFakeRuntime(new Uint8Array(0));
-    const handlers = getDesktopStreamWebsocketHandlers();
     const ws = makeViewerWs(runtime, 0);
 
-    handlers.open(ws as never);
+    openDesktopStreamWebsocket(ws as never);
     await waitFor(() => ws.sent.length > 0);
     await settle();
 
@@ -168,17 +170,16 @@ describe("getDesktopStreamWebsocketHandlers", () => {
 
   test("delivers the viewer's bytes upstream byte-identical, including frames sent before the dial completes", async () => {
     runtime = startFakeRuntime();
-    const handlers = getDesktopStreamWebsocketHandlers();
     const ws = makeViewerWs(runtime);
     // Every byte value, so a text-vs-binary or encoding slip cannot hide.
     const early = new Uint8Array(256).map((_, i) => i);
     const late = new Uint8Array([0xff, 0x00, 0x7f, 0x80]);
 
-    handlers.open(ws as never);
-    handlers.message(ws as never, early);
+    openDesktopStreamWebsocket(ws as never);
+    messageDesktopStreamWebsocket(ws as never, early);
     await runtime.connected;
     await waitFor(() => runtime.received.length === 1);
-    handlers.message(ws as never, late);
+    messageDesktopStreamWebsocket(ws as never, late);
     await waitFor(() => runtime.received.length === 2);
 
     expect(Array.from(runtime.received[0]!)).toEqual(Array.from(early));
@@ -187,10 +188,9 @@ describe("getDesktopStreamWebsocketHandlers", () => {
 
   test("propagates the runtime's close code downstream verbatim", async () => {
     runtime = startFakeRuntime();
-    const handlers = getDesktopStreamWebsocketHandlers();
     const ws = makeViewerWs(runtime);
 
-    handlers.open(ws as never);
+    openDesktopStreamWebsocket(ws as never);
     const upstream = await runtime.connected;
     upstream.close(4013, "desktop busy");
     await waitFor(() => ws.closes.length > 0);
@@ -200,15 +200,14 @@ describe("getDesktopStreamWebsocketHandlers", () => {
 
   test("propagates the viewer's close code upstream verbatim", async () => {
     runtime = startFakeRuntime();
-    const handlers = getDesktopStreamWebsocketHandlers();
     const ws = makeViewerWs(runtime);
 
-    handlers.open(ws as never);
+    openDesktopStreamWebsocket(ws as never);
     await runtime.connected;
     const upstreamClose = mock(ws.data.upstream!.close.bind(ws.data.upstream));
     ws.data.upstream!.close = upstreamClose;
 
-    handlers.close(ws as never, 4001, "viewer left");
+    closeDesktopStreamWebsocket(ws as never, 4001, "viewer left");
 
     expect(upstreamClose).toHaveBeenCalledWith(4001, "viewer left");
     expect(ws.data.pendingMessages).toBeUndefined();
