@@ -1,15 +1,4 @@
-# The docs frontend's standalone release: every merge to main that touches
-# the docs app builds it and publishes the MARKETING SNAPSHOT as workflow
-# artifacts — no npm publish, no GCP knowledge (the cloud side's
-# github-handler watches for this workflow's webhook and pushes the bundle
-# into the channel's GCS bucket, the same split as the electron feed).
-#
-# The bundle is the servable static part of the standalone build: the
-# marketing routes' prerendered HTML (/, /community, /downloads) plus the
-# content-hashed client chunks under _next/. The /docs/* page routes stay
-# served by the docs-site Cloud Run service (publish-docs-image), whose
-# build ships the same commit's chunks — the bucket accumulates every
-# build's chunks append-only, so both consumers resolve their references.
+name: Docs Release
 
 on:
   push:
