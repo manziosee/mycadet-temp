@@ -22,7 +22,9 @@
 import { Server, ServerWebSocket } from "bun";
 
 import {
-  createRuntimeAudioStreamHandlers,
+  closeRuntimeAudioStream,
+  messageRuntimeAudioStream,
+  openRuntimeAudioStream,
   runtimeAudioStreamSocketState,
 } from "./runtime-audio-stream.js";
 import { authorizeGuardianStream } from "./guardian-pin.js";
@@ -33,16 +35,17 @@ import { getLogger } from "../../logger.js";
 
 const log = getLogger("watch-stream-ws");
 
-export const watchStreamSocketDataSchema = z.object({
-  wsType: z.literal("watch-stream"),
-  ...runtimeAudioStreamSocketState,
-  mimeType: z.string(),
-  sampleRate: z.number().optional(),
-  conversationId: z.string().optional(),
-  clientId: z.string().optional(),
-  captureDisplayId: z.number().optional(),
-  captureWindowId: z.number().optional(),
-});
+export const watchStreamSocketDataSchema = runtimeAudioStreamSocketState.extend(
+  {
+    wsType: z.literal("watch-stream"),
+    mimeType: z.string(),
+    sampleRate: z.number().optional(),
+    conversationId: z.string().optional(),
+    clientId: z.string().optional(),
+    captureDisplayId: z.number().optional(),
+    captureWindowId: z.number().optional(),
+  },
+);
 
 export type WatchStreamSocketData = z.infer<typeof watchStreamSocketDataSchema>;
 
@@ -71,34 +74,6 @@ function parseCaptureId(
     return { error: `${name} must be a whole number` };
   }
   return { value: Number(raw) };
-}
-
-/**
- * The upstream query for a socket: what the runtime's own upgrade handler
- * reads. The capture ids ride through untouched, since the frame the client
- * draws around what it picked is only honest if the runtime reads the same
- * thing. Exported for unit tests.
- */
-export function watchStreamUpstreamParams(
-  data: WatchStreamSocketData,
-): Record<string, string> {
-  const params: Record<string, string> = { mimeType: data.mimeType };
-  if (data.sampleRate !== undefined) {
-    params.sampleRate = String(data.sampleRate);
-  }
-  if (data.conversationId) {
-    params.conversationId = data.conversationId;
-  }
-  if (data.clientId) {
-    params.clientId = data.clientId;
-  }
-  if (data.captureDisplayId !== undefined) {
-    params.captureDisplayId = String(data.captureDisplayId);
-  }
-  if (data.captureWindowId !== undefined) {
-    params.captureWindowId = String(data.captureWindowId);
-  }
-  return params;
 }
 
 /**
@@ -172,36 +147,25 @@ export async function handleWatchStreamWs(
   return undefined;
 }
 
-/**
- * WebSocket handlers for Bun.serve() that pump narration audio to the
- * runtime's `/v1/watch/stream` and its lifecycle frames back.
- */
-const {
-  open: openWatchStreamWebsocket,
-  message: messageWatchStreamWebsocket,
-  close: closeWatchStreamWebsocket,
-} = createRuntimeAudioStreamHandlers<WatchStreamSocketData>({
-  upstreamPath: "/v1/watch/stream",
-  log,
-  label: "watch stream",
-  upstreamParams: watchStreamUpstreamParams,
-  logContext: ({
-    mimeType,
-    sampleRate,
-    conversationId,
-    captureDisplayId,
-    captureWindowId,
-  }) => ({
-    mimeType,
-    sampleRate,
-    conversationId,
-    captureDisplayId,
-    captureWindowId,
-  }),
-});
+const label = "watch stream";
 
-export {
-  openWatchStreamWebsocket,
-  messageWatchStreamWebsocket,
-  closeWatchStreamWebsocket,
-};
+export const openWatchStreamWebsocket = (
+  ws: ServerWebSocket<WatchStreamSocketData>,
+) =>
+  openRuntimeAudioStream({
+    ws,
+    label,
+    closeOnDroppedFrame: true,
+    upstreamPath: "/v1/watch/stream",
+  });
+
+export const messageWatchStreamWebsocket = (
+  ws: ServerWebSocket<WatchStreamSocketData>,
+  message: string | ArrayBuffer | Uint8Array<ArrayBufferLike>,
+) => messageRuntimeAudioStream({ ws, message, label });
+
+export const closeWatchStreamWebsocket = (
+  ws: ServerWebSocket<WatchStreamSocketData>,
+  code: number,
+  reason: string,
+) => closeRuntimeAudioStream({ ws, code, reason, label });
