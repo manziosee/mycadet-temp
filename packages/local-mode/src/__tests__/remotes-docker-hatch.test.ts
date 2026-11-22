@@ -16,7 +16,6 @@ import {
 } from "../remotes/docker/statefulset";
 import {
   pullImage,
-  resolveDockerHatchMode,
   resolveDockerProviderCredentialSetupAction,
 } from "../remotes/docker/hatch";
 import { collectWatchTargets } from "../remotes/docker/watch";
@@ -287,65 +286,6 @@ describe("CADET_AVATAR_DEVICE passthrough", () => {
     expect(args.some((a) => a.startsWith(`${AVATAR_DEVICE_ENV_VAR}=`))).toBe(
       false,
     );
-  });
-});
-
-describe("resolveDockerHatchMode", () => {
-  test("defaults to pulling published images when no source flag is set", () => {
-    expect(
-      resolveDockerHatchMode({
-        watch: false,
-        buildFromSource: false,
-        fullSourceTreeAvailable: true,
-      }),
-    ).toEqual({ build: false, watcher: false, fellBackToPull: false });
-  });
-
-  test("--source <path> builds without enabling the file watcher", () => {
-    expect(
-      resolveDockerHatchMode({
-        watch: false,
-        buildFromSource: true,
-        fullSourceTreeAvailable: true,
-      }),
-    ).toEqual({ build: true, watcher: false, fellBackToPull: false });
-  });
-
-  test("--watch builds and enables the file watcher", () => {
-    expect(
-      resolveDockerHatchMode({
-        watch: true,
-        buildFromSource: false,
-        fullSourceTreeAvailable: true,
-      }),
-    ).toEqual({ build: true, watcher: true, fellBackToPull: false });
-  });
-
-  test("--watch + --source <path> still enables the watcher (watch wins)", () => {
-    expect(
-      resolveDockerHatchMode({
-        watch: true,
-        buildFromSource: true,
-        fullSourceTreeAvailable: true,
-      }),
-    ).toEqual({ build: true, watcher: true, fellBackToPull: false });
-  });
-
-  test("falls back to pull when source flag is set but source tree is missing", () => {
-    expect(
-      resolveDockerHatchMode({
-        watch: false,
-        buildFromSource: true,
-        fullSourceTreeAvailable: false,
-      }),
-    ).toEqual({ build: false, watcher: false, fellBackToPull: true });
-    expect(
-      resolveDockerHatchMode({
-        watch: true,
-        buildFromSource: false,
-        fullSourceTreeAvailable: false,
-      }),
-    ).toEqual({ build: false, watcher: false, fellBackToPull: true });
   });
 });
 

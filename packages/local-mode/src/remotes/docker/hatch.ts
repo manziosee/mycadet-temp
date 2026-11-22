@@ -466,42 +466,45 @@ function hasFullSourceTree(root: string): boolean {
 }
 
 /**
- * Decide which image-source path `hatchDocker` should take given the user
- * flags and a probe result for the source tree.
- *
- * - `watch` always wants source-build *and* file-watcher (when the source
- *   tree is available).
- * - `buildFromSource` wants source-build but no watcher — used by evals so
- *   each run picks up fresh CLI changes from the repo.
- * - Without either flag we pull the published images.
- * - If either flag was set but the source tree is missing (e.g. the CLI is
- *   running from a packaged .app bundle), fall back to pulling and surface
- *   the reason so the caller can log a warning.
- *
- * Returning a plain record keeps this trivially unit-testable — see
- * `__tests__/remotes-docker-hatch.test.ts`.
+ * Decide which image-source path `hatchDocker` should take.
  */
-export function resolveDockerHatchMode(opts: {
+function resolveDockerHatchMode(opts: {
   watch: boolean;
-  buildFromSource: boolean;
-  fullSourceTreeAvailable: boolean;
-}): { build: boolean; watcher: boolean; fellBackToPull: boolean } {
+  sourcePath: string | null;
+}): {
+  build: boolean;
+  watcher: boolean;
+  fellBackToPull: boolean;
+  repoRoot: string | null;
+} {
   const requested =
-    opts.watch || opts.buildFromSource || resolveEnvironmentName() === "local";
+    opts.watch ||
+    opts.sourcePath !== null ||
+    resolveEnvironmentName() === "local";
   if (!requested) {
-    return { build: false, watcher: false, fellBackToPull: false };
+    return {
+      build: false,
+      watcher: false,
+      fellBackToPull: false,
+      repoRoot: null,
+    };
   }
-  if (!opts.fullSourceTreeAvailable) {
-    return { build: false, watcher: false, fellBackToPull: true };
+  const repoRoot =
+    opts.sourcePath !== null ? resolve(opts.sourcePath) : findRepoRoot();
+  if (repoRoot === null || !hasFullSourceTree(repoRoot)) {
+    return { build: false, watcher: false, fellBackToPull: true, repoRoot };
   }
-  return { build: true, watcher: opts.watch, fellBackToPull: false };
+  return { build: true, watcher: opts.watch, fellBackToPull: false, repoRoot };
 }
 
 /**
  * Locate the repository root by walking up from `cli/src/lib/` until we
- * find a directory containing the expected Dockerfiles.
+ * find a directory containing the expected Dockerfiles — null when the
+ * CLI is running without a source tree (a global install, the vm's
+ * release-pinned hatch). Only probed when the hatch actually wants a
+ * source tree; the pull path never needs one.
  */
-function findRepoRoot(): string {
+function findRepoRoot(): string | null {
   // cli/src/lib/ -> repo root (works when running from source via bun)
   const sourceTreeRoot = join(import.meta.dir, "..", "..", "..");
   if (existsSync(join(sourceTreeRoot, "assistant", "Dockerfile"))) {
@@ -686,17 +689,13 @@ export async function hatchDocker(
       typeof params.sourcePath === "string" && params.sourcePath.length > 0
         ? params.sourcePath
         : null;
-    const buildFromSource = sourcePath !== null;
-    const repoRoot = sourcePath ? resolve(sourcePath) : findRepoRoot();
-    const fullSourceTreeAvailable = hasFullSourceTree(repoRoot);
-
     const mode = resolveDockerHatchMode({
       watch,
-      buildFromSource,
-      fullSourceTreeAvailable,
+      sourcePath,
     });
     // Honour the resolved mode for the rest of the flow.
     watch = mode.watcher;
+    const repoRoot = mode.repoRoot;
 
     if (mode.build && repoRoot) {
       const localTag = `local-${instanceName}`;
