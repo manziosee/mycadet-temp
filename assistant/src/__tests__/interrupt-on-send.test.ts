@@ -46,6 +46,7 @@ let persistShouldFail = false;
 import * as conversationCrud from "../persistence/conversation-crud.js";
 import { ensureConversationExists } from "../persistence/conversation-crud.js";
 import { initializeDb } from "../persistence/db-init.js";
+import { asConversation } from "./helpers/mock-conversation.js";
 
 const {
   classifyInterruptEligibility,
@@ -231,14 +232,14 @@ function registerBusyTurn(
       return true;
     },
     abortController: hasController
-      ? {
+      ? Object.assign(Object.create(AbortController.prototype), {
           abort: (reason: AbortReason) => {
             aborts.push(reason);
             if (releaseOnAbort) {
               release();
             }
           },
-        }
+        })
       : null,
     denyAllPendingConfirmations: () => {
       denyAllCount += 1;
@@ -270,9 +271,10 @@ function registerBusyTurn(
     },
   };
 
-  setConversation(CONV, fake as unknown as Conversation);
+  const conversation = asConversation(fake);
+  setConversation(CONV, conversation);
   return {
-    conversation: fake as unknown as Conversation,
+    conversation,
     messages,
     aborts,
     activityEvents,
@@ -924,12 +926,12 @@ describe("mayInterruptRunningTurn", () => {
 
 describe("repairInterruptedToolUseBlocks", () => {
   function fakeConversation(messages: Message[]): Conversation {
-    return {
+    return asConversation({
       conversationId: CONV,
       messages,
       pendingSteerRepair: false,
       pendingInterruptRepair: false,
-    } as unknown as Conversation;
+    });
   }
 
   test("writes one fact-only result per abandoned call", async () => {

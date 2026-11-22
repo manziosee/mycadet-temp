@@ -14,19 +14,33 @@ import {
 
 import type { LoopToolExecutor } from "../agent/loop.js";
 import type { AssistantEvent } from "../api/index.js";
+import type { LLMCallSite } from "../config/schemas/llm.js";
+import type { MemoryConfig } from "../config/schemas/memory.js";
 import { stripInjectionsForCompaction } from "../context/strip-injections.js";
 import type { AttachmentResolutionResult } from "../daemon/conversation-attachments.js";
 import {
   queueConversationNotice,
   resetConversationNoticesForTests,
 } from "../daemon/conversation-notices.js";
+import { MessageQueue } from "../daemon/conversation-queue-manager.js";
+import type { SurfaceStateEntry } from "../daemon/conversation-surface-state.js";
+import type { UsageContext } from "../daemon/conversation-usage.js";
+import type { SyncInvalidationTag } from "../daemon/message-types/sync.js";
 import { desktopAutomationLease } from "../desktop/desktop-automation-lease.js";
 import { UserPromptSubmitContext } from "../hooks/types.js";
 import type { EmitSignalParams } from "../notifications/emit-signal.js";
+import { PermissionPrompter } from "../permissions/prompter.js";
 import type { AttentionState } from "../persistence/conversation-attention-store.js";
-import type { MessageRow } from "../persistence/conversation-crud.js";
+import type {
+  AddMessageOptions,
+  MessageRole,
+  MessageRow,
+} from "../persistence/conversation-crud.js";
 import { getConversationDirName } from "../persistence/conversation-directories.js";
+import type { ContextWindowResult } from "../plugins/defaults/compaction/window-manager.js";
+import { ContextWindowManager } from "../plugins/defaults/compaction/window-manager.js";
 import { resetPluginRegistryAndRegisterDefaults } from "../plugins/defaults/index.js";
+import type { IndexMessageInput } from "../plugins/defaults/memory/indexer.js";
 import { registerPlugin } from "../plugins/registry.js";
 import type {
   Message,
@@ -35,6 +49,8 @@ import type {
 } from "../providers/types.js";
 import { ContextOverflowError } from "../providers/types.js";
 import { ToolDefinition } from "../tools/tool-types.js";
+import type { UsageActor } from "../usage/actors.js";
+import type { UsageAttributionSnapshot } from "../usage/attribution.js";
 import {
   resolveUsageAttribution,
   type UsageAttributionInput,
@@ -44,20 +60,15 @@ import { getWorkspaceDir } from "../util/layout.js";
 import { getLogger } from "../util/logger.js";
 import { setConfig } from "./helpers/set-config.js";
 
-const conversationCrudRealSnapshot = {
-  ...(createRequire(import.meta.url)(
-    "../persistence/conversation-crud.js",
-  ) as Record<string, unknown>),
+const crudRequire = createRequire(import.meta.url);
+const conversationCrudRealSnapshot: Record<string, unknown> = {
+  ...crudRequire("../persistence/conversation-crud.js"),
 };
-const conversationDiskViewRealSnapshot = {
-  ...(createRequire(import.meta.url)(
-    "../persistence/conversation-disk-view.js",
-  ) as Record<string, unknown>),
+const conversationDiskViewRealSnapshot: Record<string, unknown> = {
+  ...crudRequire("../persistence/conversation-disk-view.js"),
 };
-const channelReplyDeliveryRealSnapshot = {
-  ...(createRequire(import.meta.url)(
-    "../runtime/channel-reply-delivery.js",
-  ) as Record<string, unknown>),
+const channelReplyDeliveryRealSnapshot: Record<string, unknown> = {
+  ...crudRequire("../runtime/channel-reply-delivery.js"),
 };
 // Disable the catalog default so resolution lands on llm.default.
 const disabledCatalogDefaultProfiles: Record<string, unknown> = {
@@ -144,19 +155,30 @@ mock.module("../context/token-estimator.js", () => ({
 }));
 
 // Reducer: by default returns the input untouched and marks exhausted
+type MockReducerStep = {
+  messages?: Message[];
+  tier?: string;
+  state?: {
+    appliedTiers: string[];
+    injectionMode: string;
+    exhausted: boolean;
+  };
+  estimatedTokens?: number;
+  compactionResult?: Record<string, unknown>;
+};
 let mockReducerStepFn:
-  | ((msgs: Message[], cfg: unknown, state: unknown) => unknown)
+  | ((msgs: Message[], cfg: unknown, state: unknown) => MockReducerStep)
   | null = null;
-const makeInitialReducerState = () => ({
-  appliedTiers: [] as string[],
-  injectionMode: "full" as const,
+const makeInitialReducerState = (): NonNullable<MockReducerStep["state"]> => ({
+  appliedTiers: [],
+  injectionMode: "full",
   exhausted: false,
 });
 const runMockReducer = async (
   msgs: Message[],
   cfg: unknown,
   state: unknown,
-) => {
+): Promise<MockReducerStep> => {
   if (mockReducerStepFn) {
     return mockReducerStepFn(msgs, cfg, state);
   }
@@ -209,9 +231,7 @@ function makeOverflowLadderStub(): {
     if (!state) {
       state = makeInitialReducerState();
     }
-    const step = (await runMockReducer(msgs, opts, state)) as {
-      state: unknown;
-    };
+    const step = await runMockReducer(msgs, opts, state);
     state = step.state;
     return step;
   };
@@ -221,16 +241,11 @@ function makeOverflowLadderStub(): {
     },
     reduceOverflowOneRung,
     recoverContextOverflow: async (msgs: Message[], opts: unknown) => {
-      const step = (await reduceOverflowOneRung(msgs, opts)) as {
-        messages: Message[];
-        estimatedTokens?: number;
-        state: {
-          appliedTiers: string[];
-          injectionMode: string;
-          exhausted: boolean;
-        };
-        compactionResult?: Record<string, unknown>;
-      };
+      const step = await reduceOverflowOneRung(msgs, opts);
+      const rungState = step.state;
+      if (!rungState) {
+        throw new Error("mock reducer returned no state");
+      }
       const base = step.compactionResult ?? {
         compacted: false,
         messages: step.messages,
@@ -238,11 +253,11 @@ function makeOverflowLadderStub(): {
       return {
         ...base,
         messages: step.messages,
-        injectionMode: step.state.injectionMode,
-        autoCompressApplied: step.state.appliedTiers.includes(
+        injectionMode: rungState.injectionMode,
+        autoCompressApplied: rungState.appliedTiers.includes(
           "auto_compress_latest_turn",
         ),
-        exhausted: step.state.exhausted,
+        exhausted: rungState.exhausted,
       };
     },
   };
@@ -354,10 +369,15 @@ function soleInflightDeltaPath(): string {
   }
   return files[0];
 }
-const deleteMessageByIdMock = mock(() => ({
-  segmentIds: [],
-  deletedSummaryIds: [],
-}));
+const deleteMessageByIdMock = mock(
+  (
+    _messageId: string,
+    _options?: { retainAttachmentIds?: readonly string[] },
+  ) => ({
+    segmentIds: [],
+    deletedSummaryIds: [],
+  }),
+);
 const reserveMessageMock = mock(async () => ({
   id: "msg-reserve",
   createdAt: 1_700_000_000_050,
@@ -365,11 +385,24 @@ const reserveMessageMock = mock(async () => ({
 /** Persisted rows the loop reads back. Empty unless a test seeds one. */
 let mockStoredMessages: unknown[] = [];
 const updateMessageContentMock = mock(() => {});
-const finalizeMessageContentMock = mock(() => {});
-const addMessageMock = mock(() => ({
-  id: "mock-msg-id",
-  createdAt: 1_700_000_000_100,
-}));
+const finalizeMessageContentMock = mock(
+  (
+    _messageId: string,
+    _contentJson: string,
+    _metadataUpdates?: Record<string, unknown>,
+  ) => {},
+);
+const addMessageMock = mock(
+  (
+    _conversationId: string,
+    _role: MessageRole,
+    _content: string,
+    _options?: AddMessageOptions,
+  ) => ({
+    id: "mock-msg-id",
+    createdAt: 1_700_000_000_100,
+  }),
+);
 const updateConversationContextWindowMock = mock(() => {});
 mock.module("../persistence/conversation-crud.js", () => ({
   setConversationProcessingStartedAt: () => {},
@@ -449,12 +482,19 @@ mock.module("../persistence/conversation-crud.js", () => ({
 // `../memory/indexer.js` and `projectAssistantMessage` from
 // `../persistence/conversation-attention-store.js`; without these stubs the
 // real modules would try to open a SQLite DB and read a real config.
-const indexMessageNowMock = mock(async () => ({
-  indexedSegments: 0,
-  enqueuedJobs: 0,
-}));
-const projectAssistantMessageMock = mock(() => false);
-const publishSyncInvalidationMock = mock(async () => {});
+const indexMessageNowMock = mock(
+  async (_input: IndexMessageInput, _config: MemoryConfig) => ({
+    indexedSegments: 0,
+    enqueuedJobs: 0,
+  }),
+);
+const projectAssistantMessageMock = mock(
+  (_params: { conversationId: string; messageId: string; messageAt: number }) =>
+    false,
+);
+const publishSyncInvalidationMock = mock(
+  async (_tags: SyncInvalidationTag[], _originClientId?: string) => {},
+);
 mock.module("../plugins/defaults/memory/indexer.js", () => ({
   indexMessageNow: indexMessageNowMock,
 }));
@@ -500,7 +540,13 @@ mock.module("../notifications/background-result-producer.js", () => ({
   emitBackgroundResultNotification: emitBackgroundResultNotificationMock,
 }));
 
-const emitAssistantReplyNotificationMock = mock(async () => {});
+const emitAssistantReplyNotificationMock = mock(
+  async (_params: {
+    conversationId: string;
+    assistantMessageId: string;
+    [key: string]: unknown;
+  }) => {},
+);
 mock.module("../notifications/assistant-reply-producer.js", () => ({
   emitAssistantReplyNotification: emitAssistantReplyNotificationMock,
 }));
@@ -520,7 +566,9 @@ afterAll(() => {
   );
 });
 
-const syncMessageToDiskMock = mock(() => {});
+const syncMessageToDiskMock = mock(
+  (_conversationId: string, _messageId: string, _createdAtMs: number) => {},
+);
 const rebuildConversationDiskViewFromDbStateMock = mock(() => {});
 mock.module("../persistence/conversation-disk-view.js", () => ({
   syncMessageToDisk: syncMessageToDiskMock,
@@ -679,9 +727,38 @@ mock.module("../agent/history-repair/history-repair.js", () => ({
   isRepairableOrderingError: () => false,
 }));
 
-const recordUsageMock = mock(() => {});
-const recordRequestLogMock = mock(() => {});
-const backfillMessageIdOnLogsMock = mock(() => {});
+const recordUsageMock = mock(
+  (
+    _ctx: UsageContext,
+    _inputTokens: number,
+    _outputTokens: number,
+    _model: string,
+    _onEvent: (msg: AssistantEvent) => void,
+    _actor: UsageActor,
+    _requestId?: string | null,
+    _cacheCreationInputTokens?: number,
+    _cacheReadInputTokens?: number,
+    _rawResponse?: unknown,
+    _llmCallCount?: number,
+    _contextWindow?: { tokens: number; maxTokens: number },
+    _attribution?: UsageAttributionInput | UsageAttributionSnapshot | null,
+    _cronRunId?: string | null,
+  ) => {},
+);
+const recordRequestLogMock = mock(
+  (
+    _conversationId: string,
+    _requestPayload: string,
+    _responsePayload: string,
+    _messageId?: string,
+    _provider?: string,
+    _callSite?: LLMCallSite,
+    _latencyBreakdown?: string,
+  ) => {},
+);
+const backfillMessageIdOnLogsMock = mock(
+  (_conversationId: string, _messageId: string) => {},
+);
 const setAgentLoopExitReasonOnLatestLogMock = mock(() => {});
 mock.module("../daemon/conversation-usage.js", () => ({
   recordUsage: recordUsageMock,
@@ -820,7 +897,10 @@ import {
   recordInjected as recordV3Injected,
 } from "../plugins/defaults/memory/v3/ever-injected-store.js";
 import { installFastTimers } from "./fast-timers.js";
-import { asConversation } from "./helpers/mock-conversation.js";
+import {
+  asConversation,
+  mockUnownedModeSessions,
+} from "./helpers/mock-conversation.js";
 import {
   createMockProvider,
   type ScriptedResponse,
@@ -859,9 +939,7 @@ function makeCtx(
   // a response omits its own, which is what the request-log fallback reads.
   // Tests that need to introspect provider calls (or sequence a rejection)
   // build their own `loopProvider` via `createMockProvider`.
-  const loopProviderName =
-    (ctxOverrides.provider as { name?: string } | undefined)?.name ??
-    "mock-provider";
+  const loopProviderName = ctxOverrides.provider?.name ?? "mock-provider";
   const provider =
     loopProvider ??
     createMockProvider(
@@ -876,24 +954,15 @@ function makeCtx(
     toolExecutor,
   });
 
-  const modeSessions = {
-    getTurnOwner: () => undefined,
-    getTerminalDisposition: () => undefined,
-    keepsSessionOpenAfterTurn: () => false,
-    trackPersistedRow: () => false,
-    recordStructuralWait: () => false,
+  const modeSessions = mockUnownedModeSessions({
     invalidateStructuralWait: mock(() => false),
-    beginDraining: () => false,
-    finalizeTurn: () => false,
     releaseTurn: () => false,
-    transferTurn: () => false,
-  } as unknown as Conversation["modeSessions"];
+    transferTurn: () => undefined,
+  });
 
   const ctx = asConversation({
     conversationId: "test-conv",
-    messages: [
-      { role: "user", content: [{ type: "text", text: "Hello" }] },
-    ] as Message[],
+    messages: [{ role: "user", content: [{ type: "text", text: "Hello" }] }],
     isProcessing: () => processing,
     setProcessing: (value: boolean) => {
       processing = value;
@@ -910,14 +979,17 @@ function makeCtx(
         usage: { inputTokens: 0, outputTokens: 0 },
         stopReason: "end_turn",
       }),
-    } as unknown as Conversation["provider"],
+    },
     systemPrompt: "system prompt",
 
-    contextWindowManager: {
-      updateConfig: () => {},
-      shouldCompact: () => ({ needed: false, estimatedTokens: 0 }),
-      maybeCompact: async () => ({ compacted: false }),
-    } as unknown as Conversation["contextWindowManager"],
+    contextWindowManager: Object.assign(
+      Object.create(ContextWindowManager.prototype),
+      {
+        updateConfig: () => {},
+        shouldCompact: () => ({ needed: false, estimatedTokens: 0 }),
+        maybeCompact: async () => noCompactionResult(),
+      },
+    ),
     conversationType: mockConversationRow?.conversationType ?? undefined,
     source: mockConversationRow?.source ?? undefined,
     contextSummary: mockConversationRow?.contextSummary ?? null,
@@ -947,8 +1019,7 @@ function makeCtx(
     allowedToolNames: undefined,
     preactivatedSkillIds: undefined,
     skillProjectionState: new Map(),
-    skillProjectionCache:
-      new Map() as unknown as Conversation["skillProjectionCache"],
+    skillProjectionCache: new Map<string, never>(),
 
     usageStats: { inputTokens: 0, outputTokens: 0, estimatedCost: 0 },
     turnCount: 0,
@@ -957,8 +1028,8 @@ function makeCtx(
     lastAttachmentWarnings: [],
 
     hasNoClient: false,
-    prompter: {} as unknown as Conversation["prompter"],
-    queue: {} as unknown as Conversation["queue"],
+    prompter: Object.create(PermissionPrompter.prototype),
+    queue: Object.create(MessageQueue.prototype),
 
     getWorkspaceGitService: () => ({ ensureInitialized: async () => {} }),
     commitTurnChanges: async () => {},
@@ -987,33 +1058,42 @@ function makeCtx(
     syncLoopSystemPrompt: () => {},
     modelOverride: undefined,
 
-    graphMemory: {
-      onCompacted: async () => true,
-      prepareMemory: async () => ({
-        runMessages: [],
-        injectedTokens: 0,
-        latencyMs: 0,
-        mode: "none" as const,
-      }),
-      reinjectCachedMemory: (messages: Message[]) => ({
-        runMessages: messages,
-        injectedTokens: 0,
-      }),
-      retrackCachedNodes: () => {},
-      recordPkbQueryVectors: () => {},
-    } as unknown as Conversation["graphMemory"],
+    graphMemory: Object.assign(
+      Object.create(ConversationGraphMemory.prototype),
+      {
+        onCompacted: async () => true,
+        prepareMemory: async () => ({
+          runMessages: [],
+          injectedTokens: 0,
+          latencyMs: 0,
+          mode: "none" as const,
+          injectedBlockText: null,
+          metrics: null,
+        }),
+        reinjectCachedMemory: (messages: Message[]) => ({
+          runMessages: messages,
+          injectedTokens: 0,
+        }),
+        retrackCachedNodes: () => {},
+        recordPkbQueryVectors: () => {},
+      },
+    ),
 
     ...ctxOverrides,
   });
   // Reactive overflow recovery resolves the turn-scoped reduction ladder off
   // the manager; give every fake manager the ladder methods unless a test
   // supplied its own.
-  const manager = ctx.contextWindowManager as unknown as Record<
-    string,
-    unknown
-  >;
-  if (typeof manager.reduceOverflowOneRung !== "function") {
-    Object.assign(manager, makeOverflowLadderStub());
+  // An own-prop probe, not a typeof probe: the doubled manager is grafted
+  // onto the real class, whose prototype carries the ladder methods, so only
+  // a member the double itself supplied counts as "has its own".
+  if (
+    !Object.prototype.hasOwnProperty.call(
+      ctx.contextWindowManager,
+      "reduceOverflowOneRung",
+    )
+  ) {
+    Object.assign(ctx.contextWindowManager, makeOverflowLadderStub());
   }
   fakeContextWindowManagers.set(conversationId, ctx.contextWindowManager);
   return ctx;
@@ -1058,6 +1138,25 @@ const DAILY_LIMIT_ASSISTANT_REPLY =
   "I had to stop because you hit your daily credit limit. Raise the limit in Settings → Billing and we can pick up where we left off, or I can continue once it resets.";
 
 type CompactionResult = Parameters<typeof applyCompactionResult>[1];
+
+/** A manager result that skips compaction, shaped as the real return. */
+function noCompactionResult(): ContextWindowResult {
+  return {
+    messages: [],
+    compacted: false,
+    previousEstimatedInputTokens: 0,
+    estimatedInputTokens: 0,
+    maxInputTokens: 0,
+    thresholdTokens: 0,
+    compactedMessages: 0,
+    compactedPersistedMessages: 0,
+    summaryCalls: 0,
+    summaryInputTokens: 0,
+    summaryOutputTokens: 0,
+    summaryModel: "",
+    summaryText: "",
+  };
+}
 
 function makeCompactionResult(
   overrides?: Partial<CompactionResult>,
@@ -1105,11 +1204,14 @@ function overflowAfterToolTurnScenario(): NonNullable<
       },
     ],
     toolExecutor: async () => ({ content: "ok", isError: false }),
-    contextWindowManager: {
-      updateConfig: () => {},
-      shouldCompact: () => ({ needed: false, estimatedTokens: 0 }),
-      maybeCompact: async () => ({ compacted: false }),
-    } as unknown as Conversation["contextWindowManager"],
+    contextWindowManager: Object.assign(
+      Object.create(ContextWindowManager.prototype),
+      {
+        updateConfig: () => {},
+        shouldCompact: () => ({ needed: false, estimatedTokens: 0 }),
+        maybeCompact: async () => noCompactionResult(),
+      },
+    ),
   };
 }
 
@@ -1217,8 +1319,8 @@ function makeModeSessionDouble(options?: {
   const beginDraining = mock(() => true);
   const finalizeTurn = mock(() => true);
   const releaseTurn = mock(() => true);
-  const transferTurn = mock(() => true);
-  const coordinator = {
+  const transferTurn = mock(() => undefined);
+  const coordinator = mockUnownedModeSessions({
     getTurnOwner: () => owner,
     getTerminalDisposition: () => options?.terminalDisposition,
     keepsSessionOpenAfterTurn: () => options?.sourceLifetime ?? false,
@@ -1228,7 +1330,7 @@ function makeModeSessionDouble(options?: {
     finalizeTurn,
     releaseTurn,
     transferTurn,
-  } as unknown as Conversation["modeSessions"];
+  });
   return {
     coordinator,
     trackPersistedRow,
@@ -1246,8 +1348,8 @@ describe("prompt cache warming", () => {
       async (_messages: Message[], _options?: SendMessageOptions) =>
         textResponse("unused"),
     );
-    const conversation = Object.assign(
-      Object.create(Conversation.prototype) as object,
+    const conversation: Conversation = Object.assign(
+      Object.create(Conversation.prototype),
       {
         conversationId: "conv-cache-warm-test",
         messages: [],
@@ -1255,7 +1357,7 @@ describe("prompt cache warming", () => {
         agentLoop: { getResolvedTools: () => [] },
         buildCurrentSystemPrompt: () => "system prompt",
       },
-    ) as unknown as Conversation;
+    );
 
     await conversation.warmPromptCache();
 
@@ -1273,8 +1375,8 @@ describe("prompt cache warming", () => {
 
   test("stays non-rejecting when request preparation fails", async () => {
     const sendMessage = mock(async () => textResponse("unused"));
-    const conversation = Object.assign(
-      Object.create(Conversation.prototype) as object,
+    const conversation: Conversation = Object.assign(
+      Object.create(Conversation.prototype),
       {
         conversationId: "conv-cache-warm-test",
         messages: [],
@@ -1286,7 +1388,7 @@ describe("prompt cache warming", () => {
         },
         buildCurrentSystemPrompt: () => "system prompt",
       },
-    ) as unknown as Conversation;
+    );
 
     await expect(conversation.warmPromptCache()).resolves.toBeUndefined();
     expect(sendMessage).not.toHaveBeenCalled();
@@ -1298,8 +1400,8 @@ describe("prompt cache warming", () => {
         textResponse("unused"),
     );
     const buildCurrentSystemPrompt = mock(() => "rebuilt prompt");
-    const conversation = Object.assign(
-      Object.create(Conversation.prototype) as object,
+    const conversation: Conversation = Object.assign(
+      Object.create(Conversation.prototype),
       {
         conversationId: "conv-cache-warm-test",
         messages: [],
@@ -1307,7 +1409,7 @@ describe("prompt cache warming", () => {
         agentLoop: { getResolvedTools: () => [] },
         buildCurrentSystemPrompt,
       },
-    ) as unknown as Conversation;
+    );
 
     await conversation.warmPromptCache({ systemPrompt: null, tools: [] });
 
@@ -1391,11 +1493,9 @@ describe("session-agent-loop", () => {
         expect(events.some((event) => event.type === "error")).toBe(false);
         expect(inflightDeltaFiles()).toHaveLength(0);
         expect(sessions.finalizeTurn).toHaveBeenCalledTimes(1);
-        const finalized = (
-          finalizeMessageContentMock.mock.calls as unknown as Array<
-            [string, string, unknown]
-          >
-        ).map(([id, content]) => ({ id, content }));
+        const finalized = finalizeMessageContentMock.mock.calls.map(
+          ([id, content]) => ({ id, content }),
+        );
         expect(finalized).toContainEqual({
           id: "msg-tracking-2",
           content: expect.stringContaining("file content"),
@@ -1528,7 +1628,7 @@ describe("session-agent-loop", () => {
           async sendMessage() {
             throw new Error("provider failure");
           },
-        } as Provider,
+        },
         modeSessions: sessions.coordinator,
       });
 
@@ -1545,7 +1645,7 @@ describe("session-agent-loop", () => {
         modeSessions: sessions.coordinator,
         pendingSurfaceActions: new Map([
           ["surface-1", { surfaceType: "form" }],
-        ]) as Conversation["pendingSurfaceActions"],
+        ]),
       });
 
       await runAgentLoopImpl(ctx, "hello", "msg-1", () => {});
@@ -1661,9 +1761,7 @@ describe("session-agent-loop", () => {
       await runAgentLoopImpl(ctx, "hello", "msg-1", (msg) => events.push(msg));
 
       expect(runSpy).toHaveBeenCalledTimes(1);
-      const call = runSpy.mock.calls[0]?.[0] as
-        | { messages: Message[] }
-        | undefined;
+      const call = runSpy.mock.calls[0]?.[0];
       expect(call?.messages[0]?.content).toEqual([
         { type: "text", text: "rewritten prompt" },
       ]);
@@ -1930,7 +2028,7 @@ describe("session-agent-loop", () => {
         trustContext: {
           sourceChannel: "telegram",
           trustClass: "guardian",
-        } as Conversation["trustContext"],
+        },
       });
       const cleanupFlagDuringInjection = captureCleanupFlagDuringInjection(ctx);
 
@@ -2035,7 +2133,7 @@ describe("session-agent-loop", () => {
         trustContext: {
           sourceChannel: "telegram",
           trustClass: "guardian",
-        } as Conversation["trustContext"],
+        },
       });
       const cleanupFlagDuringInjection = captureCleanupFlagDuringInjection(ctx);
 
@@ -2104,8 +2202,7 @@ describe("session-agent-loop", () => {
       );
       raceWithTimeoutOutcome = "timed_out";
       const ctx = makeCtx({
-        commitTurnChanges:
-          commitTurnChanges as unknown as Conversation["commitTurnChanges"],
+        commitTurnChanges: commitTurnChanges,
       });
 
       await runAgentLoopImpl(ctx, "write a file", "msg-1", () => {});
@@ -2284,9 +2381,7 @@ describe("session-agent-loop", () => {
         (event) => event.type === "message_complete",
       );
       expect(complete?.attachments?.[0]?.computerUseScreenshot).toBe(true);
-      const syncCalls = syncMessageToDiskMock.mock.calls as unknown as Array<
-        [string, string, number]
-      >;
+      const syncCalls = syncMessageToDiskMock.mock.calls;
       const finalRowSyncs = syncCalls.filter(
         (call) => call[1] === "msg-reserve",
       );
@@ -2316,9 +2411,7 @@ describe("session-agent-loop", () => {
         () => {},
       );
 
-      const calls = syncMessageToDiskMock.mock.calls as unknown as Array<
-        [string, string, number]
-      >;
+      const calls = syncMessageToDiskMock.mock.calls;
       expect(
         calls
           .map((call) => call[1])
@@ -2375,13 +2468,13 @@ describe("session-agent-loop", () => {
             usage: { inputTokens: 0, outputTokens: 0 },
             stopReason: "end_turn",
           }),
-        } as unknown as Conversation["provider"],
+        },
       });
 
       await runAgentLoopImpl(ctx, "hello", "msg-1", (msg) => events.push(msg));
 
       expect(recordRequestLogMock).toHaveBeenCalledTimes(1);
-      const call = recordRequestLogMock.mock.calls[0] as unknown as unknown[];
+      const call = recordRequestLogMock.mock.calls[0];
       expect(call[4]).toBe("fireworks");
     });
 
@@ -2424,19 +2517,13 @@ describe("session-agent-loop", () => {
             usage: { inputTokens: 0, outputTokens: 0 },
             stopReason: "end_turn",
           }),
-        } as unknown as Conversation["provider"],
+        },
       });
 
       await runAgentLoopImpl(ctx, "hello", "msg-1", () => {});
 
       expect(recordRequestLogMock).toHaveBeenCalledTimes(1);
-      const call = recordRequestLogMock.mock.calls[0] as unknown as [
-        string,
-        string,
-        string,
-        undefined,
-        string,
-      ];
+      const call = recordRequestLogMock.mock.calls[0];
       expect(call[4]).toBe("openrouter");
     });
 
@@ -2490,13 +2577,13 @@ describe("session-agent-loop", () => {
             usage: { inputTokens: 0, outputTokens: 0 },
             stopReason: "end_turn",
           }),
-        } as unknown as Conversation["provider"],
+        },
       });
 
       await runAgentLoopImpl(ctx, "hello", "msg-1", (msg) => events.push(msg));
 
       expect(recordRequestLogMock).toHaveBeenCalledTimes(1);
-      const call = recordRequestLogMock.mock.calls[0] as unknown as unknown[];
+      const call = recordRequestLogMock.mock.calls[0];
       expect(call[1]).toBe(JSON.stringify(rawRequest));
       expect(call[2]).toBe(JSON.stringify(rawResponse));
     });
@@ -2534,14 +2621,17 @@ describe("session-agent-loop", () => {
       });
 
       expect(recordRequestLogMock).toHaveBeenCalledTimes(1);
-      const call = recordRequestLogMock.mock.calls[0] as unknown as unknown[];
+      const call = recordRequestLogMock.mock.calls[0];
       expect(call[5]).toBe("callAgent");
 
       const usageCall = recordUsageMock.mock.calls.find(
-        (entry) => (entry as unknown[])[5] === "main_agent",
-      ) as unknown[] | undefined;
+        (entry) => entry[5] === "main_agent",
+      );
       expect(usageCall).toBeDefined();
-      const attribution = usageCall?.[12] as UsageAttributionInput;
+      const attribution = usageCall?.[12];
+      if (!attribution) {
+        throw new Error("usage was not recorded");
+      }
       expect(attribution.callSite).toBe("callAgent");
     });
 
@@ -2563,7 +2653,7 @@ describe("session-agent-loop", () => {
         callSite: "voiceFrontDoor",
       });
 
-      const call = recordRequestLogMock.mock.calls[0] as unknown as unknown[];
+      const call = recordRequestLogMock.mock.calls[0];
       expect(call[5]).toBe("voiceFrontDoor");
     });
 
@@ -2574,7 +2664,7 @@ describe("session-agent-loop", () => {
           async sendMessage() {
             throw new Error("upstream 500");
           },
-        } as unknown as Provider,
+        },
       });
 
       await runAgentLoopImpl(ctx, "hello", "msg-1", () => {}, {
@@ -2582,7 +2672,7 @@ describe("session-agent-loop", () => {
       });
 
       expect(recordRequestLogMock).toHaveBeenCalledTimes(1);
-      const call = recordRequestLogMock.mock.calls[0] as unknown as unknown[];
+      const call = recordRequestLogMock.mock.calls[0];
       expect(call[5]).toBe("callAgent");
     });
 
@@ -2662,14 +2752,14 @@ describe("session-agent-loop", () => {
             usage: { inputTokens: 0, outputTokens: 0 },
             stopReason: "end_turn",
           }),
-        } as unknown as Conversation["provider"],
+        },
       });
 
       await runAgentLoopImpl(ctx, "hello", "msg-1", (msg) => events.push(msg));
 
       const mainAgentCall = recordUsageMock.mock.calls.find(
-        (call) => (call as unknown[])[5] === "main_agent",
-      ) as unknown[] | undefined;
+        (call) => call[5] === "main_agent",
+      );
 
       expect(mainAgentCall).toBeDefined();
       expect(mainAgentCall?.[0]).toMatchObject({
@@ -2712,20 +2802,23 @@ describe("session-agent-loop", () => {
             usage: { inputTokens: 0, outputTokens: 0 },
             stopReason: "end_turn",
           }),
-        } as unknown as Conversation["provider"],
+        },
       });
 
       await runAgentLoopImpl(ctx, "hello", "msg-1", () => {});
 
       const mainAgentCall = recordUsageMock.mock.calls.find(
-        (call) => (call as unknown[])[5] === "main_agent",
-      ) as unknown[] | undefined;
+        (call) => call[5] === "main_agent",
+      );
 
       expect(mainAgentCall).toBeDefined();
       // All three attribution facets of the row must describe the same call.
       expect(mainAgentCall?.[0]).toMatchObject({ providerName: "anthropic" });
       expect(mainAgentCall?.[3]).toBe("claude-sonnet-5");
-      const attribution = mainAgentCall?.[12] as UsageAttributionInput;
+      const attribution = mainAgentCall?.[12];
+      if (!attribution || !("forceOverrideProfile" in attribution)) {
+        throw new Error("the turn did not carry a forced override profile");
+      }
       expect(attribution.callSite).toBe("mainAgent");
       expect(attribution.overrideProfile).toBe("backupProfile");
       expect(attribution.forceOverrideProfile).toBe(true);
@@ -2765,14 +2858,14 @@ describe("session-agent-loop", () => {
             usage: { inputTokens: 0, outputTokens: 0 },
             stopReason: "end_turn",
           }),
-        } as unknown as Conversation["provider"],
+        },
       });
 
       await runAgentLoopImpl(ctx, "hello", "msg-1", () => {});
 
       const mainAgentCall = recordUsageMock.mock.calls.find(
-        (call) => (call as unknown[])[5] === "main_agent",
-      ) as unknown[] | undefined;
+        (call) => call[5] === "main_agent",
+      );
 
       expect(mainAgentCall).toBeDefined();
       expect(mainAgentCall?.[0]).toMatchObject({ providerName: "openai" });
@@ -2802,8 +2895,8 @@ describe("session-agent-loop", () => {
       // The finalize write carries the `message_complete` event's model
       // (`response.model`) as metadata alongside the content, in one write.
       const finalizeCall = finalizeMessageContentMock.mock.calls.find(
-        (call) => (call as unknown[])[2] !== undefined,
-      ) as unknown[] | undefined;
+        (call) => call[2] !== undefined,
+      );
       expect(finalizeCall).toBeDefined();
       expect(finalizeCall?.[2]).toEqual({ model: "gpt-4.1-2026-03-01" });
     });
@@ -2846,7 +2939,7 @@ describe("session-agent-loop", () => {
 
     // A `task_progress` card mid-run. `data` mirrors what `ui_show` stores for
     // the card template, which is what the end-of-turn settle inspects.
-    function runningCardState(): Map<string, unknown> {
+    function runningCardState(): Map<string, SurfaceStateEntry> {
       return new Map([
         [
           "surface-1",
@@ -2866,11 +2959,14 @@ describe("session-agent-loop", () => {
       ]);
     }
 
-    function cardStatus(ctx: { surfaceState: Map<string, unknown> }): unknown {
-      const entry = ctx.surfaceState.get("surface-1") as {
-        data: { templateData: { status: unknown } };
-      };
-      return entry.data.templateData.status;
+    function cardStatus(ctx: {
+      surfaceState: Map<string, SurfaceStateEntry>;
+    }): unknown {
+      const entry = ctx.surfaceState.get("surface-1");
+      if (entry?.surfaceType !== "card") {
+        return undefined;
+      }
+      return entry.data.templateData?.status;
     }
 
     test("settles a running progress card when the user stops the turn", async () => {
@@ -2886,7 +2982,7 @@ describe("session-agent-loop", () => {
         },
       };
       const ctx = makeCtx({ loopProvider: provider, abortController });
-      ctx.surfaceState = runningCardState() as typeof ctx.surfaceState;
+      ctx.surfaceState = runningCardState();
       await runAgentLoopImpl(ctx, "hello", "msg-1", () => {});
       expect(cardStatus(ctx)).toBe("pending");
     });
@@ -2907,7 +3003,7 @@ describe("session-agent-loop", () => {
         },
       };
       const ctx = makeCtx({ loopProvider: provider, abortController });
-      ctx.surfaceState = runningCardState() as typeof ctx.surfaceState;
+      ctx.surfaceState = runningCardState();
       await runAgentLoopImpl(ctx, "hello", "msg-1", () => {});
       expect(cardStatus(ctx)).toBe("in_progress");
     });
@@ -3002,7 +3098,7 @@ describe("session-agent-loop", () => {
           async sendMessage() {
             throw new Error("unexpected crash");
           },
-        } as unknown as Provider,
+        },
       });
 
       // WHEN the orchestrator runs the turn
@@ -3178,13 +3274,13 @@ describe("session-agent-loop", () => {
 
       // The stale table and form surfaces should have been auto-completed
       const completeEvents = events.filter(
-        (e) => e.type === "ui_surface_complete",
+        (e): e is Extract<AssistantEvent, { type: "ui_surface_complete" }> =>
+          e.type === "ui_surface_complete",
       );
       expect(completeEvents).toHaveLength(2);
       for (const evt of completeEvents) {
-        const typed = evt as { surfaceId: string; summary: string };
-        expect(typed.summary).toBe("Dismissed");
-        expect(["stale-table-1", "stale-form-1"]).toContain(typed.surfaceId);
+        expect(evt.summary).toBe("Dismissed");
+        expect(["stale-table-1", "stale-form-1"]).toContain(evt.surfaceId);
       }
 
       // dynamic_page should still be pending
@@ -3289,8 +3385,11 @@ describe("session-agent-loop", () => {
       // Retaining the failed entry must not stall the sweep: deleting the
       // current key while iterating the map leaves later keys reachable.
       const completed = events
-        .filter((e) => e.type === "ui_surface_complete")
-        .map((e) => (e as { surfaceId: string }).surfaceId);
+        .filter(
+          (e): e is Extract<AssistantEvent, { type: "ui_surface_complete" }> =>
+            e.type === "ui_surface_complete",
+        )
+        .map((e) => e.surfaceId);
       expect(completed).toEqual(["stale-form-3"]);
       expect(ctx.pendingSurfaceActions.has("stale-table-3")).toBe(true);
       expect(ctx.pendingSurfaceActions.has("stale-form-3")).toBe(false);
@@ -3315,7 +3414,8 @@ describe("session-agent-loop", () => {
 
       // No ui_surface_complete should have been emitted
       const completeEvents = events.filter(
-        (e) => e.type === "ui_surface_complete",
+        (e): e is Extract<AssistantEvent, { type: "ui_surface_complete" }> =>
+          e.type === "ui_surface_complete",
       );
       expect(completeEvents).toHaveLength(0);
       // The pending surface should still be there
@@ -3334,7 +3434,8 @@ describe("session-agent-loop", () => {
       });
 
       const completeEvents = events.filter(
-        (e) => e.type === "ui_surface_complete",
+        (e): e is Extract<AssistantEvent, { type: "ui_surface_complete" }> =>
+          e.type === "ui_surface_complete",
       );
       expect(completeEvents).toHaveLength(0);
     });
@@ -3353,7 +3454,8 @@ describe("session-agent-loop", () => {
 
       // No ui_surface_complete should have been emitted
       const completeEvents = events.filter(
-        (e) => e.type === "ui_surface_complete",
+        (e): e is Extract<AssistantEvent, { type: "ui_surface_complete" }> =>
+          e.type === "ui_surface_complete",
       );
       expect(completeEvents).toHaveLength(0);
       // Pending surfaces should still be there
@@ -3400,7 +3502,7 @@ describe("session-agent-loop", () => {
 
       const turnContextCalls = updateMessageMetadataMock.mock.calls.filter(
         (call) => {
-          const payload = call[1] as Record<string, unknown>;
+          const payload = call[1];
           return (
             payload != null &&
             Object.prototype.hasOwnProperty.call(payload, "turnContextBlock")
@@ -3422,7 +3524,7 @@ describe("session-agent-loop", () => {
 
       const turnContextCalls = updateMessageMetadataMock.mock.calls.filter(
         (call) => {
-          const payload = call[1] as Record<string, unknown>;
+          const payload = call[1];
           return (
             payload != null &&
             Object.prototype.hasOwnProperty.call(payload, "turnContextBlock")
@@ -3458,7 +3560,7 @@ describe("session-agent-loop", () => {
 
       const turnContextCalls = updateMessageMetadataMock.mock.calls.filter(
         (call) => {
-          const payload = call[1] as Record<string, unknown>;
+          const payload = call[1];
           return (
             payload != null &&
             Object.prototype.hasOwnProperty.call(payload, "turnContextBlock")
@@ -3503,7 +3605,7 @@ describe("session-agent-loop", () => {
           async sendMessage() {
             throw new Error("Internal processing failure");
           },
-        } as unknown as Provider,
+        },
       });
       await runAgentLoopImpl(ctx, "hello", "msg-1", (msg) => events.push(msg));
 
@@ -3539,19 +3641,13 @@ describe("session-agent-loop", () => {
           async sendMessage() {
             throw new Error("upstream 500");
           },
-        } as unknown as Provider,
+        },
       });
       await runAgentLoopImpl(ctx, "hello", "msg-1", (msg) => events.push(msg));
 
       // The orphan was written with messageId=undefined.
       expect(recordRequestLogMock).toHaveBeenCalledTimes(1);
-      const recordCall = recordRequestLogMock.mock.calls[0] as unknown as [
-        string,
-        string,
-        string,
-        string | undefined,
-        string | undefined,
-      ];
+      const recordCall = recordRequestLogMock.mock.calls[0];
       expect(recordCall[0]).toBe("test-conv");
       expect(recordCall[3]).toBeUndefined();
 
@@ -3559,8 +3655,7 @@ describe("session-agent-loop", () => {
       // (from the mocked `addMessage` -> `{ id: "mock-msg-id" }`) into the
       // backfill primitive, scoped to this conversation.
       expect(backfillMessageIdOnLogsMock).toHaveBeenCalledTimes(1);
-      const backfillCall = backfillMessageIdOnLogsMock.mock
-        .calls[0] as unknown as [string, string];
+      const backfillCall = backfillMessageIdOnLogsMock.mock.calls[0];
       expect(backfillCall[0]).toBe("test-conv");
       expect(backfillCall[1]).toBe("mock-msg-id");
     });
@@ -3580,24 +3675,19 @@ describe("session-agent-loop", () => {
           async sendMessage() {
             throw new Error("Payment Required");
           },
-        } as unknown as Provider,
+        },
       });
       await runAgentLoopImpl(ctx, "hello", "msg-1", () => {});
 
       expect(addMessageMock).toHaveBeenCalledTimes(1);
-      const addCall = addMessageMock.mock.calls[0] as unknown as [
-        string,
-        string,
-        string,
-        { metadata?: Record<string, unknown> },
-      ];
+      const addCall = addMessageMock.mock.calls[0];
       expect(addCall[1]).toBe("assistant");
       // The persisted row swaps the context-neutral classification copy for
       // assistant-voice wording, since this turn truly ends with no reply.
-      const persistedBlocks = JSON.parse(addCall[2]) as Array<{
+      const persistedBlocks: Array<{
         type: string;
         text: string;
-      }>;
+      }> = JSON.parse(addCall[2]);
       expect(persistedBlocks[0]?.text).toBe(
         "I couldn't reply because you ran out of credits. Add credits in Settings → Billing and we can pick up where we left off.",
       );
@@ -3617,25 +3707,20 @@ describe("session-agent-loop", () => {
           async sendMessage() {
             throw new Error("Payment Required");
           },
-        } as unknown as Provider,
+        },
       });
       await runAgentLoopImpl(ctx, "hello", "msg-1", () => {});
 
       expect(addMessageMock).toHaveBeenCalledTimes(1);
-      const addCall = addMessageMock.mock.calls[0] as unknown as [
-        string,
-        string,
-        string,
-        { metadata?: Record<string, unknown> },
-      ];
+      const addCall = addMessageMock.mock.calls[0];
       expect(addCall[1]).toBe("assistant");
       // Like the credits-exhausted row, the daily-limit row re-enters LLM
       // history and renders as assistant speech, so it carries first-person
       // copy rather than the banner-voice classification text.
-      const persistedBlocks = JSON.parse(addCall[2]) as Array<{
+      const persistedBlocks: Array<{
         type: string;
         text: string;
-      }>;
+      }> = JSON.parse(addCall[2]);
       expect(persistedBlocks[0]?.text).toBe(DAILY_LIMIT_ASSISTANT_REPLY);
       expect(addCall[3]?.metadata).toMatchObject({
         messageKind: "provider_error",
@@ -3687,17 +3772,12 @@ describe("session-agent-loop", () => {
       // (a) The synthetic provider-error row is persisted with the
       // assistant-voice daily-limit copy and the classification metadata.
       expect(addMessageMock).toHaveBeenCalledTimes(1);
-      const addCall = addMessageMock.mock.calls[0] as unknown as [
-        string,
-        string,
-        string,
-        { metadata?: Record<string, unknown> },
-      ];
+      const addCall = addMessageMock.mock.calls[0];
       expect(addCall[1]).toBe("assistant");
-      const persistedBlocks = JSON.parse(addCall[2]) as Array<{
+      const persistedBlocks: Array<{
         type: string;
         text: string;
-      }>;
+      }> = JSON.parse(addCall[2]);
       expect(persistedBlocks[0]?.text).toBe(DAILY_LIMIT_ASSISTANT_REPLY);
       expect(addCall[3]?.metadata).toMatchObject({
         messageKind: "provider_error",
@@ -3710,17 +3790,13 @@ describe("session-agent-loop", () => {
       // blank bubble. The failing call reserves last (after the first call's
       // assistant row and the grouped tool-result row).
       expect(deleteMessageByIdMock).toHaveBeenCalledTimes(1);
-      const deleteCall = deleteMessageByIdMock.mock.calls[0] as unknown as [
-        string,
-      ];
+      const deleteCall = deleteMessageByIdMock.mock.calls[0];
       expect(deleteCall[0]).toBe("msg-reserve-3");
 
       // (c) The turn is stamped failed with the classified code.
-      const outcomeStamps = (
-        updateMessageMetadataMock.mock.calls as unknown as Array<
-          [string, Record<string, unknown>]
-        >
-      ).filter((call) => call[1]?.turnOutcome !== undefined);
+      const outcomeStamps = updateMessageMetadataMock.mock.calls.filter(
+        (call) => call[1]?.turnOutcome !== undefined,
+      );
       expect(outcomeStamps).toHaveLength(1);
       expect(outcomeStamps[0]?.[0]).toBe("msg-user-daily");
       expect(outcomeStamps[0]?.[1]).toMatchObject({
@@ -3730,10 +3806,7 @@ describe("session-agent-loop", () => {
 
       // (d) History ends tool_use -> tool_result -> error text, so the row
       // never lands between a tool_use and its tool_result on replay.
-      const tail = ctx.messages.slice(-3) as Array<{
-        role: string;
-        content: Array<{ type: string; text?: string }>;
-      }>;
+      const tail = ctx.messages.slice(-3);
       expect(tail[0]?.role).toBe("assistant");
       expect(tail[0]?.content[0]?.type).toBe("tool_use");
       expect(tail[1]?.role).toBe("user");
@@ -3760,7 +3833,7 @@ describe("session-agent-loop", () => {
           async sendMessage() {
             throw new Error("API key has expired.");
           },
-        } as unknown as Provider,
+        },
       });
       await runAgentLoopImpl(ctx, "hello", "msg-1", (msg) => events.push(msg));
 
@@ -3782,9 +3855,7 @@ describe("session-agent-loop", () => {
       expect(recordRequestLogMock).not.toHaveBeenCalled();
       expect(backfillMessageIdOnLogsMock).not.toHaveBeenCalled();
       expect(deleteMessageByIdMock).toHaveBeenCalledTimes(1);
-      const deleteCall = deleteMessageByIdMock.mock.calls[0] as unknown as [
-        string,
-      ];
+      const deleteCall = deleteMessageByIdMock.mock.calls[0];
       expect(deleteCall[0]).toBe("msg-reserve");
     });
 
@@ -3799,7 +3870,7 @@ describe("session-agent-loop", () => {
           async sendMessage() {
             throw new Error("upstream 500");
           },
-        } as unknown as Provider,
+        },
       });
       await runAgentLoopImpl(ctx, "hello", "msg-1", () => {});
 
@@ -3880,8 +3951,17 @@ describe("session-agent-loop", () => {
         conversationId: "test-conv",
         latestAssistantMessageId: "prior-result",
         latestAssistantMessageAt: startedAt + 2,
+        lastSeenAssistantMessageId: null,
         lastSeenAssistantMessageAt: null,
-      } as AttentionState;
+        lastSeenEventAt: null,
+        lastSeenConfidence: null,
+        lastSeenSignalType: null,
+        lastSeenSourceChannel: null,
+        lastSeenSource: null,
+        lastSeenEvidenceText: null,
+        createdAt: startedAt,
+        updatedAt: startedAt + 2,
+      };
       mockConversationRow = {
         ...mockConversationRow,
         id: "test-conv",
@@ -4082,10 +4162,9 @@ describe("session-agent-loop", () => {
         return { id: "queued-result", createdAt: startedAt + 11 };
       });
       finalizeMessageContentMock.mockImplementationOnce(
-        (...args: unknown[]) => {
-          const [id, content] = args as [string, string];
-          const row = rows.find((candidate) => candidate.id === id)!;
-          row.content = JSON.parse(content);
+        (messageId, contentJson) => {
+          const row = rows.find((candidate) => candidate.id === messageId)!;
+          row.content = JSON.parse(contentJson);
           row.finalized = 1;
         },
       );
@@ -4094,18 +4173,13 @@ describe("session-agent-loop", () => {
         await projectionReady;
         return { indexedSegments: 0, enqueuedJobs: 0 };
       });
-      projectAssistantMessageMock.mockImplementationOnce(
-        (...args: unknown[]) => {
-          const [projection] = args as [
-            { messageId: string; messageAt: number },
-          ];
-          backgroundRecoveryAttention!.latestAssistantMessageId =
-            projection.messageId;
-          backgroundRecoveryAttention!.latestAssistantMessageAt =
-            projection.messageAt;
-          return true;
-        },
-      );
+      projectAssistantMessageMock.mockImplementationOnce((projection) => {
+        backgroundRecoveryAttention!.latestAssistantMessageId =
+          projection.messageId;
+        backgroundRecoveryAttention!.latestAssistantMessageAt =
+          projection.messageAt;
+        return true;
+      });
       emitBackgroundSignalMock.mockImplementationOnce(async (signal) => {
         markDeliveryStarted();
         await deliveryReady;
@@ -4192,10 +4266,7 @@ describe("session-agent-loop", () => {
       await runAgentLoopImpl(ctx, "hi", "msg-user-7", () => {});
 
       expect(emitAssistantReplyNotificationMock).toHaveBeenCalledTimes(1);
-      const notifyCall = emitAssistantReplyNotificationMock.mock
-        .calls[0] as unknown as [
-        { conversationId: string; userMessageId: string | undefined },
-      ];
+      const notifyCall = emitAssistantReplyNotificationMock.mock.calls[0];
       expect(notifyCall[0]).toMatchObject({
         conversationId: "test-conv",
         userMessageId: "msg-user-7",
@@ -4220,8 +4291,7 @@ describe("session-agent-loop", () => {
       });
 
       expect(emitAssistantReplyNotificationMock).toHaveBeenCalledTimes(1);
-      const notifyCall = emitAssistantReplyNotificationMock.mock
-        .calls[0] as unknown as [{ userMessageId: string | undefined }];
+      const notifyCall = emitAssistantReplyNotificationMock.mock.calls[0];
       expect(notifyCall[0].userMessageId).toBe("msg-user-prompt");
     });
 
@@ -4243,8 +4313,7 @@ describe("session-agent-loop", () => {
       });
 
       expect(emitAssistantReplyNotificationMock).toHaveBeenCalledTimes(1);
-      const notifyCall = emitAssistantReplyNotificationMock.mock
-        .calls[0] as unknown as [{ replyDeliveredInAppOnly?: boolean }];
+      const notifyCall = emitAssistantReplyNotificationMock.mock.calls[0];
       expect(notifyCall[0].replyDeliveredInAppOnly).toBe(true);
     });
 
@@ -4264,8 +4333,7 @@ describe("session-agent-loop", () => {
       await runAgentLoopImpl(ctx, "hi", "msg-user-9", () => {});
 
       expect(emitAssistantReplyNotificationMock).toHaveBeenCalledTimes(1);
-      const notifyCall = emitAssistantReplyNotificationMock.mock
-        .calls[0] as unknown as [Record<string, unknown>];
+      const notifyCall = emitAssistantReplyNotificationMock.mock.calls[0];
       expect(notifyCall[0]).not.toHaveProperty("replyDeliveredInAppOnly");
     });
   });
@@ -4424,16 +4492,7 @@ describe("session-agent-loop", () => {
 
       // Indexer fired with the reserved row's id + the finalized content.
       expect(indexMessageNowMock).toHaveBeenCalledTimes(1);
-      const indexCallArgs = indexMessageNowMock.mock.calls[0] as unknown as [
-        {
-          messageId: string;
-          conversationId: string;
-          role: string;
-          content: string;
-          createdAt: number;
-        },
-        unknown,
-      ];
+      const indexCallArgs = indexMessageNowMock.mock.calls[0];
       const indexCall = indexCallArgs[0];
       expect(indexCall).toMatchObject({
         messageId: "msg-reserve",
@@ -4445,10 +4504,7 @@ describe("session-agent-loop", () => {
 
       // Attention projector fired with the same row coordinates.
       expect(projectAssistantMessageMock).toHaveBeenCalledTimes(1);
-      const projectCall = projectAssistantMessageMock.mock
-        .calls[0] as unknown as [
-        { conversationId: string; messageId: string; messageAt: number },
-      ];
+      const projectCall = projectAssistantMessageMock.mock.calls[0];
       expect(projectCall[0]).toEqual({
         conversationId: "test-conv",
         messageId: "msg-reserve",
@@ -4460,9 +4516,9 @@ describe("session-agent-loop", () => {
       // `:messages` invalidation from the orchestrator's
       // `publishLoopMessagesChanged` post-loop emit, so we filter by tag
       // rather than asserting a total call count.
-      const metadataPublishes = (
-        publishSyncInvalidationMock.mock.calls as unknown as Array<[string[]]>
-      ).filter((args) => args[0]?.includes("conversation:test-conv:metadata"));
+      const metadataPublishes = publishSyncInvalidationMock.mock.calls.filter(
+        (args) => args[0]?.includes("conversation:test-conv:metadata"),
+      );
       expect(metadataPublishes).toHaveLength(1);
     });
 
@@ -4528,9 +4584,9 @@ describe("session-agent-loop", () => {
       // The mock will still receive a `:messages` invalidation from the
       // orchestrator's `publishLoopMessagesChanged` — filter to the
       // `:metadata` tag and assert it never landed.
-      const metadataPublishes = (
-        publishSyncInvalidationMock.mock.calls as unknown as Array<[string[]]>
-      ).filter((args) => args[0]?.includes("conversation:test-conv:metadata"));
+      const metadataPublishes = publishSyncInvalidationMock.mock.calls.filter(
+        (args) => args[0]?.includes("conversation:test-conv:metadata"),
+      );
       expect(metadataPublishes).toHaveLength(0);
     });
 
@@ -4579,11 +4635,14 @@ describe("session-agent-loop", () => {
           ),
           textResponse("retry succeeded"),
         ],
-        contextWindowManager: {
-          updateConfig: () => {},
-          shouldCompact: () => ({ needed: false, estimatedTokens: 0 }),
-          maybeCompact: async () => ({ compacted: false }),
-        } as unknown as Conversation["contextWindowManager"],
+        contextWindowManager: Object.assign(
+          Object.create(ContextWindowManager.prototype),
+          {
+            updateConfig: () => {},
+            shouldCompact: () => ({ needed: false, estimatedTokens: 0 }),
+            maybeCompact: async () => noCompactionResult(),
+          },
+        ),
       });
       await runAgentLoopImpl(ctx, "hi", "msg-1", () => {});
 
@@ -4593,8 +4652,7 @@ describe("session-agent-loop", () => {
       // `assistantRowAwaitingFinalization` is false, so no further delete
       // is attempted on shutdown.
       expect(deleteMessageByIdMock).toHaveBeenCalledTimes(1);
-      const strandDeleteCall = deleteMessageByIdMock.mock
-        .calls[0] as unknown as [string];
+      const strandDeleteCall = deleteMessageByIdMock.mock.calls[0];
       expect(strandDeleteCall[0]).toBe("msg-strand-A");
       expect(reserveMessageMock).toHaveBeenCalledTimes(2);
     });
@@ -4625,16 +4683,14 @@ describe("session-agent-loop", () => {
           async sendMessage() {
             throw new Error("upstream 500");
           },
-        } as unknown as Provider,
+        },
       });
       await runAgentLoopImpl(ctx, "hi", "msg-1", () => {});
 
       // The orphan was deleted exactly once, before the synthetic error
       // message landed.
       expect(deleteMessageByIdMock).toHaveBeenCalledTimes(1);
-      const deleteCall = deleteMessageByIdMock.mock.calls[0] as unknown as [
-        string,
-      ];
+      const deleteCall = deleteMessageByIdMock.mock.calls[0];
       expect(deleteCall[0]).toBe("msg-orphaned-reservation");
 
       // Post-loop `syncLastAssistantMessageToDisk` targets the synthetic
@@ -4642,9 +4698,7 @@ describe("session-agent-loop", () => {
       // the deleted reservation id. This is the externally-observable
       // proof that `state.lastAssistantMessageId` was repointed.
       expect(syncMessageToDiskMock).toHaveBeenCalled();
-      const syncCalls = syncMessageToDiskMock.mock.calls as unknown as Array<
-        [string, string, number]
-      >;
+      const syncCalls = syncMessageToDiskMock.mock.calls;
       const lastSync = syncCalls[syncCalls.length - 1];
       expect(lastSync?.[1]).toBe("mock-msg-id");
       expect(lastSync?.[1]).not.toBe("msg-orphaned-reservation");
@@ -4668,21 +4722,19 @@ describe("session-agent-loop", () => {
           async sendMessage() {
             throw new Error("API key has expired.");
           },
-        } as unknown as Provider,
+        },
       });
       await runAgentLoopImpl(ctx, "hi", "msg-1", () => {});
 
       expect(deleteMessageByIdMock).toHaveBeenCalledTimes(1);
-      const deleteCall = deleteMessageByIdMock.mock.calls[0] as unknown as [
-        string,
-      ];
+      const deleteCall = deleteMessageByIdMock.mock.calls[0];
       expect(deleteCall[0]).toBe("msg-managed-key-reservation");
       expect(addMessageMock).not.toHaveBeenCalled();
       expect(syncMessageToDiskMock).not.toHaveBeenCalled();
 
-      const messagePublishes = (
-        publishSyncInvalidationMock.mock.calls as unknown as Array<[string[]]>
-      ).filter((args) => args[0]?.includes("conversation:test-conv:messages"));
+      const messagePublishes = publishSyncInvalidationMock.mock.calls.filter(
+        (args) => args[0]?.includes("conversation:test-conv:messages"),
+      );
       expect(messagePublishes).toHaveLength(1);
     });
   });
@@ -4764,9 +4816,9 @@ describe("session-agent-loop", () => {
       // all — it was born holding the `{ ref }` at reserve time.
       expect(updateMessageContentMock).toHaveBeenCalledTimes(0);
       expect(midTurnDeltaLines).toHaveLength(1);
-      const delta = JSON.parse(midTurnDeltaLines![0]) as {
+      const delta: {
         block: { type: string; text?: string; _redactionVersion?: number };
-      };
+      } = JSON.parse(midTurnDeltaLines![0]);
       expect(delta.block).toEqual({
         type: "text",
         text: "Hello, world.",
@@ -4776,10 +4828,7 @@ describe("session-agent-loop", () => {
       });
       // The finalize seam folds the authoritative content inline and
       // removes the delta file.
-      const finalize = finalizeMessageContentMock.mock.calls[0] as unknown as [
-        string,
-        string,
-      ];
+      const finalize = finalizeMessageContentMock.mock.calls[0];
       expect(finalize[0]).toBe("msg-reserve");
       expect(JSON.parse(finalize[1])).toEqual([
         { type: "text", text: "Hello, world.", _redactionVersion: 2 },
@@ -4988,8 +5037,7 @@ describe("session-agent-loop", () => {
       // string is gone".
       expect(midTurnDeltaFile).toBeDefined();
       expect(midTurnDeltaFile).not.toContain(ghToken);
-      const finalizeArgs = finalizeMessageContentMock.mock
-        .calls[0] as unknown as [string, string];
+      const finalizeArgs = finalizeMessageContentMock.mock.calls[0];
       expect(finalizeArgs[1]).not.toContain(ghToken);
     });
 
@@ -5046,7 +5094,7 @@ describe("session-agent-loop", () => {
       // Scoped to the row under test: the resumed attempt reserves a row of
       // its own, which its own cleanup deletes.
       const deletedIds = deleteMessageByIdMock.mock.calls.map(
-        (call) => (call as unknown as [string])[0],
+        (call) => call[0],
       );
       expect(deletedIds).toContain("msg-orphan-with-partial");
     });
@@ -5061,15 +5109,11 @@ describe("session-agent-loop", () => {
       await runAgentLoopImpl(ctx, "hello", "user-msg-1", () => {});
 
       const pkbCalls = updateMessageMetadataMock.mock.calls.filter(
-        (call) =>
-          (call[1] as Record<string, unknown>).pkbSystemReminderBlock !==
-          undefined,
+        (call) => call[1].pkbSystemReminderBlock !== undefined,
       );
       expect(pkbCalls.length).toBe(1);
       expect(pkbCalls[0][0]).toBe("user-msg-1");
-      expect(
-        (pkbCalls[0][1] as Record<string, unknown>).pkbSystemReminderBlock,
-      ).toBe(reminder);
+      expect(pkbCalls[0][1].pkbSystemReminderBlock).toBe(reminder);
     });
 
     test("skips persistence when pkbSystemReminder is absent (minimal mode or PKB inactive)", async () => {
@@ -5079,9 +5123,7 @@ describe("session-agent-loop", () => {
       await runAgentLoopImpl(ctx, "hello", "user-msg-2", () => {});
 
       const pkbCalls = updateMessageMetadataMock.mock.calls.filter(
-        (call) =>
-          (call[1] as Record<string, unknown>).pkbSystemReminderBlock !==
-          undefined,
+        (call) => call[1].pkbSystemReminderBlock !== undefined,
       );
       expect(pkbCalls.length).toBe(0);
     });
@@ -5117,7 +5159,7 @@ describe("session-agent-loop", () => {
 
       const injectionCalls = updateMessageMetadataMock.mock.calls.filter(
         (call) => {
-          const payload = call[1] as Record<string, unknown>;
+          const payload = call[1];
           return (
             payload != null &&
             (Object.prototype.hasOwnProperty.call(
@@ -5183,43 +5225,46 @@ describe("session-agent-loop", () => {
         trustContext: {
           sourceChannel: "slack",
           trustClass: "guardian",
-        } as Conversation["trustContext"],
+        },
         getTurnChannelContext: () => ({
           userMessageChannel: "slack" as const,
           assistantMessageChannel: "slack" as const,
         }),
-        contextWindowManager: {
-          updateConfig: () => {},
-          shouldCompact: () => ({ needed: false, estimatedTokens: 0 }),
-          maybeCompact: async (messages: Message[]) => {
-            maybeCompactInputs.push(messages);
-            // Drop back under budget so the post-compaction provider call
-            // proceeds.
-            mockEstimateTokens = 1000;
-            return {
-              compacted: true,
-              messages: [
-                {
-                  role: "user",
-                  content: [{ type: "text", text: "summary" }],
-                },
-                messages[messages.length - 1]!,
-              ],
-              compactedPersistedMessages: 2,
-              previousEstimatedInputTokens: 90_000,
-              estimatedInputTokens: 5_000,
-              maxInputTokens: 100_000,
-              thresholdTokens: 80_000,
-              compactedMessages: 2,
-              summaryCalls: 1,
-              summaryInputTokens: 100,
-              summaryOutputTokens: 20,
-              summaryModel: "mock-model",
-              summaryText: "summary",
-              summaryFailed: false,
-            };
+        contextWindowManager: Object.assign(
+          Object.create(ContextWindowManager.prototype),
+          {
+            updateConfig: () => {},
+            shouldCompact: () => ({ needed: false, estimatedTokens: 0 }),
+            maybeCompact: async (messages: Message[]) => {
+              maybeCompactInputs.push(messages);
+              // Drop back under budget so the post-compaction provider call
+              // proceeds.
+              mockEstimateTokens = 1000;
+              return {
+                compacted: true,
+                messages: [
+                  {
+                    role: "user",
+                    content: [{ type: "text", text: "summary" }],
+                  },
+                  messages[messages.length - 1]!,
+                ],
+                compactedPersistedMessages: 2,
+                previousEstimatedInputTokens: 90_000,
+                estimatedInputTokens: 5_000,
+                maxInputTokens: 100_000,
+                thresholdTokens: 80_000,
+                compactedMessages: 2,
+                summaryCalls: 1,
+                summaryInputTokens: 100,
+                summaryOutputTokens: 20,
+                summaryModel: "mock-model",
+                summaryText: "summary",
+                summaryFailed: false,
+              };
+            },
           },
-        } as unknown as Conversation["contextWindowManager"],
+        ),
       });
 
       await runAgentLoopImpl(
@@ -5304,42 +5349,45 @@ describe("session-agent-loop", () => {
         trustContext: {
           sourceChannel: "slack",
           trustClass: "guardian",
-        } as Conversation["trustContext"],
+        },
         getTurnChannelContext: () => ({
           userMessageChannel: "slack" as const,
           assistantMessageChannel: "slack" as const,
         }),
-        contextWindowManager: {
-          updateConfig: () => {},
-          shouldCompact: () => ({ needed: false, estimatedTokens: 0 }),
-          maybeCompact: async (messages: Message[]) => {
-            maybeCompactInputs.push(messages);
-            // The mid-loop gate compacted its in-loop basis; drop the estimate
-            // back under budget so the post-compaction provider call proceeds.
-            mockEstimateTokens = 1000;
-            return {
-              compacted: true,
-              messages: [
-                {
-                  role: "user",
-                  content: [{ type: "text", text: "summary" }],
-                },
-              ],
-              compactedPersistedMessages: 2,
-              previousEstimatedInputTokens: 90_000,
-              estimatedInputTokens: 5_000,
-              maxInputTokens: 100_000,
-              thresholdTokens: 80_000,
-              compactedMessages: 2,
-              summaryCalls: 1,
-              summaryInputTokens: 100,
-              summaryOutputTokens: 20,
-              summaryModel: "mock-model",
-              summaryText: "summary",
-              summaryFailed: false,
-            };
+        contextWindowManager: Object.assign(
+          Object.create(ContextWindowManager.prototype),
+          {
+            updateConfig: () => {},
+            shouldCompact: () => ({ needed: false, estimatedTokens: 0 }),
+            maybeCompact: async (messages: Message[]) => {
+              maybeCompactInputs.push(messages);
+              // The mid-loop gate compacted its in-loop basis; drop the estimate
+              // back under budget so the post-compaction provider call proceeds.
+              mockEstimateTokens = 1000;
+              return {
+                compacted: true,
+                messages: [
+                  {
+                    role: "user",
+                    content: [{ type: "text", text: "summary" }],
+                  },
+                ],
+                compactedPersistedMessages: 2,
+                previousEstimatedInputTokens: 90_000,
+                estimatedInputTokens: 5_000,
+                maxInputTokens: 100_000,
+                thresholdTokens: 80_000,
+                compactedMessages: 2,
+                summaryCalls: 1,
+                summaryInputTokens: 100,
+                summaryOutputTokens: 20,
+                summaryModel: "mock-model",
+                summaryText: "summary",
+                summaryFailed: false,
+              };
+            },
           },
-        } as unknown as Conversation["contextWindowManager"],
+        ),
       });
 
       await runAgentLoopImpl(ctx, "next reply", "user-msg-mid-loop", () => {});
@@ -5418,7 +5466,7 @@ describe("session-agent-loop", () => {
         trustContext: {
           sourceChannel: "slack",
           trustClass: "guardian",
-        } as Conversation["trustContext"],
+        },
         getTurnChannelContext: () => ({
           userMessageChannel: "slack" as const,
           assistantMessageChannel: "slack" as const,
@@ -5509,7 +5557,7 @@ describe("session-agent-loop", () => {
         trustContext: {
           sourceChannel: "slack",
           trustClass: "guardian",
-        } as Conversation["trustContext"],
+        },
         getTurnChannelContext: () => ({
           userMessageChannel: "slack" as const,
           assistantMessageChannel: "slack" as const,
@@ -5607,8 +5655,8 @@ describe("session-agent-loop", () => {
       );
 
       const compactorCall = recordUsageMock.mock.calls.find(
-        (call) => (call as unknown[])[5] === "context_compactor",
-      ) as unknown[] | undefined;
+        (call) => call[5] === "context_compactor",
+      );
 
       expect(compactorCall).toBeDefined();
       // All three attribution facets of the row describe the same call.
@@ -5652,8 +5700,8 @@ describe("session-agent-loop", () => {
       );
 
       const compactorCall = recordUsageMock.mock.calls.find(
-        (call) => (call as unknown[])[5] === "context_compactor",
-      ) as unknown[] | undefined;
+        (call) => call[5] === "context_compactor",
+      );
 
       expect(compactorCall).toBeDefined();
       expect(compactorCall?.[0]).toMatchObject({ providerName: "openai" });
@@ -5698,8 +5746,8 @@ describe("session-agent-loop", () => {
       );
 
       const compactorCall = recordUsageMock.mock.calls.find(
-        (call) => (call as unknown[])[5] === "context_compactor",
-      ) as unknown[] | undefined;
+        (call) => call[5] === "context_compactor",
+      );
 
       expect(compactorCall).toBeDefined();
       expect(compactorCall?.[0]).toMatchObject({
@@ -5721,8 +5769,9 @@ describe("session-agent-loop", () => {
       const ctx = makeCtx({
         contextCompactedMessageCount: 5,
         trustContext: {
+          sourceChannel: "cadet",
           trustClass: "guardian",
-        } as Conversation["trustContext"],
+        },
       });
 
       // WHEN a turn compacts 4 more in-context messages
@@ -5748,8 +5797,9 @@ describe("session-agent-loop", () => {
       const ctx = makeCtx({
         contextCompactedMessageCount: 5,
         trustContext: {
+          sourceChannel: "cadet",
           trustClass: "unknown",
-        } as Conversation["trustContext"],
+        },
       });
 
       // WHEN that turn compacts 4 in-context messages
@@ -5873,15 +5923,15 @@ describe("session-agent-loop", () => {
     function noopPipelineManager(
       order: string[],
     ): Conversation["contextWindowManager"] {
-      return {
+      return Object.assign(Object.create(ContextWindowManager.prototype), {
         updateConfig: () => {},
         shouldCompact: () => ({ needed: false, estimatedTokens: 0 }),
         maybeCompact: async (messages: Message[]) => {
           order.push("pipeline");
           mockEstimateTokens = 1000;
-          return { compacted: false, messages };
+          return { ...noCompactionResult(), messages };
         },
-      } as unknown as Conversation["contextWindowManager"];
+      });
     }
 
     test("a budget-gate run that finds nothing to summarize resets the ledgers before re-injection", async () => {
@@ -5932,7 +5982,7 @@ describe("session-agent-loop", () => {
     function compactingPipelineManager(
       order: string[],
     ): Conversation["contextWindowManager"] {
-      return {
+      return Object.assign(Object.create(ContextWindowManager.prototype), {
         updateConfig: () => {},
         shouldCompact: () => ({ needed: false, estimatedTokens: 0 }),
         maybeCompact: async (messages: Message[]) => {
@@ -5951,7 +6001,7 @@ describe("session-agent-loop", () => {
             summaryFailed: false,
           };
         },
-      } as unknown as Conversation["contextWindowManager"];
+      });
     }
 
     test("resets the ledgers on the strip's durable marker write when a later marker write would fail", async () => {
@@ -6380,7 +6430,10 @@ describe("session-agent-loop", () => {
         return true;
       });
       const ctx = makeCtx({
-        graphMemory: { onCompacted } as unknown as Conversation["graphMemory"],
+        graphMemory: Object.assign(
+          Object.create(ConversationGraphMemory.prototype),
+          { onCompacted },
+        ),
       });
 
       await applyCompactionResult(
@@ -6403,7 +6456,10 @@ describe("session-agent-loop", () => {
       });
       const onCompacted = mock(async (_count: number) => true);
       const ctx = makeCtx({
-        graphMemory: { onCompacted } as unknown as Conversation["graphMemory"],
+        graphMemory: Object.assign(
+          Object.create(ConversationGraphMemory.prototype),
+          { onCompacted },
+        ),
       });
 
       await expect(
@@ -6419,7 +6475,10 @@ describe("session-agent-loop", () => {
       });
       const onCompacted = mock(async (_count: number) => true);
       const ctx = makeCtx({
-        graphMemory: { onCompacted } as unknown as Conversation["graphMemory"],
+        graphMemory: Object.assign(
+          Object.create(ConversationGraphMemory.prototype),
+          { onCompacted },
+        ),
       });
 
       // The marker write is best-effort, so the durable commit still lands.
@@ -6442,7 +6501,10 @@ describe("session-agent-loop", () => {
       });
       const onCompacted = mock(async (_count: number) => true);
       const ctx = makeCtx({
-        graphMemory: { onCompacted } as unknown as Conversation["graphMemory"],
+        graphMemory: Object.assign(
+          Object.create(ConversationGraphMemory.prototype),
+          { onCompacted },
+        ),
       });
 
       await applyCompactionResult(

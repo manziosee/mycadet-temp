@@ -1,6 +1,9 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 
-import type { Conversation } from "../daemon/conversation.js";
+import {
+  asConversation,
+  mockUnownedModeSessions,
+} from "../__tests__/helpers/mock-conversation.js";
 import {
   clearConversations,
   setConversation,
@@ -14,9 +17,12 @@ describe("pending interaction mode-session waits", () => {
     pendingInteractions.clear();
     clearConversations();
     invalidateStructuralWait.mockClear();
-    setConversation("conv-1", {
-      modeSessions: { invalidateStructuralWait },
-    } as unknown as Conversation);
+    setConversation(
+      "conv-1",
+      asConversation({
+        modeSessions: mockUnownedModeSessions({ invalidateStructuralWait }),
+      }),
+    );
   });
 
   afterEach(() => {

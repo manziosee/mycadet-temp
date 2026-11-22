@@ -28,7 +28,6 @@ import {
 
 import { TrustClass } from "@mycadet/gateway-client";
 
-import type { Conversation } from "../../daemon/conversation.js";
 import type { TrustContext } from "../../daemon/trust-context-types.js";
 import type { Message } from "../../providers/types.js";
 
@@ -72,8 +71,8 @@ class FakeParentConversation {
   trustContext: TrustContext | undefined;
   /** The instance's trust context as observed inside each `loadFromDb` call. */
   readonly loadTrustContexts: (TrustContext | undefined)[] = [];
-  private messages: Message[];
-  private loadedHistoryTrustClass: TrustClass | undefined;
+  messages: Message[];
+  loadedHistoryTrustClass: TrustClass | undefined;
 
   constructor(messages: Message[] = [], loadedAs?: TrustClass) {
     this.messages = messages;
@@ -125,7 +124,7 @@ mock.module("../../daemon/conversation-store.js", () => ({
   ...realConversationStoreModule,
   getOrCreateConversation: async (conversationId: string) =>
     forkMocksActive
-      ? (parentConversation as unknown as Conversation)
+      ? asConversation(parentConversation)
       : realConversationStoreModule.getOrCreateConversation(conversationId),
 }));
 
@@ -173,6 +172,8 @@ mock.module("../../subagent/index.js", () => ({
       : realSubagentModule.getSubagentManager(),
 }));
 
+import { asConversation } from "../../__tests__/helpers/mock-conversation.js";
+import { initializeDb } from "../../persistence/db-init.js";
 import { defaultSpawnBackgroundContinuation } from "../live-voice-session.js";
 
 async function spawnContinuation(): Promise<string> {
@@ -185,7 +186,8 @@ async function spawnContinuation(): Promise<string> {
 }
 
 describe("duplex continuation fork-parent hydration", () => {
-  beforeAll(() => {
+  beforeAll(async () => {
+    await initializeDb();
     forkMocksActive = true;
   });
 

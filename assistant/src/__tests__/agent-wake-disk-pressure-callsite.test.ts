@@ -59,24 +59,26 @@ mock.module("../daemon/disk-pressure-guard.js", () => ({
   }),
 }));
 
+import { AgentLoop } from "../agent/loop.js";
 import type { Conversation } from "../daemon/conversation.js";
 import {
   __resetWakeChainForTests,
   wakeAgentForOpportunity,
 } from "../runtime/agent-wake.js";
+import { asConversation } from "./helpers/mock-conversation.js";
 
 function makeTarget(): Conversation {
   const messages: Message[] = [];
   let processing = false;
   const target = {
     conversationId: "conv-wake-callsite",
-    agentLoop: {
+    agentLoop: Object.assign(Object.create(AgentLoop.prototype), {
       run: async ({ messages }: { messages: Message[] }) => ({
         history: messages,
         exitReason: null,
         newMessages: [],
       }),
-    },
+    }),
     messages,
     // The wake trims its own run input; no row here is tagged as a camera
     // frame, so the real pass would return the array unchanged too.
@@ -97,7 +99,7 @@ function makeTarget(): Conversation {
     // The wake rebuilds the loop prompt under its per-turn stamps.
     syncLoopSystemPrompt: () => {},
   };
-  return target as unknown as Conversation;
+  return asConversation(target);
 }
 
 beforeEach(() => {
