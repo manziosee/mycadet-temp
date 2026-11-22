@@ -15,11 +15,6 @@ import { installDock } from "./dock";
 import { createHostCuExecutor } from "./executors/host-cu-executor";
 import { shutdownSharedCuHelper } from "./sidecar/shared-cu-helper";
 import { installEscapeMonitor, setDictationRecording } from "./escape-monitor";
-import {
-  handleHotkeyHelperState,
-  installHotkeyHelper,
-  makeClient,
-} from "./hotkey-helper";
 import { showCompanionCoachmarks } from "./companion-window";
 import {
   replayCompanionIntro,
@@ -46,7 +41,6 @@ import {
   installCompanionWindow,
   syncCompanionSurface,
 } from "./companion-window";
-import { installTextInsertionIpc } from "./textInsertion";
 import {
   readCompanionHidden,
   readCompanionSize,
@@ -101,16 +95,6 @@ startApp({
   share: { present: shareMenuPresenter() },
   permissions: permissionsShell,
   permissionGuide,
-  dictation: {
-    client: makeClient,
-    onState: handleHotkeyHelperState,
-    // The hold outlives the process boundary only if the helper is told —
-    // the key must not survive a quit still believing it is armed.
-    shutdownRequest: {
-      method: "hotkey.modifierHold",
-      params: { enable: false },
-    },
-  },
   precheck: async () => {
     if (hasPendingFiles() || hasPendingDeepLinks()) {
       markRelocationSkipped();
@@ -122,8 +106,6 @@ startApp({
   async setup() {
     installDock();
 
-    installHotkeyHelper();
-    installTextInsertionIpc();
     registerCompanionSurfaceSync(setCompanionSurfaceVisible);
     installDictationOverlay({ onRecordingLifecycle: setDictationRecording });
     installCompanionWindow();

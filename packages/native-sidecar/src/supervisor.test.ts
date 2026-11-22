@@ -32,10 +32,8 @@ describe("NativeSidecarClient", () => {
     const child = new FakeChild();
     const logs = logger();
     const client = new NativeSidecarClient({
-      name: "test helper",
       resolveExecutablePath: () => "unused",
       logger: logs,
-      platform: "win32",
       spawn: () => asChild(child),
       maxFrameBytes: 256,
     });
@@ -72,10 +70,8 @@ describe("NativeSidecarClient", () => {
   test("rejects pending calls when the helper exits", async () => {
     const child = new FakeChild();
     const client = new NativeSidecarClient({
-      name: "test helper",
       resolveExecutablePath: () => "unused",
       logger: logger(),
-      platform: "darwin",
       spawn: () => asChild(child),
       initialBackoffMs: 50,
     });
@@ -85,12 +81,81 @@ describe("NativeSidecarClient", () => {
     await expect(response).rejects.toThrow("exited before response");
     client.shutdown();
   });
+
+  test("a deliberate shutdown does not respawn", async () => {
+    const children: FakeChild[] = [];
+    const client = new NativeSidecarClient({
+      resolveExecutablePath: () => "unused",
+      logger: logger(),
+      spawn: () => {
+        const child = new FakeChild();
+        children.push(child);
+        return asChild(child);
+      },
+    });
+
+    await client.call("system.ping").catch(() => undefined);
+
+    client.shutdown();
+    children[0]!.emit("close", 0, null);
+    await expect(client.call("system.ping")).rejects.toThrow("not available");
+    expect(children).toHaveLength(1);
+  });
+
+  test("a user-initiated retry replaces the running helper", async () => {
+    const children: FakeChild[] = [];
+    const client = new NativeSidecarClient({
+      resolveExecutablePath: () => "unused",
+      logger: logger(),
+      spawn: () => {
+        const child = new FakeChild();
+        children.push(child);
+        return asChild(child);
+      },
+    });
+
+    await client.call("system.ping").catch(() => undefined);
+    children[0]!.stdout.emit(
+      "data",
+      Buffer.from('{"jsonrpc":"2.0","id":1,"result":"pong"}\n'),
+    );
+
+    expect(client.retry()).toMatchObject({ status: "running" });
+    expect(children[0]!.kill).toHaveBeenCalledWith("SIGTERM");
+    expect(children).toHaveLength(2);
+    client.shutdown();
+  });
+
+  test("a user-initiated retry reopens a circuit-open supervisor", async () => {
+    const children: FakeChild[] = [];
+    const client = new NativeSidecarClient({
+      resolveExecutablePath: () => "unused",
+      logger: logger(),
+      spawn: () => {
+        const child = new FakeChild();
+        children.push(child);
+        return asChild(child);
+      },
+      initialBackoffMs: 1,
+      maxBackoffMs: 1,
+      circuitCrashCount: 2,
+      circuitWindowMs: 1_000,
+    });
+
+    expect(client.retry()).toMatchObject({ status: "running" });
+    children[0]!.emit("close", 1, null);
+    children[1]!.emit("close", 1, null);
+    expect(client.getState()).toMatchObject({ status: "circuit-open" });
+
+    expect(client.retry()).toMatchObject({ status: "running" });
+    expect(children).toHaveLength(3);
+    client.shutdown();
+  });
 });
 
 test("SidecarSupervisor bounds crash loops with a circuit breaker", async () => {
   const children: FakeChild[] = [];
   const supervisor = new SidecarSupervisor({
-    name: "test helper",
     logger: logger(),
     spawn: () => {
       const child = new FakeChild();

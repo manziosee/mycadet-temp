@@ -1,8 +1,4 @@
 import { BrowserWindow, type WebContents } from "electron";
-import { spawn } from "node:child_process";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import path from "node:path";
 import { z } from "zod";
 
 import {
@@ -16,10 +12,6 @@ import {
   HELPER_HOTKEY_SET_CHORDS,
   HELPER_HOTKEY_SET_MODIFIER_HOLD,
 } from "@mycadet/ipc-contract";
-import {
-  helperClient,
-  __resetForTesting as resetDictationHelper,
-} from "@mycadet/electron-desktop/dictation";
 import type {
   ChordBinding,
   ChordRegistrationResult,
@@ -29,11 +21,15 @@ import type {
   ModifierHoldRegistrationResult,
 } from "@mycadet/ipc-contract";
 
+import { handle } from "../ipc";
+import log from "../app-logger";
+import { getSharedHelperClient } from "../native-helper-client";
+import { JsonRpcHelperError } from "@mycadet/native-sidecar/supervisor";
+
 import {
   coachmarkPressed,
   provideCoachmarkPressWatch,
   watchedCoachmarkPress,
-  type CoachmarkPressRect,
 } from "./coachmark-press-watch";
 import { isPointerOnCompanion } from "./companion-pointer";
 import {
@@ -41,30 +37,41 @@ import {
   isFrameScrollWatched,
   provideFrameScrollWatch,
 } from "./frame-scroll-watch";
-import { handle } from "@mycadet/electron-desktop/ipc";
-import log from "@mycadet/electron-desktop/app-logger";
-import {
-  JsonRpcHelperError,
-  NativeSidecarClient as MacHelperClient,
-  type NativeSidecarClientOptions as MacHelperClientOptions,
-  type NativeSidecarState as MacHelperState,
-} from "@mycadet/native-sidecar/supervisor";
-import {
-  getMacHelperAppPath,
-  getMacHelperPath,
-} from "./sidecar/mac-helper-path";
 
-export type MacHelperPermissionKind =
-  | "speechRecognition"
-  | "inputMonitoring"
-  | "screen";
+/**
+ * Where a pointed-at control is, in screen points with a top-left origin.
+ * The shell that draws coachmarks owns the geometry; this feature only
+ * carries the rectangles to the helper.
+ */
+export interface HelperHotkeyPressRect {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
 
-export type MacHelperPermissionStatus =
-  | "unknown"
-  | "restricted"
-  | "denied"
-  | "not-determined"
-  | "granted";
+/**
+ * The shell's watch-state surfaces. The wanted-or-not for the scroll and
+ * press watches lives where the frames and marks put it (a helper that comes
+ * back from a crash is put back to watching the same way), so the state is
+ * the shell's and the sends over the helper are this feature's.
+ */
+export interface HelperHotkeysWatches {
+  /** Hand the shell the sender it calls when the frame asks for a scroll watch. */
+  provideFrameScrollWatch(send: (enable: boolean) => void): void;
+  /** The frame says the scroll it stepped aside for has ended. */
+  frameScrollEnded(): void;
+  /** Whether the frame currently wants the scroll watch restored after a restart. */
+  isFrameScrollWatched(): boolean;
+  /** Hand the shell the sender it calls when the marks ask for a press watch. */
+  provideCoachmarkPressWatch(
+    send: (rects: readonly HelperHotkeyPressRect[]) => void,
+  ): void;
+  /** The helper reports a press on mark `index`. */
+  coachmarkPressed(index: number): void;
+  /** The rectangles the marks currently want watched, or `null` when none. */
+  watchedCoachmarkPress(): readonly HelperHotkeyPressRect[] | null;
+}
 
 const HOTKEY_EVENT_SCHEMA = z.union([
   z.object({
@@ -116,40 +123,6 @@ const FRONT_FOCUS_SCHEMA = z.object({
 const HOTKEY_RESULT_SCHEMA = z.object({
   enabled: z.boolean(),
 });
-
-const HELPER_PERMISSION_STATUS_SCHEMA = z.object({
-  status: z.enum([
-    "unknown",
-    "restricted",
-    "denied",
-    "not-determined",
-    "granted",
-  ]),
-});
-
-let platformForTesting: NodeJS.Platform | null = null;
-let supervisorOptionsForTesting: Partial<
-  Pick<
-    MacHelperClientOptions,
-    | "initialBackoffMs"
-    | "maxBackoffMs"
-    | "stableResetMs"
-    | "circuitCrashCount"
-    | "circuitWindowMs"
-  >
-> = {};
-
-const getPlatform = (): NodeJS.Platform =>
-  platformForTesting ?? process.platform;
-
-export const makeClient = (): MacHelperClient =>
-  new MacHelperClient({
-    name: "mac helper",
-    resolveExecutablePath: getMacHelperPath,
-    logger: log,
-    platform: getPlatform(),
-    ...supervisorOptionsForTesting,
-  });
 
 /**
  * The binding the helper is currently holding, so a clear that has nothing to
@@ -220,7 +193,7 @@ const sendChords = async (
   binding: ChordBinding,
 ): Promise<ChordRegistrationResult> => {
   try {
-    const result = await helperClient().call(
+    const result = await getSharedHelperClient().call(
       "hotkey.chords",
       binding.kind === "off"
         ? { enable: false }
@@ -228,7 +201,7 @@ const sendChords = async (
     );
     const parsed = HOTKEY_RESULT_SCHEMA.safeParse(result);
     if (!parsed.success) {
-      return { ok: false, reason: "mac helper returned invalid hotkey result" };
+      return { ok: false, reason: "helper returned invalid hotkey result" };
     }
     return { ok: true, enabled: parsed.data.enabled };
   } catch (err) {
@@ -284,7 +257,7 @@ const sendModifierHold = async (
   hold: ModifierHold,
 ): Promise<ModifierHoldRegistrationResult> => {
   try {
-    const result = await helperClient().call(
+    const result = await getSharedHelperClient().call(
       "hotkey.modifierHold",
       hold.kind === "off"
         ? { enable: false }
@@ -292,7 +265,7 @@ const sendModifierHold = async (
     );
     const parsed = HOTKEY_RESULT_SCHEMA.safeParse(result);
     if (!parsed.success) {
-      return { ok: false, reason: "mac helper returned invalid hotkey result" };
+      return { ok: false, reason: "helper returned invalid hotkey result" };
     }
     helperHoldsBinding = hold.kind !== "off" && parsed.data.enabled;
     return { ok: true, enabled: parsed.data.enabled };
@@ -314,13 +287,13 @@ const readFrontSelection = async (): Promise<HotkeySelectionResult> => {
     let holdId: number | undefined;
     // Chromium debounces activation for two seconds, so allow tree build time too.
     for (let attempt = 0; attempt <= FRONT_SELECTION_MAX_RETRIES; attempt++) {
-      const result = await helperClient().call(
+      const result = await getSharedHelperClient().call(
         "selection.read",
         holdId === undefined ? undefined : { holdId },
       );
       const parsed = FRONT_SELECTION_SCHEMA.safeParse(result);
       if (!parsed.success) {
-        log.warn("[mac-helper] selection read returned an invalid result");
+        log.warn("[helper] selection read returned an invalid result");
         return { unavailable: true };
       }
       if (!parsed.data.unavailable) {
@@ -339,7 +312,7 @@ const readFrontSelection = async (): Promise<HotkeySelectionResult> => {
     }
   } catch (err) {
     log.warn(
-      `[mac-helper] selection read failed: ${err instanceof Error ? err.message : String(err)}`,
+      `[helper] selection read failed: ${err instanceof Error ? err.message : String(err)}`,
     );
   }
   return { unavailable: true };
@@ -358,14 +331,14 @@ const runningApps = async (bundleIds: string[]): Promise<string[]> => {
     return [];
   }
   try {
-    const result = await helperClient().call("apps.running", {
+    const result = await getSharedHelperClient().call("apps.running", {
       bundleIds: wanted,
     });
     const parsed = RUNNING_APPS_SCHEMA.safeParse(result);
     return parsed.success ? parsed.data.running : [];
   } catch (err) {
     log.warn(
-      `[mac-helper] running apps query failed: ${err instanceof Error ? err.message : String(err)}`,
+      `[helper] running apps query failed: ${err instanceof Error ? err.message : String(err)}`,
     );
     return [];
   }
@@ -379,18 +352,18 @@ const runningApps = async (bundleIds: string[]): Promise<string[]> => {
  */
 const quitApp = async (bundleId: string): Promise<boolean> => {
   if (!FN_CLAIMANT_BUNDLE_IDS.includes(bundleId)) {
-    log.warn(
-      `[mac-helper] refused to quit ${bundleId}: not a voice key claimant`,
-    );
+    log.warn(`[helper] refused to quit ${bundleId}: not a voice key claimant`);
     return false;
   }
   try {
-    const result = await helperClient().call("apps.quit", { bundleId });
+    const result = await getSharedHelperClient().call("apps.quit", {
+      bundleId,
+    });
     const parsed = QUIT_APP_SCHEMA.safeParse(result);
     return parsed.success && parsed.data.asked;
   } catch (err) {
     log.warn(
-      `[mac-helper] quit app failed: ${err instanceof Error ? err.message : String(err)}`,
+      `[helper] quit app failed: ${err instanceof Error ? err.message : String(err)}`,
     );
     return false;
   }
@@ -399,12 +372,12 @@ const quitApp = async (bundleId: string): Promise<boolean> => {
 /** The bundle identifier of the application in front, or `null` when the helper cannot say. */
 const frontmostApp = async (): Promise<string | null> => {
   try {
-    const result = await helperClient().call("apps.frontmost");
+    const result = await getSharedHelperClient().call("apps.frontmost");
     const parsed = FRONTMOST_APP_SCHEMA.safeParse(result);
     return parsed.success ? parsed.data.bundleId : null;
   } catch (err) {
     log.warn(
-      `[mac-helper] frontmost app query failed: ${err instanceof Error ? err.message : String(err)}`,
+      `[helper] frontmost app query failed: ${err instanceof Error ? err.message : String(err)}`,
     );
     return null;
   }
@@ -425,14 +398,17 @@ const setInputActivityWatch = async (enable: boolean): Promise<boolean> => {
 
 const sendInputActivityWatch = async (enable: boolean): Promise<boolean> => {
   try {
-    const result = await helperClient().call("input.setActivityWatch", {
-      enable,
-    });
+    const result = await getSharedHelperClient().call(
+      "input.setActivityWatch",
+      {
+        enable,
+      },
+    );
     const parsed = HOTKEY_RESULT_SCHEMA.safeParse(result);
     return parsed.success && parsed.data.enabled === enable;
   } catch (err) {
     log.warn(
-      `[mac-helper] input activity watch failed: ${err instanceof Error ? err.message : String(err)}`,
+      `[helper] input activity watch failed: ${err instanceof Error ? err.message : String(err)}`,
     );
     return false;
   }
@@ -440,20 +416,20 @@ const sendInputActivityWatch = async (enable: boolean): Promise<boolean> => {
 
 /**
  * Ask the helper to report the end of the scroll the watch frame stepped
- * aside for. Wanted-or-not lives in `frame-scroll-watch.ts`, where the frame
- * put it, so a helper that comes back from a crash is put back to watching
- * the same way the activity watch is.
+ * aside for. Wanted-or-not lives in the shell's watch state, so a helper
+ * that comes back from a crash is put back to watching the same way the
+ * activity watch is.
  */
 const sendScrollWatch = async (enable: boolean): Promise<boolean> => {
   try {
-    const result = await helperClient().call("input.setScrollWatch", {
+    const result = await getSharedHelperClient().call("input.setScrollWatch", {
       enable,
     });
     const parsed = HOTKEY_RESULT_SCHEMA.safeParse(result);
     return parsed.success && parsed.data.enabled === enable;
   } catch (err) {
     log.warn(
-      `[mac-helper] scroll watch failed: ${err instanceof Error ? err.message : String(err)}`,
+      `[helper] scroll watch failed: ${err instanceof Error ? err.message : String(err)}`,
     );
     return false;
   }
@@ -461,20 +437,22 @@ const sendScrollWatch = async (enable: boolean): Promise<boolean> => {
 
 /**
  * Ask the helper to report the next press on something the assistant is
- * pointing at, or to stop when there is nothing. Wanted-or-not lives in
- * `coachmark-press-watch.ts`, where the marks put it, so a helper that comes
- * back from a crash is put back to watching the same rectangles.
+ * pointing at, or to stop when there is nothing. Wanted-or-not lives in the
+ * shell's watch state, so a helper that comes back from a crash is put back
+ * to watching the same rectangles.
  */
 const sendPressWatch = async (
-  rects: readonly CoachmarkPressRect[],
+  rects: readonly HelperHotkeyPressRect[],
 ): Promise<boolean> => {
   try {
-    const result = await helperClient().call("input.setPressWatch", { rects });
+    const result = await getSharedHelperClient().call("input.setPressWatch", {
+      rects,
+    });
     const parsed = HOTKEY_RESULT_SCHEMA.safeParse(result);
     return parsed.success && parsed.data.enabled === rects.length > 0;
   } catch (err) {
     log.warn(
-      `[mac-helper] press watch failed: ${err instanceof Error ? err.message : String(err)}`,
+      `[helper] press watch failed: ${err instanceof Error ? err.message : String(err)}`,
     );
     return false;
   }
@@ -502,16 +480,16 @@ export type FrontAppFocus = { takesText: boolean; helperAnswered: boolean };
 
 export const readFrontAppFocus = async (): Promise<FrontAppFocus> => {
   try {
-    const result = await helperClient().call("focus.read");
+    const result = await getSharedHelperClient().call("focus.read");
     const parsed = FRONT_FOCUS_SCHEMA.safeParse(result);
     if (!parsed.success) {
-      log.warn("[mac-helper] focus read returned an invalid result");
+      log.warn("[helper] focus read returned an invalid result");
       return { takesText: true, helperAnswered: false };
     }
     return { takesText: parsed.data.takesText, helperAnswered: true };
   } catch (err) {
     log.warn(
-      `[mac-helper] focus read failed: ${err instanceof Error ? err.message : String(err)}`,
+      `[helper] focus read failed: ${err instanceof Error ? err.message : String(err)}`,
     );
     return { takesText: true, helperAnswered: false };
   }
@@ -535,131 +513,34 @@ export const postFrontAppShortcut = async (
 ): Promise<ShortcutOutcome> => {
   let pending: Promise<unknown>;
   try {
-    pending = helperClient().call("keys.shortcut", { key });
+    pending = getSharedHelperClient().call("keys.shortcut", { key });
   } catch (err) {
     log.warn(
-      `[mac-helper] shortcut not sent: ${err instanceof Error ? err.message : String(err)}`,
+      `[helper] shortcut not sent: ${err instanceof Error ? err.message : String(err)}`,
     );
     return "declined";
   }
   try {
     const parsed = FRONT_SHORTCUT_SCHEMA.safeParse(await pending);
     if (!parsed.success) {
-      log.warn("[mac-helper] shortcut returned an invalid result");
+      log.warn("[helper] shortcut returned an invalid result");
       return "unknown";
     }
     if (parsed.data.outcome !== "posted") {
       log.warn(
-        `[mac-helper] shortcut cmd+${key} not posted: ${parsed.data.outcome}`,
+        `[helper] shortcut cmd+${key} not posted: ${parsed.data.outcome}`,
       );
       return "declined";
     }
     return "posted";
   } catch (err) {
     log.warn(
-      `[mac-helper] shortcut failed: ${err instanceof Error ? err.message : String(err)}`,
+      `[helper] shortcut failed: ${err instanceof Error ? err.message : String(err)}`,
     );
     // An error the helper sent back means the handler refused the call before
     // posting anything. Anything else lost the reply, not the request.
     return err instanceof JsonRpcHelperError ? "declined" : "unknown";
   }
-};
-
-export const queryMacHelperPermission = async (
-  kind: MacHelperPermissionKind,
-): Promise<MacHelperPermissionStatus> => {
-  const result = await helperClient().call("permission.status", { kind });
-  return HELPER_PERMISSION_STATUS_SCHEMA.parse(result).status;
-};
-
-export const queryFreshMacHelperPermission = async (
-  kind: MacHelperPermissionKind,
-): Promise<MacHelperPermissionStatus> => {
-  const result = await queryBundledMacHelperPermission(kind);
-  return HELPER_PERMISSION_STATUS_SCHEMA.parse(result).status;
-};
-
-export const requestMacHelperSpeechRecognitionPermission =
-  async (): Promise<void> => {
-    await openMacHelperApp(["--request-speech-recognition"]);
-  };
-
-export const requestMacHelperInputMonitoringPermission =
-  async (): Promise<void> => {
-    await openMacHelperApp(["--request-input-monitoring"]);
-  };
-
-export const requestMacHelperScreenRecordingPermission =
-  async (): Promise<void> => {
-    await openMacHelperApp(["--request-screen-recording"]);
-  };
-
-const queryBundledMacHelperPermission = async (
-  kind: MacHelperPermissionKind,
-): Promise<unknown> => {
-  const tempDir = await mkdtemp(
-    path.join(tmpdir(), "cadet-mac-helper-permission-"),
-  );
-  const outputPath = path.join(tempDir, "status.json");
-
-  try {
-    await openMacHelperApp([
-      "--permission-status",
-      kind,
-      "--status-output",
-      outputPath,
-    ]);
-    return await readPermissionStatusFile(outputPath);
-  } finally {
-    await rm(tempDir, { recursive: true, force: true });
-  }
-};
-
-const openMacHelperApp = async (helperArgs: string[]): Promise<void> => {
-  await new Promise<void>((resolve, reject) => {
-    const args = ["-n", getMacHelperAppPath(), "--args", ...helperArgs];
-    const child = spawn("open", args, { stdio: "ignore" });
-    let settled = false;
-
-    const settle = (err?: Error) => {
-      if (settled) return;
-      settled = true;
-      if (err) {
-        reject(err);
-      } else {
-        resolve();
-      }
-    };
-
-    child.once("error", settle);
-    child.once("exit", (code) => {
-      if (code === 0) {
-        settle();
-      } else {
-        settle(new Error(`open exited with code ${code ?? "unknown"}`));
-      }
-    });
-  });
-};
-
-const readPermissionStatusFile = async (
-  outputPath: string,
-): Promise<unknown> => {
-  const deadline = Date.now() + 5_000;
-  let lastError: unknown = null;
-
-  while (Date.now() < deadline) {
-    try {
-      return JSON.parse(await readFile(outputPath, "utf8"));
-    } catch (err) {
-      lastError = err;
-      await new Promise((resolve) => setTimeout(resolve, 100));
-    }
-  }
-
-  throw lastError instanceof Error
-    ? lastError
-    : new Error("mac helper permission status did not appear");
 };
 
 interface HotkeyOwner {
@@ -833,10 +714,10 @@ const restoreModifierHoldIfNeeded = async (): Promise<void> => {
   restoreHoldInFlight = false;
   if (result.ok && result.enabled) {
     restoreHoldAfterRestart = false;
-    log.info("[mac-helper] restored the voice key after helper restart");
+    log.info("[helper] restored the voice key after helper restart");
   } else {
     log.warn(
-      `[mac-helper] failed to restore the voice key: ${result.ok ? "helper refused" : result.reason}`,
+      `[helper] failed to restore the voice key: ${result.ok ? "helper refused" : result.reason}`,
     );
   }
 };
@@ -853,11 +734,11 @@ const restoreChordsIfNeeded = async (): Promise<void> => {
   const result = await sendChords(chordBinding);
   if (result.ok && result.enabled) {
     restoreChordsAfterRestart = false;
-    log.info("[mac-helper] restored the call's chords after helper restart");
+    log.info("[helper] restored the call's chords after helper restart");
   }
 };
 
-export const handleHotkeyHelperState = (state: MacHelperState): void => {
+const handleHelperState = (state: { status: string }): void => {
   if (state.status === "running") {
     void restoreModifierHoldIfNeeded();
     void restoreChordsIfNeeded();
@@ -868,10 +749,10 @@ export const handleHotkeyHelperState = (state: MacHelperState): void => {
     if (desiredInputActivityWatch) {
       void sendInputActivityWatch(true);
     }
-    if (isFrameScrollWatched()) {
+    if (shellWatches?.isFrameScrollWatched()) {
       void sendScrollWatch(true);
     }
-    const pressRects = watchedCoachmarkPress();
+    const pressRects = shellWatches?.watchedCoachmarkPress() ?? null;
     if (pressRects !== null) {
       void sendPressWatch(pressRects);
     }
@@ -889,47 +770,65 @@ export const handleHotkeyHelperState = (state: MacHelperState): void => {
 };
 
 let installed = false;
+let shellWatches: HelperHotkeysWatches | null = null;
 let unsubscribeHotkeyEvents: (() => void) | null = null;
 let unsubscribeInputActivity: (() => void) | null = null;
 let unsubscribeScrollEnded: (() => void) | null = null;
 let unsubscribePressed: (() => void) | null = null;
+let unsubscribeState: (() => void) | null = null;
 
-export const installHotkeyHelper = (): void => {
+/**
+ * Install the helper's hotkey family: the voice key's hold and chords, the
+ * front-application reads the words ride, and the input watches. The
+ * bindings, owners, and restores are the same over any helper that speaks
+ * the protocol; the watch state and the companion check are this feature's
+ * own modules beside it.
+ */
+export const install = (): void => {
   if (installed) return;
   installed = true;
+  shellWatches = {
+    provideFrameScrollWatch,
+    frameScrollEnded,
+    isFrameScrollWatched,
+    provideCoachmarkPressWatch,
+    coachmarkPressed,
+    watchedCoachmarkPress,
+  };
 
-  unsubscribeHotkeyEvents = helperClient().onNotification(
+  unsubscribeState = getSharedHelperClient().onState(handleHelperState);
+  unsubscribeHotkeyEvents = getSharedHelperClient().onNotification(
     "hotkey.event",
     HOTKEY_EVENT_SCHEMA,
     (event) => {
       sendHotkeyEventToOwner(event);
     },
   );
-  unsubscribeInputActivity = helperClient().onNotification(
+  unsubscribeInputActivity = getSharedHelperClient().onNotification(
     "input.activity",
     z.unknown(),
     () => {
       sendInputActivityToOwner();
     },
   );
-  unsubscribeScrollEnded = helperClient().onNotification(
+  unsubscribeScrollEnded = getSharedHelperClient().onNotification(
     "input.scrollEnded",
     z.unknown(),
     () => {
-      frameScrollEnded();
+      shellWatches?.frameScrollEnded();
     },
   );
-  provideFrameScrollWatch((enable) => {
+  shellWatches?.provideFrameScrollWatch((enable) => {
     void sendScrollWatch(enable);
   });
-  unsubscribePressed = helperClient().onNotification(
+  unsubscribePressed = getSharedHelperClient().onNotification(
     "input.pressed",
     INPUT_PRESSED_SCHEMA,
     (event) => {
-      coachmarkPressed(event.index);
+      shellWatches?.coachmarkPressed(event.index);
     },
   );
-  provideCoachmarkPressWatch((rects) => {
+  shellWatches?.provideCoachmarkPressWatch((rects) => {
     void sendPressWatch(rects);
   });
   handle(
@@ -979,8 +878,7 @@ export const installHotkeyHelper = (): void => {
 
 export const __resetForTesting = (): void => {
   installed = false;
-  platformForTesting = null;
-  supervisorOptionsForTesting = {};
+  shellWatches = null;
   modifierHoldBinding = { kind: "off" };
   desiredModifierHold = { kind: "off" };
   modifierHoldInFlight = null;
@@ -994,6 +892,8 @@ export const __resetForTesting = (): void => {
   restoreHoldInFlight = false;
   desiredInputActivityWatch = false;
   holdIsOpen = false;
+  unsubscribeState?.();
+  unsubscribeState = null;
   unsubscribeHotkeyEvents?.();
   unsubscribeHotkeyEvents = null;
   unsubscribeInputActivity?.();
@@ -1005,28 +905,4 @@ export const __resetForTesting = (): void => {
   for (const owner of hotkeyOwners.values()) owner.cleanup();
   hotkeyOwners.clear();
   activeHotkeyOwnerId = null;
-  resetDictationHelper(makeClient);
-};
-
-export const __setPlatformForTesting = (
-  platform: NodeJS.Platform | null,
-): void => {
-  platformForTesting = platform;
-  resetDictationHelper(makeClient);
-};
-
-export const __setSupervisorOptionsForTesting = (
-  options: Partial<
-    Pick<
-      MacHelperClientOptions,
-      | "initialBackoffMs"
-      | "maxBackoffMs"
-      | "stableResetMs"
-      | "circuitCrashCount"
-      | "circuitWindowMs"
-    >
-  >,
-): void => {
-  supervisorOptionsForTesting = options;
-  resetDictationHelper(makeClient);
 };

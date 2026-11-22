@@ -78,18 +78,21 @@ type StreamSubscription = {
 };
 
 export interface NativeSidecarClientOptions {
-  name: string;
-  resolveExecutablePath: () => string;
   logger: {
     info: (...args: unknown[]) => void;
     warn: (...args: unknown[]) => void;
   };
+  /**
+   * Where the helper executable lives. The package's per-platform resolvers
+   * answer this (native-helper-client); shells never construct clients, so
+   * they never see the option.
+   */
+  resolveExecutablePath: () => string;
   responseTimeoutMs?: number;
   maxFrameBytes?: number;
   spawnArgs?: string[];
   /** Extra environment merged over process.env for the spawned helper. */
   spawnEnv?: Record<string, string>;
-  platform?: NodeJS.Platform;
   spawn?: () => ChildProcessWithoutNullStreams;
   initialBackoffMs?: number;
   maxBackoffMs?: number;
@@ -122,14 +125,13 @@ const DEFAULT_RESPONSE_TIMEOUT_MS = 2_000;
 const DEFAULT_MAX_FRAME_BYTES = Number.POSITIVE_INFINITY;
 
 export class NativeSidecarClient {
-  private readonly name: string;
+  private readonly name = "native-sidecar-client";
   private readonly resolveExecutablePath: () => string;
   private readonly logger: NativeSidecarClientOptions["logger"];
   private readonly responseTimeoutMs: number;
   private readonly maxFrameBytes: number;
   private readonly spawnArgs: string[];
   private readonly spawnEnv?: Record<string, string>;
-  private readonly platform: NodeJS.Platform;
   private readonly spawnOverride?: () => ChildProcessWithoutNullStreams;
   private readonly supervisor: SidecarSupervisor;
   private stdoutBuffer = "";
@@ -143,7 +145,6 @@ export class NativeSidecarClient {
   private readonly streamSubscriptions = new Set<StreamSubscription>();
 
   constructor(options: NativeSidecarClientOptions) {
-    this.name = options.name;
     this.resolveExecutablePath = options.resolveExecutablePath;
     this.logger = options.logger;
     this.responseTimeoutMs =
@@ -153,10 +154,8 @@ export class NativeSidecarClient {
     if (options.spawnEnv) {
       this.spawnEnv = options.spawnEnv;
     }
-    this.platform = options.platform ?? process.platform;
     this.spawnOverride = options.spawn;
     this.supervisor = new SidecarSupervisor({
-      name: this.name,
       logger: this.logger,
       spawn: () => this.spawnChild(),
       onStart: (child) => this.attachChild(child),
@@ -319,10 +318,6 @@ export class NativeSidecarClient {
   }
 
   private ensureChild(): ChildProcessWithoutNullStreams {
-    if (this.platform !== "darwin" && this.platform !== "win32") {
-      throw new Error(`${this.name} requires macOS or Windows`);
-    }
-
     const child = this.supervisor.ensureRunning();
     if (!child) {
       throw new Error(`${this.name} is not available`);

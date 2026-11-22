@@ -61,10 +61,8 @@ import {
   install as installPermissions,
   type PermissionsShellInputs,
 } from "./features/permissions";
-import {
-  install as installDictation,
-  type DictationShellInputs,
-} from "./features/dictation";
+import { install as installDictation } from "./features/dictation";
+import { install as installHelperHotkeys } from "./features/helper-hotkeys";
 import {
   installPermissionGuide,
   type PermissionGuideInputs,
@@ -101,14 +99,6 @@ export interface DesktopAppInputs {
    */
   setup?: () => void | Promise<void>;
   /**
-   * The toast factory notifications deliver through. Absent, the shared
-   * module's `electron.Notification` default delivers click-only toasts.
-   */
-  notifications?: {
-    create?: (options: NotificationCreateOptions) => NotificationLike;
-    isSupported?: () => boolean;
-  };
-  /**
    * Runs once at the head of the lifecycle — after this launch's files and
    * deep links are captured, before anything is wired. Returning true stops
    * the startup: the precheck has quit this process itself (the macOS
@@ -138,6 +128,25 @@ export interface DesktopAppInputs {
    */
   interfaceId: string;
   /**
+   * How the main window's chrome draws — the macOS traffic lights over a
+   * hidden title bar, the Windows caption overlay, or the plain system
+   * frame. Build configuration the shell carries; the shared code never
+   * derives it.
+   */
+  titleBarMode: "hidden" | "hiddenOverlay" | "systemFrame";
+
+  // To VargasJR: Everything under here is ripe for consolidation.
+  // I will show just two more in this prototype
+
+  /**
+   * The toast factory notifications deliver through. Absent, the shared
+   * module's `electron.Notification` default delivers click-only toasts.
+   */
+  notifications?: {
+    create?: (options: NotificationCreateOptions) => NotificationLike;
+    isSupported?: () => boolean;
+  };
+  /**
    * The shell's host-proxy contributions — the capability flags and the
    * computer-use executor only its build ships. Absent, the shared
    * composition answers with the shared defaults.
@@ -165,19 +174,6 @@ export interface DesktopAppInputs {
    * install.
    */
   permissionGuide?: PermissionGuideInputs;
-  /**
-   * The shell's helper surfaces for the dictation bridge — its sidecar
-   * client factory, its extra state handling, its quit request. Absent,
-   * the shared helper client answers.
-   */
-  dictation?: DictationShellInputs;
-  /**
-   * How the main window's chrome draws — the macOS traffic lights over a
-   * hidden title bar, the Windows caption overlay, or the plain system
-   * frame. Build configuration the shell carries; the shared code never
-   * derives it.
-   */
-  titleBarMode: "hidden" | "hiddenOverlay" | "systemFrame";
 }
 
 // In prod, register `app://` and `cadet://` as "standard" + "secure" schemes
@@ -471,7 +467,8 @@ export const startApp = async (inputs: DesktopAppInputs): Promise<void> => {
       installPermissionGuide(inputs.permissionGuide);
       // Still the classic shells' own composition until its round lands:
       // the voice-mode chord (R12).
-      installDictation(inputs.dictation);
+      installDictation();
+      installHelperHotkeys();
       if (process.platform !== "darwin") {
         installVoiceModeChord();
       }

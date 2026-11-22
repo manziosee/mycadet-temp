@@ -21,10 +21,7 @@ import {
   type DictationPartialsResult,
   type HelperRestartResult,
 } from "@mycadet/ipc-contract";
-import {
-  type NativeSidecarClient,
-  type NativeSidecarState,
-} from "@mycadet/native-sidecar/supervisor";
+import { type NativeSidecarState } from "@mycadet/native-sidecar/supervisor";
 
 import { handle, on } from "../ipc";
 import log from "../app-logger";
@@ -43,21 +40,6 @@ import { getSharedHelperClient } from "../native-helper-client";
  * the shared answers: the classic helper client, no extra state handling,
  * and a dictation-only graceful shutdown.
  */
-export interface DictationShellInputs {
-  /** The shell's sidecar client factory — its helper binary and options. */
-  client?: () => NativeSidecarClient;
-  /**
-   * The shell's own reaction to helper state changes, beside the shared
-   * broadcast and dictation-owner clears (restored bindings, watches).
-   */
-  onState?: (state: NativeSidecarState) => void;
-  /**
-   * The graceful request sent to the helper on app quit, instead of the
-   * dictation disable.
-   */
-  shutdownRequest?: { method: string; params?: unknown };
-}
-
 const DICTATION_TEXT_SCHEMA = z.object({ text: z.string() });
 const DICTATION_TRANSCRIBED_SCHEMA = DICTATION_TEXT_SCHEMA.extend({
   requestId: z.string(),
@@ -67,19 +49,10 @@ const DICTATION_ERROR_SCHEMA = z.object({
   onDevice: z.boolean().optional(),
   willRetryServer: z.boolean().optional(),
 });
-let clientFactory = (): NativeSidecarClient => getSharedHelperClient();
-let client: NativeSidecarClient | null = null;
-const getClient = (): NativeSidecarClient => (client ??= clientFactory());
 
-/**
- * The helper client the dictation bridge supervises. A shell's other helper
- * halves (its hotkey bindings, its permission requests) share this one
- * client rather than supervising a second helper process.
- */
-export const helperClient = getClient;
+const getClient = getSharedHelperClient;
 
-let shellOnState: ((state: NativeSidecarState) => void) | null = null;
-let quitRequest: { method: string; params?: unknown } = {
+const quitRequest: { method: string; params?: unknown } = {
   method: "dictation.setPartials",
   params: { enable: false },
 };
@@ -164,19 +137,13 @@ const handleHelperState = (state: NativeSidecarState): void => {
       ?.send(HELPER_DICTATION_TRANSCRIBED_EVENT, { text: "" });
     dictationOwners.clear();
   }
-  shellOnState?.(state);
 };
 
-export const install = (inputs?: DictationShellInputs): void => {
+export const install = (): void => {
   if (installed) {
     return;
   }
   installed = true;
-  if (inputs?.client) {
-    clientFactory = inputs.client;
-  }
-  shellOnState = inputs?.onState ?? null;
-  quitRequest = inputs?.shutdownRequest ?? quitRequest;
   const helper = getClient();
 
   helper.onNotification("dictation.partial", DICTATION_TEXT_SCHEMA, (event) => {
@@ -294,23 +261,10 @@ export const install = (inputs?: DictationShellInputs): void => {
   });
 };
 
-export const __resetForTesting = (
-  factory?: () => NativeSidecarClient,
-): void => {
+export const __resetForTesting = (): void => {
   installed = false;
   dictationOwners.clear();
   dictationPartialsQueue = Promise.resolve();
   transcriptionRequestSequence = 0;
   audioChunkCount = 0;
-  shellOnState = null;
-  quitRequest = { method: "dictation.setPartials", params: { enable: false } };
-  clientFactory = factory ?? getSharedHelperClient;
-  try {
-    // A supervised helper left running keeps its respawn timers — a later
-    // test's writes land on the wrong child. Settle it before dropping it.
-    client?.shutdown();
-  } catch {
-    // The client was already gone.
-  }
-  client = null;
 };
