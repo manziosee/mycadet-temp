@@ -324,10 +324,17 @@ function findPersistedSurfaceBlock(
       return parsed.success && parsed.data.surfaceId === surfaceId;
     });
     if (blockIndex !== -1) {
+      const parsedBlock = uiSurfaceBlockSchema.parse(blocks[blockIndex]);
+      // Write the parsed block back into the array so the returned `block`
+      // IS the element `blocks` serializes: mutation sites (the debounced
+      // data persist, the completion patch) edit it in place. Returning a
+      // parse copy left `blocks` untouched and every DB write carried the
+      // stale pre-mutation data.
+      blocks[blockIndex] = parsedBlock;
       return {
         rowId: rows[r].id,
         blocks,
-        block: uiSurfaceBlockSchema.parse(blocks[blockIndex]),
+        block: parsedBlock,
         blockIndex,
       };
     }
@@ -1124,12 +1131,15 @@ export function createSurfaceMutex(): SurfaceMutex {
     return next;
   };
 
-  return Object.assign(mutex, {
-    /** Number of surfaces with an active chain — exposed for tests. */
-    get size() {
-      return chains.size;
-    },
+  // defineProperty, NOT Object.assign: assign invokes the getter ONCE at
+  // assignment time (chains still empty) and stamps a static 0 — the count
+  // would never move again.
+  const surfaceMutex = mutex as SurfaceMutex;
+  Object.defineProperty(surfaceMutex, "size", {
+    get: () => chains.size,
+    configurable: true,
   });
+  return surfaceMutex;
 }
 
 // ── Standalone surface lifecycle ────────────────────────────────────
@@ -1332,11 +1342,22 @@ function buildStandaloneSurfaceData(
   // of top-level `fields` may omit the latter entirely.
   const raw = request.data;
   const hasFields = Array.isArray(raw.fields) && raw.fields.length > 0;
-  const form = FormSurfaceDataSchema.parse({
+  const rawInput = {
     ...raw,
     fields: hasFields ? raw.fields : [],
-  });
-  return { surfaceType: "form", data: form };
+  };
+  const form = FormSurfaceDataSchema.parse(rawInput);
+  // The schema validates the known shape but must not STRIP keys a newer
+  // protocol added — forward-compatible clients read them off the wire.
+  // Carry every undeclared key over the parsed result (declared keys keep
+  // the parse's normalization/defaults).
+  const additive: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(raw)) {
+    if (!(key in FormSurfaceDataSchema.shape)) {
+      additive[key] = value;
+    }
+  }
+  return { surfaceType: "form", data: { ...additive, ...form } };
 }
 
 /**
