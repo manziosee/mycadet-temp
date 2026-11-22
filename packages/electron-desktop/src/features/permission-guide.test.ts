@@ -178,6 +178,34 @@ mock.module("../app-logger", () => ({
   getLogFilePaths: () => [],
   default: { warn: () => undefined },
 }));
+// The guide's shell values, as fixtures — install assembles them itself.
+mock.module("./permission-presentation", () => ({
+  preparePermissionPresentation: preparePresentation,
+  onPermissionPresentation: () => () => undefined,
+}));
+mock.module("./permission-guide-values", () => ({
+  dragTarget: async () => {
+    await iconWait;
+    if (iconEmpty) {
+      throw new Error(
+        "The permission app is unavailable. Reinstall Cadet and try again.",
+      );
+    }
+    return { file: HELPER_APP, icon: icon as never };
+  },
+  openSettingsPane: async () => {
+    if (settingsOpenFails) {
+      throw new Error("Settings failed");
+    }
+  },
+  listSettingsWindows: async () => {
+    await windowsWait;
+    return settingsWindows.map((win) => ({
+      id: win.windowId,
+      bounds: win.bounds,
+    }));
+  },
+}));
 const { installPermissionGuide } = await import("./permission-guide");
 // The full state surface, with the kinds under test riding the toggle.
 const state = (): PermissionsState => {
@@ -200,31 +228,8 @@ const state = (): PermissionsState => {
     notifications: item("notifications"),
   };
 };
-// The shell's own guide surfaces, as fixtures.
-installPermissionGuide({
-  dragTarget: async () => {
-    await iconWait;
-    if (iconEmpty) {
-      throw new Error(
-        "The permission app is unavailable. Reinstall Cadet and try again.",
-      );
-    }
-    return { file: HELPER_APP, icon: icon as never };
-  },
-  openSettingsPane: async () => {
-    if (settingsOpenFails) {
-      throw new Error("Settings failed");
-    }
-  },
-  listSettingsWindows: async () => {
-    await windowsWait;
-    return settingsWindows.map((win) => ({
-      id: win.windowId,
-      bounds: win.bounds,
-    }));
-  },
-  onYieldToSettings: preparePresentation,
-});
+// The shell's own guide surfaces ride the mocked values module above.
+installPermissionGuide();
 const get = (): PermissionGuideState | null =>
   handles.get("cadet:permissions:guide:get")!([]);
 const begin = (

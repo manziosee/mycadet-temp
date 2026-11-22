@@ -19,7 +19,10 @@ import {
   getFloatingWindow,
   repositionFloatingWindow,
 } from "./floating-window";
+import log from "./app-logger";
+import { createDictationEscapeMonitor } from "./dictation-escape-monitor";
 import { handle, on } from "./ipc";
+import { dispatchToMain } from "./main-window";
 import { createModuleConfiguration } from "./module-configuration";
 
 /**
@@ -68,12 +71,6 @@ export const DONE_HIDE_MS = 800;
 
 /** How long error states stay up — mirrors the recording store's 3 s. */
 export const ERROR_HIDE_MS = 3000;
-
-export type {
-  DictationOverlayHitRegion,
-  DictationOverlayMessage,
-  DictationOverlayState,
-};
 
 export interface DictationOverlayWindowDependencies {
   closeOnHide?: boolean;
@@ -412,22 +409,22 @@ const hideOverlay = (): void => {
 
 let installed = false;
 
-export const installDictationOverlay = (
-  options: {
-    /**
-     * Raw recording-lifecycle tap, true while the renderer reports an
-     * active recording. The shell injects its Escape monitor through this
-     * callback so this shared window module does not depend on main-window
-     * routing. The raw state is intentional: Escape must cancel a recording
-     * even when the overlay itself is suppressed.
-     */
-    onRecordingLifecycle?: (recording: boolean) => void;
-  } = {},
-): void => {
+// The overlay and the escape monitor are a pair: the overlay reports the raw
+// recording lifecycle to the monitor — Escape must cancel a recording even
+// when the overlay itself is suppressed — and the monitor holds the global
+// Escape shortcut while recording, cancelling into the focused window's
+// dictation session.
+const escapeMonitor = createDictationEscapeMonitor({
+  cancel: () => dispatchToMain({ kind: "cancelDictation" }),
+  log,
+});
+
+export const installDictationOverlay = (): void => {
   if (installed) {
     return;
   }
   installed = true;
+  escapeMonitor.install();
 
   const controller = createDictationOverlayController({
     showOverlay,
@@ -447,7 +444,7 @@ export const installDictationOverlay = (
     DICTATION_OVERLAY_SET_STATE,
     z.tuple([dictationOverlayMessageSchema]),
     ([message]) => {
-      options.onRecordingLifecycle?.(message.kind === "recording");
+      escapeMonitor.setRecording(message.kind === "recording");
       controller.handleMessage(message);
     },
   );

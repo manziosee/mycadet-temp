@@ -25,6 +25,7 @@ type Registration = {
 };
 const onRegistrations: Registration[] = [];
 const handleRegistrations: Registration[] = [];
+const handleSyncRegistrations: { channel: string; fn: () => unknown }[] = [];
 mock.module("@mycadet/electron-desktop/ipc", () => ({
   on: (
     channel: string,
@@ -39,6 +40,10 @@ mock.module("@mycadet/electron-desktop/ipc", () => ({
     fn: (args: unknown[]) => void,
   ) => {
     handleRegistrations.push({ channel, schema, fn });
+  },
+  // native-auth's top-level import; the dock never reads it.
+  handleSync: (channel: string, fn: () => unknown) => {
+    handleSyncRegistrations.push({ channel, fn });
   },
 }));
 mock.module("@mycadet/electron-desktop/avatar", () => ({
@@ -80,6 +85,14 @@ mock.module("@mycadet/local-mode", () => ({
     assistants: mockLockfileAssistants,
     activeAssistant: null,
   }),
+  // Every other name the package's sources import at top level resolves
+  // against this mock; the dock itself never reads any of them.
+  forwardOperatorRequest: () => undefined,
+  getGatewayUrl: () => undefined,
+  getGuardianAccessToken: () => undefined,
+  resolveConfigDir: () => "/tmp/cadet-config",
+  resolveLocalConfigFromEnv: () => undefined,
+  servedConfigFromLockfile: () => undefined,
 }));
 
 const avatarBitmapMock = mock((_size: number): Buffer | null => null);
@@ -115,6 +128,10 @@ mock.module("electron", () =>
       getVersion: () => "0.0.0",
       getName: () => "Cadet",
       isPackaged: false,
+      // The notifier addon's path probe and the session stores ride the
+      // permissions-strategy import; the dock never reads them.
+      getAppPath: () => "/mock/app",
+      getPath: () => "/tmp/cadet-userdata",
       dock: {
         setIcon: setIconMock,
         setBadge: setBadgeMock,

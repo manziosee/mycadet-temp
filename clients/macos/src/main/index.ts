@@ -3,14 +3,10 @@ import { app } from "electron";
 import {
   hasPendingDeepLinks,
   hasPendingFiles,
-  installDictationOverlay,
   startApp,
 } from "@mycadet/electron-desktop";
-import log from "@mycadet/electron-desktop/app-logger";
 
 import { installDock } from "./dock";
-import { installEscapeMonitor, setDictationRecording } from "./escape-monitor";
-
 import {
   promptToRelocateIfStranded,
   relocateToApplicationsFolder,
@@ -40,13 +36,8 @@ startApp({
     }
     return relocateToApplicationsFolder();
   },
-  async setup() {
+  setup() {
     installDock();
-
-    installDictationOverlay({ onRecordingLifecycle: setDictationRecording });
-    installEscapeMonitor();
-    void promptToRelocateIfStranded().catch((err: unknown) => {
-      log.error("[app] relocation prompt failed:", err);
-    });
+    void promptToRelocateIfStranded();
   },
 });

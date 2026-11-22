@@ -55,11 +55,10 @@ import { install as installAuxiliaryWindows } from "./features/auxiliary-windows
 import { install as installHostProxy } from "./features/host-proxy";
 import { install as installLoginItem } from "./features/login-item";
 import { install as installPermissions } from "./features/permissions";
-import { permissionsStrategy } from "./features/permissions-strategy";
 import { install as installDictation } from "./features/dictation";
+import { installDictationOverlay } from "./dictation-overlay-window";
 import { install as installHelperHotkeys } from "./features/helper-hotkeys";
 import { installPermissionGuide } from "./features/permission-guide";
-import { permissionGuideInputs } from "./features/permission-guide-values";
 import { install as installTray } from "./features/tray";
 import {
   installCompanionWindow,
@@ -422,8 +421,8 @@ export const startApp = async (inputs: DesktopAppInputs): Promise<void> => {
       installHostProxy(inputs.interfaceId);
       installTray();
       installShare();
-      installPermissions(permissionsStrategy());
-      installPermissionGuide(permissionGuideInputs());
+      installPermissions();
+      installPermissionGuide();
       // The companion surface joins the shared composition on every
       // desktop; the hidden preference is the runtime off-switch. The
       // menu-facing visibility entry dispatches into the window wiring, so
@@ -433,6 +432,7 @@ export const startApp = async (inputs: DesktopAppInputs): Promise<void> => {
       // Still the classic shells' own composition until its round lands:
       // the voice-mode chord (R12).
       installDictation();
+      installDictationOverlay();
       installHelperHotkeys();
       if (process.platform !== "darwin") {
         installVoiceModeChord();

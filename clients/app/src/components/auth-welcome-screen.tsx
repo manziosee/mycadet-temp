@@ -76,7 +76,10 @@ export function WelcomeScreenCopy({
   );
 }
 
-/** Account login actions around the app-owned welcome copy and shell. */
+/** Account login actions around the app-owned welcome copy and shell.
+ * Production builds read Coming Soon! and stay inert — the login hand-off
+ * is not wired up for production yet — while dev and local builds keep the
+ * real login flow. */
 export function AuthWelcomeScreen({
   returnTo,
   secondary,
@@ -166,15 +169,24 @@ export function AuthWelcomeScreen({
   return (
     <WelcomeScreenShell>
       <WelcomeScreenCopy error={error}>
-        <Button
-          variant="primary"
-          size="large"
-          fullWidth
-          disabled={awaitingRedirect}
-          onClick={loading && cancellable ? cancel : () => void login()}
-        >
-          {loading && cancellable ? t("welcome.cancel") : t("welcome.logIn")}
-        </Button>
+        {import.meta.env.PROD ? (
+          // Production: the login hand-off is not wired up yet — the
+          // primary button reads Coming Soon! and stays inert, leaving the
+          // secondary action as the only way forward.
+          <Button variant="primary" size="large" fullWidth disabled>
+            {t("welcome.comingSoon")}
+          </Button>
+        ) : (
+          <Button
+            variant="primary"
+            size="large"
+            fullWidth
+            disabled={awaitingRedirect}
+            onClick={loading && cancellable ? cancel : () => void login()}
+          >
+            {loading && cancellable ? t("welcome.cancel") : t("welcome.logIn")}
+          </Button>
+        )}
         {secondaryButton}
       </WelcomeScreenCopy>
     </WelcomeScreenShell>

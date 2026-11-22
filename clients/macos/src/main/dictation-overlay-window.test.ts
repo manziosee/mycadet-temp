@@ -6,8 +6,8 @@ import {
   ERROR_HIDE_MS,
   createDictationOverlayController,
   positionDictationOverlayInWorkArea,
-  type DictationOverlayState,
 } from "@mycadet/electron-desktop";
+import { type DictationOverlayState } from "@mycadet/ipc-contract";
 
 type Harness = {
   controller: ReturnType<typeof createDictationOverlayController>;
