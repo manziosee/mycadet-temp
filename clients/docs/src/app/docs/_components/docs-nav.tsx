@@ -157,6 +157,11 @@ const NAV_ITEMS: DocsNavItem[] = [
     icon: icon(Boxes),
     children: [
       {
+        label: "Architecture",
+        href: "/docs/architecture",
+        icon: icon(Layers),
+      },
+      {
         label: "The Workspace",
         href: "/docs/key-concepts/the-workspace",
         icon: icon(FolderOpen),
@@ -195,11 +200,6 @@ const NAV_ITEMS: DocsNavItem[] = [
         label: "Agentic Payments",
         href: "/docs/key-concepts/agentic-payments",
         icon: icon(CreditCard),
-      },
-      {
-        label: "Architecture",
-        href: "/docs/architecture",
-        icon: icon(Layers),
       },
       {
         label: "Vision",
