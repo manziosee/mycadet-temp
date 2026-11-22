@@ -7,9 +7,10 @@ import {
   type CadetCommand,
 } from "@mycadet/ipc-contract";
 
+import { resolveRoute } from "./floating-window";
 import { handle } from "./ipc";
-import { createModuleConfiguration } from "./module-configuration";
-import type { CreateWindowOptions } from "./windows";
+import { dispatchToMain, ensureVisible } from "./main-window";
+import { createWindow } from "./windows";
 
 /**
  * System-wide quick input window
@@ -19,18 +20,6 @@ const QUICK_INPUT_PATH = "/quick-input";
 
 const PANEL_WIDTH = 720;
 const PANEL_HEIGHT = 72;
-
-export interface QuickInputWindowDependencies {
-  createWindow: (options: CreateWindowOptions) => BrowserWindow;
-  dispatchToMain: (command: CadetCommand) => void;
-  ensureMainWindowVisible: () => void | Promise<void>;
-  resolveRoute: (route: string) => string;
-}
-
-const configuration = createModuleConfiguration<QuickInputWindowDependencies>(
-  "Quick Input window module",
-);
-export const configureQuickInputWindow = configuration.configure;
 
 let quickInputWindow: BrowserWindow | null = null;
 
@@ -58,7 +47,6 @@ const openQuickInput = (): void => {
     return;
   }
 
-  const { createWindow, resolveRoute } = configuration.get();
   const { x, y } = quickInputPosition();
 
   quickInputWindow = createWindow({
@@ -117,17 +105,12 @@ export const installQuickInput = (): void => {
   }
   installed = true;
 
-  // The dependencies read lazily, like the palette's and the popouts': the
-  // composition configures this module from `installAuxiliaryWindows`,
-  // which the lifecycle may run after this install registers its channels.
   handle(QUICK_INPUT_SUBMIT, z.tuple([z.string()]), async ([message]) => {
-    const { dispatchToMain, ensureMainWindowVisible } = configuration.get();
-
     if (quickInputWindow && !quickInputWindow.isDestroyed()) {
       quickInputWindow.close();
     }
 
-    await ensureMainWindowVisible();
+    await ensureVisible();
 
     const command: CadetCommand = { kind: "quickInputSubmit", message };
     dispatchToMain(command);

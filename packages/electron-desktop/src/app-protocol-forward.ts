@@ -11,7 +11,7 @@ import {
   servedConfigFromLockfile,
   type CookieJar,
 } from "@mycadet/local-mode";
-import { planAppProtocolAssetRequest } from "@mycadet/electron-utils/app-protocol";
+import { planAppProtocolAssetRequest } from "./app-protocol";
 
 /**
  * The `app://` protocol handler all three desktop clients share: one
