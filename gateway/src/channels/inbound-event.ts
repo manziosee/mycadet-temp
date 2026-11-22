@@ -6,6 +6,10 @@ import {
 } from "@mycadet/gateway-client";
 import type { ChannelConversationType } from "@mycadet/gateway-client";
 import type { ChannelId } from "./types.js";
+import { cleanupExpiredInboundEvents } from "../db/inbound-dedup-store.js";
+import { getLogger } from "../logger.js";
+
+const log = getLogger("inbound-event");
 
 /**
  * Channel-discriminated inbound event model.
@@ -199,4 +203,28 @@ export function eventRefersToAnotherMessage(
   message: GatewayInboundEvent["message"],
 ): boolean {
   return inboundEventRefersToAnotherMessage(resolveInboundEventKind(message));
+}
+
+const INBOUND_DEDUP_CLEANUP_INTERVAL_MS = 60 * 60 * 1_000;
+
+/**
+ * Sweeps expired inbound dedup claims on an interval. Hourly by default,
+ * because nothing depends on the sweep being timely: an expired claim is
+ * already reclaimed in place by the next delivery on the same key, so this
+ * is a size bound, not a correctness one. Returns the stop thunk.
+ */
+export function startInboundEventExpirationCleanup(
+  intervalMs = INBOUND_DEDUP_CLEANUP_INTERVAL_MS,
+) {
+  const inboundDedupCleanup = setInterval(() => {
+    try {
+      const evicted = cleanupExpiredInboundEvents();
+      if (evicted > 0) {
+        log.debug({ evicted }, "Evicted expired inbound dedup claims");
+      }
+    } catch (err) {
+      log.warn({ err }, "Inbound dedup cleanup failed");
+    }
+  }, intervalMs);
+  return () => clearInterval(inboundDedupCleanup);
 }

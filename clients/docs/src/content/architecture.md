@@ -43,9 +43,10 @@ This separation aims to uphold two crucial invariants:
 
 Colors on the arrows carry the access meaning:
 
-- green is read/write
+- red is read/write — the dangerous direction, worth seeing coming
 - blue read-only
 - violet read-metadata-only
+- orange is just traffic movement: packets flowing, no access either way
 
 ```mermaid
 flowchart LR
@@ -64,9 +65,9 @@ flowchart LR
   Assistant -.-> Gateway
   Gateway -.-> CES
   Assistant -.-> CES
-  linkStyle 1 stroke:#22c55e
+  linkStyle 1 stroke:#ef4444
   linkStyle 2 stroke:#3b82f6
-  linkStyle 3 stroke:#22c55e
+  linkStyle 3 stroke:#ef4444
   linkStyle 4 stroke:#a855f7
 ```
 
@@ -76,15 +77,16 @@ The Gateway is the front door controlling all of the data that comes from the ou
 
 - Web Server - The main listener routing both HTTP and WebSocket connections from the outside world
 - IPC Server - The main entrypoint where the Assistant can read data from the Gateway.
-- `$GATEWAY_SECURITY_DIR` - The location where the gateway manages all of its data, including logs and its own SQlite database. Default: `/gateway-security`
+- File System - The location where the gateway manages all of its data, including logs and its own SQlite database. A default value of `/gateway-security` that can be overridden with `$GATEWAY_SECURITY_DIR`.
 - IPC Clients - How it communicates to the Assistant and the Credential Vault
 - Tunnel Client - How it connects directly to the outside world, when not receiving its requests from the Operator.
+- Scheduler - A process running routine work that keeps the Gateway healthy.
 
 The arrows keep the access convention from the data-plane diagram above:
-green edges write (the Gateway reaching the Assistant and the Credential
-Vault), blue edges are the Assistant reading back, and violet edges are
-metadata only (how the IPC endpoints find each other inside
-`$GATEWAY_SECURITY_DIR`).
+red edges write (the Gateway reaching the Assistant, the Credential Vault,
+and its own file system), blue edges are the Assistant reading back, and
+orange edges are just traffic moving through — the world reaching the Web
+Server, the Tunnel Client shuttling both ways.
 
 ```mermaid
 flowchart LR
@@ -99,7 +101,8 @@ flowchart LR
     IpcServer["IPC Server"]
     IpcClients["IPC Clients"]
     TunnelClient["Tunnel Client"]
-    SecurityDir[("$GATEWAY_SECURITY_DIR")]
+    SecurityDir[("File System")]
+    Scheduler["Scheduler"]
   end
 
   World["Outside world"]:::world
@@ -115,7 +118,8 @@ flowchart LR
   TunnelClient -.-> WebServer
   WebServer -.-> SecurityDir
   IpcServer -.-> SecurityDir
-  linkStyle 1,3,4 stroke:#22c55e
-  linkStyle 2 stroke:#3b82f6
-  linkStyle 7,8 stroke:#a855f7
+  Scheduler -.-> SecurityDir
+  linkStyle 0,5,6 stroke:#f97316
+  linkStyle 1,3,4,7,9 stroke:#ef4444
+  linkStyle 2,8 stroke:#3b82f6
 ```
