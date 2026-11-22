@@ -84,7 +84,7 @@ import {
 } from "./cloud-identity.js";
 import { buildSchema } from "./schema.js";
 import { startDiscordGateway } from "./discord/lifecycle.js";
-import { getSlackSocketClient, startSlackGateway } from "./slack/lifecycle.js";
+import { startSlackGateway } from "./slack/lifecycle.js";
 import { checkAuthRateLimit } from "./http/middleware/rate-limit.js";
 import {
   extractBearerToken,
@@ -102,7 +102,7 @@ import {
 import { validateEdgeToken } from "./auth/token-exchange.js";
 import { createRouter, type GetClientIp } from "./http/router.js";
 import { ROUTES, webhookDedupCaches } from "./http/routes/index.js";
-import { SleepWakeDetector } from "./sleep-wake-detector.js";
+import { startSleepWakeDetector } from "./sleep-wake-detector.js";
 import { callTelegramApi } from "./telegram/api.js";
 import { reconcileTelegramWebhook } from "./telegram/webhook-manager.js";
 import { registerEmailCallbackRoute } from "./email/register-callback.js";
@@ -1151,27 +1151,7 @@ async function main() {
 
   void refreshRouteSchema();
 
-  // ── Sleep/wake detection ──
-  // Detect system sleep/wake transitions and force-reconnect channels
-  // that may have stale connections after the OS suspended the process.
-  const sleepWakeDetector = new SleepWakeDetector(() => {
-    log.info("System wake detected — reconnecting channels");
-
-    // Force-reconnect Slack WebSocket (may be half-open after sleep)
-    getSlackSocketClient()?.forceReconnect();
-
-    // Invalidate caches so next read picks up any config changes (e.g. a new tunnel URL)
-    configFileCache.invalidate();
-    credentialCache.invalidate();
-
-    // Re-register Telegram webhook with current ingress URL
-    if (telegramReady) {
-      reconcileTelegramWebhook(telegramCaches).catch((err) => {
-        log.error({ err }, "Failed to reconcile Telegram webhook after wake");
-      });
-    }
-  });
-  sleepWakeDetector.start();
+  const stopSleepWakeDetector = startSleepWakeDetector();
 
   const stopInboundEventExpirationCleanup =
     startInboundEventExpirationCleanup();
@@ -1181,11 +1161,10 @@ async function main() {
     draining = true;
     // The task list is uniform: each entry runs once at signal time. Class
     // methods ride as arrows so `this` survives the call — a bare
-    // `sleepWakeDetector.stop` would dereference nothing and crash the
-    // shutdown. The lifecycle thunks (discord, slack, the dedup sweep) are
-    // already module closures, so they ride bare.
+    // `credentialWatcher.stop` would dereference nothing and crash the
+    // shutdown. The lifecycle thunks (sleep/wake, discord, slack, the dedup
+    // sweep) are already module closures, so they ride bare.
     const shutdownTasks: (() => Promise<void> | void)[] = [
-      () => sleepWakeDetector.stop(),
       () => credentialWatcher.stop(),
       () => configFileWatcher.stop(),
       () => tunnelClient.stop(),
@@ -1195,6 +1174,7 @@ async function main() {
       () => telegramDedupCache.stopCleanup(),
       () => whatsappDedupCache.stopCleanup(),
       () => emailDedupCache.stopCleanup(),
+      stopSleepWakeDetector,
       stopInboundEventExpirationCleanup,
     ];
 
