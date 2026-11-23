@@ -272,21 +272,6 @@ async function readJsonBody(
   }
 }
 
-/** The hatch row's body: the requested remote override; junk degrades to a plain hatch. */
-const HatchBodySchema = HatchAssistantParamsSchema.pick({
-  remote: true,
-  provider: true,
-  precollectedApiKey: true,
-  configValues: true,
-})
-  .extend({
-    remote: HatchAssistantParamsSchema.shape.remote
-      .nullish()
-      .catch(undefined)
-      .transform((remote) => remote ?? "local"),
-  })
-  .catch({ remote: "local" });
-
 /** The upgrade row's body: the target version and force flag; junk reads as the defaults. */
 const UpgradeBodySchema = z
   .object({
@@ -311,7 +296,9 @@ const UpgradeBodySchema = z
  * ever invokes the CLI as a subprocess.
  */
 async function runHatchRoute(request: OperatorRequest): Promise<Response> {
-  const params = HatchBodySchema.parse(await readJsonBody(request.body));
+  const params = HatchAssistantParamsSchema.parse(
+    await readJsonBody(request.body),
+  );
   try {
     const result = await hatchAssistant(params);
     if (result.ok) {

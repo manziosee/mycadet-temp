@@ -31,37 +31,43 @@ import { HatchAssistantResult } from "./types";
  * lease. The cloud arm is the platform hatch call with the caller's stored
  * token. The baseten arm builds, pushes, and creates the sandbox.
  */
-export const HatchAssistantParamsSchema = z.object({
-  remote: z.string(),
-  name: z.string().nullable().optional(),
-  watch: z.boolean().optional(),
-  /** The merged hatch config (the CLI folds its provider choice in). */
-  configValues: z.record(z.string(), z.string()).optional(),
-  /** Show the arms' per-service startup logs (the local leg). */
-  verbose: z.boolean().optional(),
-  /** The caller's release version. */
-  version: z.string().optional(),
-  /** docker arm: build images from a source tree instead of pulling. */
-  sourcePath: z.string().nullable().optional(),
-  netnsContainer: z.string().optional(),
-  gatewayPort: z.number().optional(),
-  assistantCaCertPath: z.string().optional(),
-  /** Undefined skips provider credential setup. */
-  provider: z.string().nullable().optional(),
-  precollectedApiKey: z.string().optional(),
-  /** In-process narration sink; never accepted from HTTP callers. */
-  reporter: z
-    .custom<LifecycleReporter>(
-      (value) =>
-        value !== null &&
-        typeof value === "object" &&
-        ["progress", "log", "warn", "error"].every(
-          (key) =>
-            key in value && typeof Reflect.get(value, key) === "function",
-        ),
-    )
-    .optional(),
-});
+export const HatchAssistantParamsSchema = z
+  .object({
+    remote: z
+      .string()
+      .nullish()
+      .catch(undefined)
+      .transform((remote) => remote ?? "local"),
+    name: z.string().nullable().optional(),
+    watch: z.boolean().optional(),
+    /** The merged hatch config (the CLI folds its provider choice in). */
+    configValues: z.record(z.string(), z.string()).optional(),
+    /** Show the arms' per-service startup logs (the local leg). */
+    verbose: z.boolean().optional(),
+    /** The caller's release version. */
+    version: z.string().optional(),
+    /** docker arm: build images from a source tree instead of pulling. */
+    sourcePath: z.string().nullable().optional(),
+    netnsContainer: z.string().optional(),
+    gatewayPort: z.number().optional(),
+    assistantCaCertPath: z.string().optional(),
+    /** Undefined skips provider credential setup. */
+    provider: z.string().nullable().optional(),
+    precollectedApiKey: z.string().optional(),
+    /** In-process narration sink; never accepted from HTTP callers. */
+    reporter: z
+      .custom<LifecycleReporter>(
+        (value) =>
+          value !== null &&
+          typeof value === "object" &&
+          ["progress", "log", "warn", "error"].every(
+            (key) =>
+              key in value && typeof Reflect.get(value, key) === "function",
+          ),
+      )
+      .optional(),
+  })
+  .catch({ remote: "local" });
 
 export type HatchAssistantParams = z.infer<typeof HatchAssistantParamsSchema>;
 
