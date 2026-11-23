@@ -144,7 +144,7 @@ Your job:
       return candidates.slice(0, maxNodes);
     }
 
-    const input = toolBlock.input as { selected?: number[] };
+    const input: { selected?: number[] } = toolBlock.input;
     if (!input.selected?.length) {
       return candidates.slice(0, maxNodes);
     }
@@ -244,7 +244,7 @@ async function dedupForTurn(
       return { nodes: candidates.slice(0, maxNodes), llmApplied: false };
     }
 
-    const input = toolBlock.input as { items?: number[] };
+    const input: { items?: number[] } = toolBlock.input;
     if (!input.items?.length) {
       return { nodes: candidates.slice(0, maxNodes), llmApplied: false };
     }
@@ -339,7 +339,7 @@ async function dedupCrossCategory(
       return candidates.slice(0, maxNodes);
     }
 
-    const input = toolBlock.input as { items?: number[] };
+    const input: { items?: number[] } = toolBlock.input;
     if (!input.items?.length) {
       return candidates.slice(0, maxNodes);
     }

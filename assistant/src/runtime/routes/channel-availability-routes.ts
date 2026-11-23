@@ -100,6 +100,16 @@ const channelInfoSchema = z.object({
   }),
 });
 
+export const channelAvailabilityResponseSchema = z.object({
+  channels: z
+    .array(channelInfoSchema)
+    .describe(
+      "Available channels in display order: the ones the assistant " +
+        "ships, then the ones installed plugins bring by declaring " +
+        "ingress routes. `source` distinguishes them.",
+    ),
+});
+
 export const ROUTES: RouteDefinition[] = [
   {
     operationId: "channels_available_get",
@@ -118,14 +128,6 @@ export const ROUTES: RouteDefinition[] = [
       "routes. Each carries a `source` saying which of those it is.",
     tags: ["channels"],
     handler: handleGetChannelAvailability,
-    responseBody: z.object({
-      channels: z
-        .array(channelInfoSchema)
-        .describe(
-          "Available channels in display order: the ones the assistant " +
-            "ships, then the ones installed plugins bring by declaring " +
-            "ingress routes. `source` distinguishes them.",
-        ),
-    }),
+    responseBody: channelAvailabilityResponseSchema,
   },
 ];

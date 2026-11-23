@@ -9,8 +9,12 @@
  */
 import { beforeEach, describe, expect, mock, test } from "bun:test";
 
+import { z } from "zod";
+
 import { readProviderMetadata } from "../messaging/read-provider-metadata.js";
 import { jsonObjectSchema } from "./helpers/json-object-schema.js";
+
+const capturedStringSchema = z.string();
 
 process.env.DISABLE_HTTP_AUTH = "true";
 
@@ -610,7 +614,9 @@ describe("Slack delete propagation", () => {
     expect(typeof parsed.slackMeta).toBe("string");
 
     // slackMeta.deletedAt is set to a recent timestamp.
-    const slackMeta = readSlackMetadata(parsed.slackMeta as string);
+    const slackMeta = readSlackMetadata(
+      capturedStringSchema.parse(parsed.slackMeta),
+    );
     expect(slackMeta).not.toBeNull();
     expect(slackMeta!.deletedAt).toBeDefined();
     expect(slackMeta!.deletedAt!).toBeGreaterThanOrEqual(before);
@@ -694,7 +700,9 @@ describe("Slack delete propagation", () => {
       "The reply that was later deleted from the thread",
     );
     const parsed = jsonObjectSchema.parse(JSON.parse(row!.metadata!));
-    const slackMeta = readSlackMetadata(parsed.slackMeta as string);
+    const slackMeta = readSlackMetadata(
+      capturedStringSchema.parse(parsed.slackMeta),
+    );
     expect(slackMeta!.deletedAt).toBeDefined();
     expect(slackMeta!.channelTs).toBe(postTs);
     expect(readProviderMetadata(row!.metadata)!.deletedAt).toBeDefined();
@@ -806,7 +814,9 @@ describe("Slack delete propagation", () => {
 
     expect(row!.content).toBe("Should remain untouched");
     const parsed = jsonObjectSchema.parse(JSON.parse(row!.metadata!));
-    const slackMeta = readSlackMetadata(parsed.slackMeta as string);
+    const slackMeta = readSlackMetadata(
+      capturedStringSchema.parse(parsed.slackMeta),
+    );
     expect(slackMeta!.deletedAt).toBeUndefined();
   });
 
@@ -986,7 +996,9 @@ describe("Slack delete propagation", () => {
       .where(eq(messages.id, seeded.messageId))
       .get();
     const parsed = jsonObjectSchema.parse(JSON.parse(row!.metadata!));
-    const slackMeta = readSlackMetadata(parsed.slackMeta as string);
+    const slackMeta = readSlackMetadata(
+      capturedStringSchema.parse(parsed.slackMeta),
+    );
     expect(slackMeta!.deletedAt).toBeUndefined();
   });
 
@@ -1055,7 +1067,9 @@ describe("Slack delete propagation", () => {
       .where(eq(messages.id, messageId))
       .get();
     const parsed = jsonObjectSchema.parse(JSON.parse(row!.metadata!));
-    const parsedSlackMeta = readSlackMetadata(parsed.slackMeta as string);
+    const parsedSlackMeta = readSlackMetadata(
+      capturedStringSchema.parse(parsed.slackMeta),
+    );
     expect(parsedSlackMeta!.deletedAt).toBeDefined();
   });
 
@@ -1096,7 +1110,9 @@ describe("Slack delete propagation", () => {
       .get();
     expect(row!.content).toBe("Original audited text");
     const parsed = jsonObjectSchema.parse(JSON.parse(row!.metadata!));
-    const slackMeta = readSlackMetadata(parsed.slackMeta as string);
+    const slackMeta = readSlackMetadata(
+      capturedStringSchema.parse(parsed.slackMeta),
+    );
     expect(slackMeta!.deletedAt).toBeUndefined();
   });
 });

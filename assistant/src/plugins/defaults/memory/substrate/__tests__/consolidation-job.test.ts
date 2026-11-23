@@ -50,6 +50,8 @@ import {
   test,
 } from "bun:test";
 
+import { z } from "zod";
+
 import { installFastTimers } from "../../../../../__tests__/fast-timers.js";
 import { CONSOLIDATION_ALLOWED_TOOLS } from "../consolidation-tool-surface.js";
 
@@ -59,6 +61,8 @@ import { CONSOLIDATION_ALLOWED_TOOLS } from "../consolidation-tool-surface.js";
 // mid-write append below keeps its ordering: scheduled before the job's
 // settle timer, so it fires (and lands) between the job's first and second
 // buffer reads exactly as with real timers.
+const capturedStringSchema = z.string();
+
 let restoreTimers: () => void;
 beforeAll(() => {
   restoreTimers = installFastTimers();
@@ -360,10 +364,12 @@ describe("memoryV2ConsolidateJob — chunked cutoff (consolidation_max_entries_p
     expect(outcome.cutoff).toBe("Apr 27, 9:03 AM");
     expect(outcome.deferredEntries).toBe(2);
     expect(runnerCalls).toBe(1);
-    expect(runnerLastArgs!.prompt as string).toContain("Apr 27, 9:03 AM");
+    expect(capturedStringSchema.parse(runnerLastArgs!.prompt)).toContain(
+      "Apr 27, 9:03 AM",
+    );
     // The pass is the first three entries, verbatim, and the job removed
     // exactly them; the two deferred entries are still in the buffer.
-    const prompt = runnerLastArgs!.prompt as string;
+    const prompt = capturedStringSchema.parse(runnerLastArgs!.prompt);
     expect(prompt).toContain(
       "<buffer_entries>\n" +
         "- [Apr 27, 9:00 AM] Alice prefers VS Code.\n" +
@@ -655,7 +661,7 @@ describe("memoryV2ConsolidateJob — non-empty buffer", () => {
     // cutoff substituted in. Asserting the placeholder is GONE catches a
     // regression where `replaceAll` is dropped and the model receives
     // `{{CUTOFF}}` literally.
-    const prompt = runnerLastArgs?.prompt as string;
+    const prompt = capturedStringSchema.parse(runnerLastArgs?.prompt);
     expect(prompt).toContain("memory consolidation");
     expect(prompt).not.toContain(CUTOFF_PLACEHOLDER);
     // Cutoff is a buffer-entry-format timestamp (`Mon D, h:mm AM/PM`) so it
@@ -680,7 +686,7 @@ describe("memoryV2ConsolidateJob — non-empty buffer", () => {
     try {
       const result = await memoryV2ConsolidateJob(makeJob(), CONFIG);
       expect(result.kind).toBe("invoked");
-      const prompt = runnerLastArgs?.prompt as string;
+      const prompt = capturedStringSchema.parse(runnerLastArgs?.prompt);
       expect(prompt).toContain("repair unreadable pages");
       expect(prompt).toContain("`memory/concepts/broken-page.md`");
     } finally {
@@ -701,7 +707,7 @@ describe("memoryV2ConsolidateJob — non-empty buffer", () => {
     try {
       const result = await memoryV2ConsolidateJob(makeJob(), CONFIG);
       expect(result.kind).toBe("invoked");
-      const prompt = runnerLastArgs?.prompt as string;
+      const prompt = capturedStringSchema.parse(runnerLastArgs?.prompt);
       expect(prompt).toContain("resolve dangling links");
       expect(prompt).toContain(
         "- `memory/concepts/atl-1290.md` → `atl-1291` (frontmatter `links:` entry)",
@@ -752,7 +758,7 @@ describe("memoryV2ConsolidateJob — non-empty buffer", () => {
     const result = await memoryV2ConsolidateJob(makeJob(), overrideConfig);
 
     expect(result.kind).toBe("invoked");
-    const prompt = runnerLastArgs?.prompt as string;
+    const prompt = capturedStringSchema.parse(runnerLastArgs?.prompt);
     expect(prompt).toMatch(
       /^CUSTOM CONSOLIDATION at [A-Z][a-z]{2} \d{1,2}, \d{1,2}:\d{2} (AM|PM)$/m,
     );
@@ -805,14 +811,16 @@ describe("memoryV2ConsolidateJob — non-empty buffer", () => {
     // — the file feeds the v3 core lane and is inert without it.
     v3FlagOn = false;
     await memoryV2ConsolidateJob(makeJob(), CONFIG);
-    expect(runnerLastArgs?.prompt as string).not.toContain("core-pages");
+    expect(capturedStringSchema.parse(runnerLastArgs?.prompt)).not.toContain(
+      "core-pages",
+    );
 
     // The first run consumed the buffer. Refill it so the second
     // invocation doesn't bail at the empty-buffer gate.
     writeFileSync(bufferPath(), "- [Apr 27, 9:10 AM] Alice refactored.\n");
     v3FlagOn = true;
     await memoryV2ConsolidateJob(makeJob(), CONFIG);
-    expect(runnerLastArgs?.prompt as string).toContain(
+    expect(capturedStringSchema.parse(runnerLastArgs?.prompt)).toContain(
       "## 10. Review `memory/core-pages.md`",
     );
   });
@@ -905,7 +913,7 @@ describe("memoryV2ConsolidateJob: runtime-owned consumption", () => {
     expect(result.noProgress).toBe(false);
     expect(result.consumedEntries).toBe(2);
     expect(readFileSync(bufferPath(), "utf-8")).toBe(midRun);
-    expect(runnerLastArgs?.prompt as string).not.toContain(
+    expect(capturedStringSchema.parse(runnerLastArgs?.prompt)).not.toContain(
       "Bob joined the standup.",
     );
   });
@@ -1120,7 +1128,9 @@ describe("memoryV2ConsolidateJob: runtime-owned consumption", () => {
       throw new Error("unreachable");
     }
     expect(result.consumedEntries).toBe(1);
-    expect(runnerLastArgs?.prompt as string).not.toContain("Alice ships");
+    expect(capturedStringSchema.parse(runnerLastArgs?.prompt)).not.toContain(
+      "Alice ships",
+    );
     expect(readFileSync(bufferPath(), "utf-8")).toBe(
       "- [Apr 27, 9:05 AM] Alice ships at end of day.\n",
     );
@@ -1145,7 +1155,7 @@ describe("memoryV2ConsolidateJob: runtime-owned consumption", () => {
       throw new Error("unreachable");
     }
     expect(result.consumedEntries).toBe(2);
-    expect(runnerLastArgs?.prompt as string).toContain(
+    expect(capturedStringSchema.parse(runnerLastArgs?.prompt)).toContain(
       "Alice ships at end of day.",
     );
     expect(readFileSync(bufferPath(), "utf-8")).toBe("");
@@ -1173,7 +1183,7 @@ describe("memoryV2ConsolidateJob: runtime-owned consumption", () => {
     if (result.kind !== "invoked") {
       throw new Error("unreachable");
     }
-    expect(runnerLastArgs?.prompt as string).toContain(
+    expect(capturedStringSchema.parse(runnerLastArgs?.prompt)).toContain(
       "<buffer_entries>\nSome notes I typed by hand.\n- [Apr 27, 9:00 AM]",
     );
     expect(result.consumedEntries).toBe(3);
@@ -1286,7 +1296,7 @@ describe("memoryV2ConsolidateJob: runtime-owned consumption", () => {
         throw new Error("unreachable");
       }
       // The pre-run index fed the repair step...
-      expect(runnerLastArgs?.prompt as string).toContain(
+      expect(capturedStringSchema.parse(runnerLastArgs?.prompt)).toContain(
         "resolve dangling links",
       );
       // ...and the post-run count reflects the repair.
@@ -1703,7 +1713,7 @@ describe("article-shape selection — keyed on the live gate", () => {
     await memoryV2ConsolidateJob(makeJob(), CONFIG);
 
     expect(runnerCalls).toBe(1);
-    const prompt = runnerLastArgs?.prompt as string;
+    const prompt = capturedStringSchema.parse(runnerLastArgs?.prompt);
     expect(prompt).not.toContain(V3_MARKER);
     expect(prompt).toContain("The `summary` field is required");
     // §10 (core-pages curation) is omitted on a v2-only install.
@@ -1717,7 +1727,7 @@ describe("article-shape selection — keyed on the live gate", () => {
     await memoryV2ConsolidateJob(makeJob(), CONFIG);
 
     expect(runnerCalls).toBe(1);
-    const prompt = runnerLastArgs?.prompt as string;
+    const prompt = capturedStringSchema.parse(runnerLastArgs?.prompt);
     expect(prompt).toContain(V3_MARKER);
     expect(prompt).not.toContain("The `summary` field is required");
     expect(prompt).toContain("memory/core-pages.md");

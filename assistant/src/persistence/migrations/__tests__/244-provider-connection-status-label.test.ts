@@ -33,8 +33,8 @@ describe("migration 244 — provider_connection status + label", () => {
 
     // Verify the new columns are absent before migration 244.
     const colsBefore = raw
-      .query(`PRAGMA table_info(provider_connections)`)
-      .all() as ColumnRow[];
+      .query<ColumnRow, []>(`PRAGMA table_info(provider_connections)`)
+      .all();
     const namesBefore = colsBefore.map((c) => c.name);
     expect(namesBefore).not.toContain("status");
     expect(namesBefore).not.toContain("label");
@@ -42,8 +42,8 @@ describe("migration 244 — provider_connection status + label", () => {
     migrateProviderConnectionStatusLabel(db);
 
     const cols = raw
-      .query(`PRAGMA table_info(provider_connections)`)
-      .all() as ColumnRow[];
+      .query<ColumnRow, []>(`PRAGMA table_info(provider_connections)`)
+      .all();
     const colMap = Object.fromEntries(cols.map((c) => [c.name, c]));
 
     // status: NOT NULL, default 'active'
@@ -75,12 +75,15 @@ describe("migration 244 — provider_connection status + label", () => {
     migrateProviderConnectionStatusLabel(db);
 
     const rows = raw
-      .query(`SELECT name, status, label FROM provider_connections`)
-      .all() as Array<{
-      name: string;
-      status: string;
-      label: string | null;
-    }>;
+      .query<
+        {
+          name: string;
+          status: string;
+          label: string | null;
+        },
+        []
+      >(`SELECT name, status, label FROM provider_connections`)
+      .all();
     expect(rows.length).toBeGreaterThan(0);
     for (const row of rows) {
       expect(row.status).toBe("active");

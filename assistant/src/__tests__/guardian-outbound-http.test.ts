@@ -14,6 +14,7 @@
 import { afterAll, beforeEach, describe, expect, mock, test } from "bun:test";
 
 import { fetchMock } from "./helpers/fetch-mock.js";
+import { jsonObjectSchema } from "./helpers/json-object-schema.js";
 
 // ---------------------------------------------------------------------------
 // Test isolation: in-memory SQLite via temp directory
@@ -435,17 +436,21 @@ describe("HTTP route: handleCreateVerificationSession (guardian path)", () => {
   });
 
   test("creates inbound challenge when destination is absent", async () => {
-    const result = (await handleCreateVerificationSession({
-      body: { channel: "phone" },
-    })) as unknown as Record<string, unknown>;
+    const result = jsonObjectSchema.parse(
+      await handleCreateVerificationSession({
+        body: { channel: "phone" },
+      }),
+    );
     expect(result.success).toBe(true);
     expect(result.channel).toBe("phone");
   });
 
   test("returns success for valid voice start", async () => {
-    const result = (await handleCreateVerificationSession({
-      body: { channel: "phone", destination: "+15559999999" },
-    })) as unknown as Record<string, unknown>;
+    const result = jsonObjectSchema.parse(
+      await handleCreateVerificationSession({
+        body: { channel: "phone", destination: "+15559999999" },
+      }),
+    );
     expect(result.success).toBe(true);
     expect(result.verificationSessionId).toBeDefined();
   });
@@ -466,9 +471,11 @@ describe("HTTP route: handleResendVerificationSession (guardian path)", () => {
 
   test("passes originConversationId through on successful resend", async () => {
     // Start a session first
-    const startResult = (await handleCreateVerificationSession({
-      body: { channel: "phone", destination: "+15556667777" },
-    })) as unknown as Record<string, unknown>;
+    const startResult = jsonObjectSchema.parse(
+      await handleCreateVerificationSession({
+        body: { channel: "phone", destination: "+15556667777" },
+      }),
+    );
     expect(startResult.success).toBe(true);
 
     // Expire the cooldown so resend is allowed
@@ -481,12 +488,14 @@ describe("HTTP route: handleResendVerificationSession (guardian path)", () => {
       );
     }
 
-    const resendResult = (await handleResendVerificationSession({
-      body: {
-        channel: "phone",
-        originConversationId: "conv-resend-http-origin",
-      },
-    })) as unknown as Record<string, unknown>;
+    const resendResult = jsonObjectSchema.parse(
+      await handleResendVerificationSession({
+        body: {
+          channel: "phone",
+          originConversationId: "conv-resend-http-origin",
+        },
+      }),
+    );
     expect(resendResult.success).toBe(true);
     expect(resendResult.originConversationId).toBe("conv-resend-http-origin");
   });
@@ -508,9 +517,11 @@ describe("HTTP route: handleCancelVerificationSession (guardian path)", () => {
 
   test("returns success when active session is cancelled", async () => {
     // Start a session
-    const startResult = (await handleCreateVerificationSession({
-      body: { channel: "phone", destination: "+15558887777" },
-    })) as unknown as Record<string, unknown>;
+    const startResult = jsonObjectSchema.parse(
+      await handleCreateVerificationSession({
+        body: { channel: "phone", destination: "+15558887777" },
+      }),
+    );
     expect(startResult.success).toBe(true);
 
     // Cancel it
@@ -566,13 +577,15 @@ describe("origin conversation linkage", () => {
   });
 
   test("HTTP handleCreateVerificationSession passes originConversationId through", async () => {
-    const result = (await handleCreateVerificationSession({
-      body: {
-        channel: "phone",
-        destination: "+15557776666",
-        originConversationId: "conv-origin-http-test",
-      },
-    })) as unknown as Record<string, unknown>;
+    const result = jsonObjectSchema.parse(
+      await handleCreateVerificationSession({
+        body: {
+          channel: "phone",
+          destination: "+15557776666",
+          originConversationId: "conv-origin-http-test",
+        },
+      }),
+    );
     expect(result.success).toBe(true);
     expect(result.originConversationId).toBe("conv-origin-http-test");
   });

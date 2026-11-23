@@ -114,8 +114,8 @@ describe("migration 291 — renormalize addresses", () => {
     migrateContactChannelsRenormalizeAddresses(db);
 
     const rows = raw
-      .prepare("SELECT * FROM contact_channels")
-      .all() as ChannelRow[];
+      .prepare<ChannelRow, []>("SELECT * FROM contact_channels")
+      .all();
     expect(rows).toHaveLength(1);
     expect(rows[0].address).toBe("U12345ABC");
   });
@@ -139,8 +139,8 @@ describe("migration 291 — renormalize addresses", () => {
     migrateContactChannelsRenormalizeAddresses(db);
 
     const rows = raw
-      .prepare("SELECT * FROM contact_channels")
-      .all() as ChannelRow[];
+      .prepare<ChannelRow, []>("SELECT * FROM contact_channels")
+      .all();
     expect(rows).toHaveLength(1);
     expect(rows[0].address).toBe("user@example.com");
   });
@@ -165,8 +165,8 @@ describe("migration 291 — renormalize addresses", () => {
     migrateContactChannelsRenormalizeAddresses(db);
 
     const rows = raw
-      .prepare("SELECT * FROM contact_channels")
-      .all() as ChannelRow[];
+      .prepare<ChannelRow, []>("SELECT * FROM contact_channels")
+      .all();
     expect(rows).toHaveLength(1);
     expect(rows[0].address).toBe("user@example.com");
   });
@@ -200,8 +200,8 @@ describe("migration 291 — renormalize addresses", () => {
     migrateContactChannelsRenormalizeAddresses(db);
 
     const rows = raw
-      .prepare("SELECT * FROM contact_channels ORDER BY id")
-      .all() as ChannelRow[];
+      .prepare<ChannelRow, []>("SELECT * FROM contact_channels ORDER BY id")
+      .all();
     expect(rows).toHaveLength(1);
     expect(rows[0].id).toBe("normalizer");
     expect(rows[0].address).toBe("U12345ABC");
@@ -226,8 +226,8 @@ describe("migration 291 — renormalize addresses", () => {
     migrateContactChannelsRenormalizeAddresses(db);
 
     const rows = raw
-      .prepare("SELECT * FROM contact_channels")
-      .all() as ChannelRow[];
+      .prepare<ChannelRow, []>("SELECT * FROM contact_channels")
+      .all();
     expect(rows).toHaveLength(1);
     expect(rows[0].address).toBe("U12345ABC");
   });
@@ -254,8 +254,8 @@ describe("migration 291 — renormalize addresses", () => {
     migrateContactChannelsRenormalizeAddresses(db);
 
     const rows = raw
-      .prepare("SELECT * FROM contact_channels")
-      .all() as ChannelRow[];
+      .prepare<ChannelRow, []>("SELECT * FROM contact_channels")
+      .all();
     expect(rows).toHaveLength(1);
     // generic-examples:ignore-next-line — reason: verifying E.164 address preserved
     expect(rows[0].address).toBe("+15550101234");
@@ -279,8 +279,8 @@ describe("migration 291 — renormalize addresses", () => {
     migrateContactChannelsRenormalizeAddresses(db);
 
     const rows = raw
-      .prepare("SELECT * FROM contact_channels")
-      .all() as ChannelRow[];
+      .prepare<ChannelRow, []>("SELECT * FROM contact_channels")
+      .all();
     expect(rows).toHaveLength(1);
     expect(rows[0].address).toBe("+447911123456");
   });
@@ -303,8 +303,8 @@ describe("migration 291 — renormalize addresses", () => {
     migrateContactChannelsRenormalizeAddresses(db);
 
     const rows = raw
-      .prepare("SELECT * FROM contact_channels")
-      .all() as ChannelRow[];
+      .prepare<ChannelRow, []>("SELECT * FROM contact_channels")
+      .all();
     expect(rows).toHaveLength(1);
     expect(rows[0].address).toBe("U12345ABC");
   });
@@ -333,8 +333,11 @@ describe("migration 291 — renormalize addresses", () => {
     expect(() => migrateContactChannelsRenormalizeAddresses(db)).not.toThrow();
 
     const rows = raw
-      .prepare("SELECT id, address FROM contact_channels")
-      .all() as { id: string; address: string }[];
+      .prepare<
+        { id: string; address: string },
+        []
+      >("SELECT id, address FROM contact_channels")
+      .all();
     expect(rows).toHaveLength(1);
     expect(rows[0].address).toBe("u12345abc");
   });

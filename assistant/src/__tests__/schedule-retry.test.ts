@@ -1,5 +1,7 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 
+import { jsonObjectSchema } from "./helpers/json-object-schema.js";
+
 // The scheduler's fresh-bootstrap path routes through `runBackgroundJob`,
 // which invokes the real `processMessage` from `daemon/process-message.ts`
 // instead of the test-injected callback. To keep these tests focused on
@@ -504,7 +506,7 @@ describe("execute-mode failure notifications", () => {
   test("a failing schedule alerts once, at exhaustion, keyed on the failure cause", async () => {
     const emitted: Array<Record<string, unknown>> = [];
     emitNotificationSignalImpl = async (payload) => {
-      emitted.push(payload as Record<string, unknown>);
+      emitted.push(jsonObjectSchema.parse(payload));
     };
     runnerFailureClassification = {
       errorKind: "model_provider",
@@ -564,7 +566,7 @@ describe("execute-mode failure notifications", () => {
     // different remedies; schedule A's alert must not suppress schedule B's.
     const emitted: Array<Record<string, unknown>> = [];
     emitNotificationSignalImpl = async (payload) => {
-      emitted.push(payload as Record<string, unknown>);
+      emitted.push(jsonObjectSchema.parse(payload));
     };
     runnerFailureClassification = {
       errorKind: "model_provider",
@@ -614,7 +616,7 @@ describe("execute-mode failure notifications", () => {
   test("a cause-less failure keys the exhaustion alert per schedule", async () => {
     const emitted: Array<Record<string, unknown>> = [];
     emitNotificationSignalImpl = async (payload) => {
-      emitted.push(payload as Record<string, unknown>);
+      emitted.push(jsonObjectSchema.parse(payload));
     };
 
     const schedule = await createSchedule({
@@ -842,7 +844,7 @@ describe("scheduler-recovery equivalence", () => {
     // Now run recovery's retry logic on the post-completeScheduleRun state
     const jobB = getSchedule(scheduleB.id)!;
     const decision = decideRetry(jobB);
-    const noopLogger = new Proxy({} as Record<string, unknown>, {
+    const noopLogger = new Proxy(jsonObjectSchema.parse({}), {
       get: () => () => {},
     });
     await applyRetryDecision({
@@ -921,7 +923,7 @@ describe("scheduler-recovery equivalence", () => {
     // decideRetry + apply for first failure
     const jobB1 = getSchedule(scheduleB.id)!;
     const decision1 = decideRetry(jobB1);
-    const noopLogger = new Proxy({} as Record<string, unknown>, {
+    const noopLogger = new Proxy(jsonObjectSchema.parse({}), {
       get: () => () => {},
     });
     await applyRetryDecision({

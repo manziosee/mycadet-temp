@@ -1,10 +1,14 @@
 import { beforeEach, describe, expect, mock, test } from "bun:test";
 
+import { z } from "zod";
+
 import type { WorkspaceMigration } from "../workspace/migrations/types.js";
 
 // ---------------------------------------------------------------------------
 // Mock state
 // ---------------------------------------------------------------------------
+
+const capturedStringSchema = z.string();
 
 let mockCheckpointContents: string | null = null;
 
@@ -199,17 +203,17 @@ describe("runWorkspaceMigrations", () => {
 
     // Verify the completed checkpoint contains m1
     // The second write is the "completed" marker for m1
-    const completedWrite = (
-      writeFileSyncFn.mock.calls[1] as unknown[]
-    )[1] as string;
+    const completedWrite = capturedStringSchema.parse(
+      (writeFileSyncFn.mock.calls[1] as unknown[])[1],
+    );
     const parsed = JSON.parse(completedWrite);
     expect(parsed.applied["001"]).toBeDefined();
     expect(parsed.applied["001"].status).toBe("completed");
 
     // Verify m2 is marked as failed
-    const failedWrite = (
-      writeFileSyncFn.mock.calls[3] as unknown[]
-    )[1] as string;
+    const failedWrite = capturedStringSchema.parse(
+      (writeFileSyncFn.mock.calls[3] as unknown[])[1],
+    );
     const failedParsed = JSON.parse(failedWrite);
     expect(failedParsed.applied["002"]).toBeDefined();
     expect(failedParsed.applied["002"].status).toBe("failed");
@@ -227,7 +231,7 @@ describe("runWorkspaceMigrations", () => {
 
     // Capture the last checkpoint that was written
     const lastWriteCall = writeFileSyncFn.mock.calls.at(-1) as unknown[];
-    const savedCheckpoint = lastWriteCall[1] as string;
+    const savedCheckpoint = capturedStringSchema.parse(lastWriteCall[1]);
 
     // Reset mocks for second run
     (m1.run as ReturnType<typeof mock>).mockClear();
@@ -378,14 +382,18 @@ describe("runWorkspaceMigrations", () => {
 
     // The first persisted checkpoint (m1's "started" save) carries the flag.
     const firstSave = JSON.parse(
-      (writeFileSyncFn.mock.calls[0] as unknown[])[1] as string,
+      capturedStringSchema.parse(
+        (writeFileSyncFn.mock.calls[0] as unknown[])[1],
+      ),
     );
     expect(firstSave.isNewWorkspace).toBe(true);
 
     // The final persisted checkpoint clears the flag so subsequent boots
     // treat this workspace as an upgrade.
     const finalSave = JSON.parse(
-      (writeFileSyncFn.mock.calls.at(-1) as unknown[])[1] as string,
+      capturedStringSchema.parse(
+        (writeFileSyncFn.mock.calls.at(-1) as unknown[])[1],
+      ),
     );
     expect(finalSave.isNewWorkspace).toBe(false);
   });
@@ -546,7 +554,9 @@ describe("rollbackWorkspaceMigrations", () => {
 
     // The last checkpoint write should only contain m1 (002 and 003 were rolled back)
     const lastWriteCall = writeFileSyncFn.mock.calls.at(-1) as unknown[];
-    const finalCheckpoint = JSON.parse(lastWriteCall[1] as string);
+    const finalCheckpoint = JSON.parse(
+      capturedStringSchema.parse(lastWriteCall[1]),
+    );
     expect(finalCheckpoint.applied["001"]).toBeDefined();
     expect(finalCheckpoint.applied["002"]).toBeUndefined();
     expect(finalCheckpoint.applied["003"]).toBeUndefined();

@@ -10,12 +10,15 @@
  *  - failure paths emit `activity.failed` (unless suppressed)
  *  - the result is always a structured value, never a thrown error
  */
-
 import { beforeEach, describe, expect, mock, test } from "bun:test";
+
+import { z } from "zod";
 
 import type { TrustContext } from "../../daemon/trust-context-types.js";
 
 // ── Module mocks ─────────────────────────────────────────────────────
+
+const capturedStringSchema = z.string();
 
 let bootstrapCalls = 0;
 let bootstrapLastArgs: Record<string, unknown> | null = null;
@@ -282,7 +285,7 @@ describe("runBackgroundJob", () => {
     });
     // Dedupe key collapses repeated failures of the same job per UTC day.
     expect(typeof emitted.dedupeKey).toBe("string");
-    expect(emitted.dedupeKey as string).toMatch(
+    expect(capturedStringSchema.parse(emitted.dedupeKey)).toMatch(
       /^activity-failed:test-job:\d{4}-\d{2}-\d{2}$/,
     );
   });
@@ -315,7 +318,7 @@ describe("runBackgroundJob", () => {
     // the resolved provider scope, not the job. `heartbeatAgent` resolves the
     // cost-optimized default profile, so every job failing on this code
     // through that route collapses into one notification per UTC day.
-    expect(emitCalls[0].dedupeKey as string).toMatch(
+    expect(capturedStringSchema.parse(emitCalls[0].dedupeKey)).toMatch(
       /^activity-failed:cause:PROVIDER_BILLING:cost-optimized:\d{4}-\d{2}-\d{2}$/,
     );
   });
@@ -329,7 +332,7 @@ describe("runBackgroundJob", () => {
     await runBackgroundJob(baseOpts({ overrideProfile: "balanced" }));
 
     expect(emitCalls).toHaveLength(1);
-    expect(emitCalls[0].dedupeKey as string).toMatch(
+    expect(capturedStringSchema.parse(emitCalls[0].dedupeKey)).toMatch(
       /^activity-failed:cause:PROVIDER_BILLING:balanced:\d{4}-\d{2}-\d{2}$/,
     );
   });
@@ -352,7 +355,7 @@ describe("runBackgroundJob", () => {
     expect(result.turnFailure?.userMessage).toBe("You're out of credits.");
     expect(emitCalls).toHaveLength(1);
     // The carried connection outranks the call site's recomputed profile.
-    expect(emitCalls[0].dedupeKey as string).toMatch(
+    expect(capturedStringSchema.parse(emitCalls[0].dedupeKey)).toMatch(
       /^activity-failed:cause:PROVIDER_BILLING:conn-a:\d{4}-\d{2}-\d{2}$/,
     );
     expect(emitCalls[0].contextPayload).toMatchObject({
@@ -375,7 +378,7 @@ describe("runBackgroundJob", () => {
     expect(result.ok).toBe(false);
     expect(result.turnFailure?.failureCode).toBe("CONTEXT_TOO_LARGE");
     expect(emitCalls).toHaveLength(1);
-    expect(emitCalls[0].dedupeKey as string).toMatch(
+    expect(capturedStringSchema.parse(emitCalls[0].dedupeKey)).toMatch(
       /^activity-failed:test-job:\d{4}-\d{2}-\d{2}$/,
     );
   });
@@ -390,7 +393,7 @@ describe("runBackgroundJob", () => {
     expect(result.ok).toBe(false);
     expect(result.errorKind).toBe("model_provider");
     expect(emitCalls).toHaveLength(1);
-    expect(emitCalls[0].dedupeKey as string).toMatch(
+    expect(capturedStringSchema.parse(emitCalls[0].dedupeKey)).toMatch(
       /^activity-failed:cause:model_provider:cost-optimized:\d{4}-\d{2}-\d{2}$/,
     );
   });
@@ -410,7 +413,7 @@ describe("runBackgroundJob", () => {
       (emitCalls[0].contextPayload as { errorKind: string }).errorKind,
     ).toBe("timeout");
     // A timeout is job-specific, so it keeps the per-job dedupe key.
-    expect(emitCalls[0].dedupeKey as string).toMatch(
+    expect(capturedStringSchema.parse(emitCalls[0].dedupeKey)).toMatch(
       /^activity-failed:test-job:\d{4}-\d{2}-\d{2}$/,
     );
   });

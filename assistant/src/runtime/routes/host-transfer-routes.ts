@@ -59,7 +59,7 @@ async function handleTransferContentGet({
 
   const targetClientId = match.proxy.getTargetClientIdForTransfer(transferId);
   if (targetClientId != null) {
-    const headerMap = headers as Record<string, string | undefined>;
+    const headerMap: Record<string, string | undefined> = headers;
     const submittingClientId =
       headerMap["x-cadet-client-id"]?.trim() || undefined;
     if (!submittingClientId) {
@@ -161,7 +161,7 @@ async function handleTransferContentPut({
 
   const targetClientId = match.proxy.getTargetClientIdForTransfer(transferId);
   if (targetClientId != null) {
-    const headerMap = headers as Record<string, string | undefined>;
+    const headerMap: Record<string, string | undefined> = headers;
     const submittingClientId =
       headerMap["x-cadet-client-id"]?.trim() || undefined;
     if (!submittingClientId) {

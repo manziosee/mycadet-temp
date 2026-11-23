@@ -1,3 +1,5 @@
+import type { SQLQueryBindings } from "bun:sqlite";
+
 import { getLogger } from "../logging.js";
 import { memorySqliteOrNull } from "../memory-db.js";
 
@@ -68,11 +70,11 @@ export function computeInjectionScore(slug: string, now: number): number {
   }
   const cutoff = now - READ_WINDOW_MS;
   const rows = raw
-    .query(
+    .query<{ injected_at: number }, SQLQueryBindings[]>(
       `SELECT injected_at FROM memory_v2_injection_events
         WHERE slug = ? AND injected_at >= ?`,
     )
-    .all(slug, cutoff) as Array<{ injected_at: number }>;
+    .all(slug, cutoff);
   let score = 0;
   for (const row of rows) {
     score += decayContribution(now - row.injected_at);
@@ -103,11 +105,11 @@ export function computeInjectionScores(
   const cutoff = now - READ_WINDOW_MS;
   const placeholders = slugs.map(() => "?").join(",");
   const rows = raw
-    .query(
+    .query<{ slug: string; injected_at: number }, SQLQueryBindings[]>(
       `SELECT slug, injected_at FROM memory_v2_injection_events
         WHERE slug IN (${placeholders}) AND injected_at >= ?`,
     )
-    .all(...slugs, cutoff) as Array<{ slug: string; injected_at: number }>;
+    .all(...slugs, cutoff);
   for (const row of rows) {
     const prev = out.get(row.slug) ?? 0;
     out.set(row.slug, prev + decayContribution(now - row.injected_at));

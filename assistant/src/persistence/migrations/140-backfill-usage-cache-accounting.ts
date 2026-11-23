@@ -171,7 +171,7 @@ export function migrateBackfillUsageCacheAccounting(database: DrizzleDb): void {
   }
 
   const usageRows = raw
-    .query(
+    .query<UsageEventRow, []>(
       /*sql*/ `
       SELECT
         id,
@@ -187,10 +187,10 @@ export function migrateBackfillUsageCacheAccounting(database: DrizzleDb): void {
       ORDER BY conversation_id ASC, created_at ASC, id ASC
       `,
     )
-    .all() as UsageEventRow[];
+    .all();
 
   const requestLogRows = raw
-    .query(
+    .query<RequestLogRow, []>(
       /*sql*/ `
       SELECT
         id,
@@ -201,7 +201,7 @@ export function migrateBackfillUsageCacheAccounting(database: DrizzleDb): void {
       ORDER BY conversation_id ASC, created_at ASC, id ASC
       `,
     )
-    .all() as RequestLogRow[];
+    .all();
 
   const requestLogsByConversation = buildRequestLogMap(requestLogRows);
   const requestOffsets = new Map<string, number>();

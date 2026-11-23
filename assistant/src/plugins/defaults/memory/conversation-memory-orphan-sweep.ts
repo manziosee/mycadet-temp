@@ -1,3 +1,5 @@
+import type { SQLQueryBindings } from "bun:sqlite";
+
 // ---------------------------------------------------------------------------
 // Relocated memory tables — startup orphan sweep.
 // ---------------------------------------------------------------------------
@@ -24,7 +26,6 @@
 // is a bounded statement with a yield between pages, so even a large backlog
 // after a long disabled window never materializes all ids at once or holds the
 // event loop.
-
 import { getSqlite } from "../../../persistence/db-connection.js";
 import { CONVERSATION_KEYED_MEMORY_TABLES } from "./conversation-memory-purge.js";
 import { getLogger } from "./logging.js";
@@ -89,14 +90,13 @@ async function sweepTable(
     // advances through the index instead of restarting from the top each round
     // (which would re-scan the whole table per batch). Only this page's ids are
     // ever held in memory.
-    const page = (
-      memoryRaw
-        .query(
-          `SELECT DISTINCT conversation_id AS id FROM ${table}
+    const page = memoryRaw
+      .query<{ id: string }, SQLQueryBindings[]>(
+        `SELECT DISTINCT conversation_id AS id FROM ${table}
            WHERE conversation_id > ? ORDER BY conversation_id LIMIT ?`,
-        )
-        .all(cursor, SWEEP_BATCH) as Array<{ id: string }>
-    ).map((row) => row.id);
+      )
+      .all(cursor, SWEEP_BATCH)
+      .map((row) => row.id);
     if (page.length === 0) {
       break;
     }
@@ -106,11 +106,12 @@ async function sweepTable(
     // conversation has been deleted.
     const placeholders = page.map(() => "?").join(", ");
     const alive = new Set(
-      (
-        mainRaw
-          .query(`SELECT id FROM conversations WHERE id IN (${placeholders})`)
-          .all(...page) as Array<{ id: string }>
-      ).map((row) => row.id),
+      mainRaw
+        .query<{ id: string }, SQLQueryBindings[]>(
+          `SELECT id FROM conversations WHERE id IN (${placeholders})`,
+        )
+        .all(...page)
+        .map((row) => row.id),
     );
     const orphans = page.filter((id) => !alive.has(id));
     if (orphans.length > 0) {

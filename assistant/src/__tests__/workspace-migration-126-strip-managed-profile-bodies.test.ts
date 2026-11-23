@@ -10,6 +10,7 @@ import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
 import { stripCloudProfileBodiesMigration } from "../workspace/migrations/126-strip-managed-profile-bodies.js";
+import { jsonObjectSchema } from "./helpers/json-object-schema.js";
 
 let workspaceDir: string;
 
@@ -76,7 +77,7 @@ describe("126-strip-managed-profile-bodies", () => {
 
     stripCloudProfileBodiesMigration.run(workspaceDir);
 
-    const profiles = (readConfig().llm as Record<string, unknown>)
+    const profiles = jsonObjectSchema.parse(readConfig().llm)
       .profiles as Record<string, Record<string, unknown>>;
     expect(profiles.balanced).toEqual({
       source: "managed",
@@ -112,7 +113,7 @@ describe("126-strip-managed-profile-bodies", () => {
 
     stripCloudProfileBodiesMigration.run(workspaceDir);
 
-    const profiles = (readConfig().llm as Record<string, unknown>)
+    const profiles = jsonObjectSchema.parse(readConfig().llm)
       .profiles as Record<string, Record<string, unknown>>;
     expect(profiles["my-custom"]).toEqual(custom);
     expect(profiles.balanced).toEqual(shadow);
@@ -138,7 +139,7 @@ describe("126-strip-managed-profile-bodies", () => {
 
     stripCloudProfileBodiesMigration.run(workspaceDir);
 
-    const profiles = (readConfig().llm as Record<string, unknown>)
+    const profiles = jsonObjectSchema.parse(readConfig().llm)
       .profiles as Record<string, Record<string, unknown>>;
     expect(profiles.balanced).toEqual({
       source: "managed",
@@ -163,7 +164,7 @@ describe("126-strip-managed-profile-bodies", () => {
 
     stripCloudProfileBodiesMigration.run(workspaceDir);
 
-    const profiles = (readConfig().llm as Record<string, unknown>)
+    const profiles = jsonObjectSchema.parse(readConfig().llm)
       .profiles as Record<string, Record<string, unknown>>;
     expect(profiles["os-beta"]).toEqual({
       source: "managed",

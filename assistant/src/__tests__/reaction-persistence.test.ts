@@ -11,11 +11,15 @@ import type { SQLQueryBindings } from "bun:sqlite";
  */
 import { beforeEach, describe, expect, mock, test } from "bun:test";
 
+import { z } from "zod";
+
 import { jsonObjectSchema } from "./helpers/json-object-schema.js";
 
 // ---------------------------------------------------------------------------
 // Test isolation: in-memory SQLite via temp directory
 // ---------------------------------------------------------------------------
+
+const capturedStringSchema = z.string();
 
 process.env.DISABLE_HTTP_AUTH = "true";
 
@@ -282,7 +286,9 @@ describe("Slack reaction event persistence", () => {
     const slackMetaRaw = envelope.slackMeta;
     expect(typeof slackMetaRaw).toBe("string");
 
-    const slackMeta = readSlackMetadata(slackMetaRaw as string);
+    const slackMeta = readSlackMetadata(
+      capturedStringSchema.parse(slackMetaRaw),
+    );
     expect(slackMeta).not.toBeNull();
     expect(slackMeta!.source).toBe("slack");
     expect(slackMeta!.eventKind).toBe("reaction");
@@ -316,7 +322,9 @@ describe("Slack reaction event persistence", () => {
     expect(rows.length).toBe(1);
 
     const envelope = jsonObjectSchema.parse(JSON.parse(rows[0].metadata!));
-    const slackMeta = readSlackMetadata(envelope.slackMeta as string);
+    const slackMeta = readSlackMetadata(
+      capturedStringSchema.parse(envelope.slackMeta),
+    );
     expect(slackMeta).not.toBeNull();
     expect(slackMeta!.eventKind).toBe("reaction");
     expect(slackMeta!.reaction?.op).toBe("removed");
@@ -352,7 +360,9 @@ describe("Slack reaction event persistence", () => {
       (r) => r.content === "[reaction]",
     );
     const meta = readSlackMetadata(
-      jsonObjectSchema.parse(JSON.parse(rows[0].metadata!)).slackMeta as string,
+      capturedStringSchema.parse(
+        jsonObjectSchema.parse(JSON.parse(rows[0].metadata!)).slackMeta,
+      ),
     );
     expect(meta?.threadTs).toBeUndefined();
   });
@@ -374,7 +384,9 @@ describe("Slack reaction event persistence", () => {
     expect(rows.length).toBe(1);
 
     const envelope = jsonObjectSchema.parse(JSON.parse(rows[0].metadata!));
-    const slackMeta = readSlackMetadata(envelope.slackMeta as string);
+    const slackMeta = readSlackMetadata(
+      capturedStringSchema.parse(envelope.slackMeta),
+    );
     expect(slackMeta).not.toBeNull();
     expect(slackMeta!.threadTs).toBeUndefined();
     expect(slackMeta!.channelTs).toBe("1700000000.222222");
@@ -619,7 +631,7 @@ describe("Slack reaction event persistence", () => {
     const req = buildReactionRequest("reaction:thumbsup");
     const resp = await handleChannelInbound(req, undefined, TEST_BEARER_TOKEN);
     const json = jsonObjectSchema.parse(await resp.json());
-    const eventId = json.eventId as string;
+    const eventId = capturedStringSchema.parse(json.eventId);
 
     const db = getDb();
     const messageRows = db
@@ -754,7 +766,9 @@ describe("reaction access control (no verification handshake)", () => {
     );
     expect(rows.length).toBe(1);
     const envelope = jsonObjectSchema.parse(JSON.parse(rows[0].metadata!));
-    const slackMeta = readSlackMetadata(envelope.slackMeta as string);
+    const slackMeta = readSlackMetadata(
+      capturedStringSchema.parse(envelope.slackMeta),
+    );
     expect(slackMeta?.eventKind).toBe("reaction");
     expect(slackMeta?.reaction?.emoji).toBe("tada");
   });

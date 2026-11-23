@@ -10,6 +10,7 @@ import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
 import { backfillCloudProfileLabelsMigration } from "../workspace/migrations/082-backfill-managed-profile-labels.js";
+import { jsonObjectSchema } from "./helpers/json-object-schema.js";
 
 let workspaceDir: string;
 
@@ -85,7 +86,7 @@ describe("082-backfill-managed-profile-labels migration", () => {
     backfillCloudProfileLabelsMigration.run(workspaceDir);
 
     const config = readConfig();
-    const profiles = (config.llm as Record<string, unknown>).profiles as Record<
+    const profiles = jsonObjectSchema.parse(config.llm).profiles as Record<
       string,
       Record<string, unknown>
     >;
@@ -120,7 +121,7 @@ describe("082-backfill-managed-profile-labels migration", () => {
     backfillCloudProfileLabelsMigration.run(workspaceDir);
 
     const config = readConfig();
-    const profiles = (config.llm as Record<string, unknown>).profiles as Record<
+    const profiles = jsonObjectSchema.parse(config.llm).profiles as Record<
       string,
       Record<string, unknown>
     >;
@@ -147,7 +148,7 @@ describe("082-backfill-managed-profile-labels migration", () => {
     backfillCloudProfileLabelsMigration.run(workspaceDir);
 
     const config = readConfig();
-    const profiles = (config.llm as Record<string, unknown>).profiles as Record<
+    const profiles = jsonObjectSchema.parse(config.llm).profiles as Record<
       string,
       Record<string, unknown>
     >;
@@ -175,7 +176,7 @@ describe("082-backfill-managed-profile-labels migration", () => {
     backfillCloudProfileLabelsMigration.run(workspaceDir);
 
     const config = readConfig();
-    const profiles = (config.llm as Record<string, unknown>).profiles as Record<
+    const profiles = jsonObjectSchema.parse(config.llm).profiles as Record<
       string,
       Record<string, unknown>
     >;

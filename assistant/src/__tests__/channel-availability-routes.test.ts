@@ -58,23 +58,12 @@ mock.module("../cloud/client.js", () => ({
 // Import after mocks
 // ---------------------------------------------------------------------------
 
-import { ROUTES } from "../runtime/routes/channel-availability-routes.js";
+import {
+  channelAvailabilityResponseSchema,
+  ROUTES,
+} from "../runtime/routes/channel-availability-routes.js";
 
 const handler = ROUTES[0]!.handler;
-
-interface ChannelEntry {
-  id: string;
-  /** `default` here, `plugin:<name>` for a channel a plugin brings. */
-  source: string;
-  label: string;
-  subtitle: string;
-  icon: string;
-  supportsVerification: boolean;
-  setupMessages: { guardian: string; contact: string };
-}
-interface HandlerResult {
-  channels: ChannelEntry[];
-}
 
 // ---------------------------------------------------------------------------
 // Tests
@@ -93,7 +82,7 @@ describe("channels/available", () => {
   });
 
   test("base list only when no email address registered", async () => {
-    const result = (await handler({})) as HandlerResult;
+    const result = channelAvailabilityResponseSchema.parse(await handler({}));
 
     expect(result.channels.map((c) => c.id)).toEqual([
       "slack",
@@ -110,7 +99,7 @@ describe("channels/available", () => {
       body: { count: 1, results: [{ id: "addr-1", address: "hi@bot" }] },
     };
 
-    const result = (await handler({})) as HandlerResult;
+    const result = channelAvailabilityResponseSchema.parse(await handler({}));
 
     expect(result.channels.map((c) => c.id)).toEqual([
       "slack",
@@ -128,7 +117,7 @@ describe("channels/available", () => {
       body: { results: [{ id: "addr-1", address: "hi@bot" }] },
     };
 
-    const result = (await handler({})) as HandlerResult;
+    const result = channelAvailabilityResponseSchema.parse(await handler({}));
 
     expect(result.channels.map((c) => c.id)).toContain("email");
   });
@@ -136,7 +125,7 @@ describe("channels/available", () => {
   test("appends email when a your-own provider credential is stored", async () => {
     mockSecureKeys[credentialKey("resend", "api_key")] = "stored";
 
-    const result = (await handler({})) as HandlerResult;
+    const result = channelAvailabilityResponseSchema.parse(await handler({}));
 
     expect(result.channels.map((c) => c.id)).toContain("email");
   });
@@ -148,7 +137,7 @@ describe("channels/available", () => {
       body: { detail: "boom" },
     };
 
-    const result = (await handler({})) as HandlerResult;
+    const result = channelAvailabilityResponseSchema.parse(await handler({}));
 
     expect(result.channels.map((c) => c.id)).toEqual([
       "slack",
@@ -161,7 +150,7 @@ describe("channels/available", () => {
   test("base list only when platform fetch throws (best-effort)", async () => {
     mockFetchThrows = true;
 
-    const result = (await handler({})) as HandlerResult;
+    const result = channelAvailabilityResponseSchema.parse(await handler({}));
 
     expect(result.channels.map((c) => c.id)).toEqual([
       "slack",
@@ -174,7 +163,7 @@ describe("channels/available", () => {
   test("base list only when no cloudAssistantId on client", async () => {
     mockCloudAssistantId = null;
 
-    const result = (await handler({})) as HandlerResult;
+    const result = channelAvailabilityResponseSchema.parse(await handler({}));
 
     expect(result.channels.map((c) => c.id)).toEqual([
       "slack",
@@ -191,7 +180,7 @@ describe("channels/available", () => {
       body: { count: 1, results: [{ id: "addr-1", address: "hi@bot" }] },
     };
 
-    const result = (await handler({})) as HandlerResult;
+    const result = channelAvailabilityResponseSchema.parse(await handler({}));
 
     for (const channel of result.channels) {
       const expected = (CHANNEL_METADATA as any)[channel.id];
@@ -206,7 +195,7 @@ describe("channels/available", () => {
     // The base list is what a client compares a plugin-contributed row
     // against, so the marker has to be present rather than implied by an
     // absent field.
-    const result = (await handler({})) as HandlerResult;
+    const result = channelAvailabilityResponseSchema.parse(await handler({}));
 
     expect(result.channels.every((c) => c.source === "default")).toBe(true);
   });
@@ -218,7 +207,7 @@ describe("channels/available", () => {
       body: { count: 1, results: [{ id: "addr-1", address: "hi@bot" }] },
     };
 
-    const result = (await handler({})) as HandlerResult;
+    const result = channelAvailabilityResponseSchema.parse(await handler({}));
     const email = result.channels.find((c) => c.id === "email");
 
     expect(email).toBeDefined();
@@ -228,7 +217,7 @@ describe("channels/available", () => {
   });
 
   test("slack/telegram/phone are all verification-capable", async () => {
-    const result = (await handler({})) as HandlerResult;
+    const result = channelAvailabilityResponseSchema.parse(await handler({}));
     for (const id of ["slack", "telegram", "phone"]) {
       const ch = result.channels.find((c) => c.id === id);
       expect(ch).toBeDefined();
@@ -239,7 +228,7 @@ describe("channels/available", () => {
   });
 
   test("offers Discord for verification, like the other text channels", async () => {
-    const result = (await handler({})) as HandlerResult;
+    const result = channelAvailabilityResponseSchema.parse(await handler({}));
 
     const discord = result.channels.find((c) => c.id === "discord");
     // Availability is what a client reads to decide whether to offer setup at

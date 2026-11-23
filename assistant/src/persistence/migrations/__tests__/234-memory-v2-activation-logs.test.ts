@@ -58,15 +58,16 @@ describe("memory_v2_activation_logs migration", () => {
     migrateMemoryV2ActivationLogs(db);
 
     const tableRow = raw
-      .query(
-        `SELECT name FROM sqlite_master WHERE type='table' AND name='memory_v2_activation_logs'`,
-      )
-      .get() as TableRow | null;
+      .query<
+        TableRow,
+        []
+      >(`SELECT name FROM sqlite_master WHERE type='table' AND name='memory_v2_activation_logs'`)
+      .get();
     expect(tableRow?.name).toBe("memory_v2_activation_logs");
 
     const columns = raw
-      .query(`PRAGMA table_info(memory_v2_activation_logs)`)
-      .all() as ColumnRow[];
+      .query<ColumnRow, []>(`PRAGMA table_info(memory_v2_activation_logs)`)
+      .all();
     const byName = new Map(columns.map((c) => [c.name, c]));
 
     expect(byName.get("id")?.pk).toBe(1);
@@ -89,10 +90,11 @@ describe("memory_v2_activation_logs migration", () => {
     expect(byName.get("created_at")?.type).toBe("INTEGER");
 
     const indexes = raw
-      .query(
-        `SELECT name FROM sqlite_master WHERE type='index' AND tbl_name='memory_v2_activation_logs'`,
-      )
-      .all() as IndexRow[];
+      .query<
+        IndexRow,
+        []
+      >(`SELECT name FROM sqlite_master WHERE type='index' AND tbl_name='memory_v2_activation_logs'`)
+      .all();
     const indexNames = new Set(indexes.map((r) => r.name));
     for (const expected of EXPECTED_INDEXES) {
       expect(indexNames.has(expected)).toBe(true);
@@ -137,15 +139,19 @@ describe("memory_v2_activation_logs migration", () => {
     expect(() => migrateMemoryV2ActivationLogs(db)).not.toThrow();
 
     const row = raw
-      .query(`SELECT id FROM memory_v2_activation_logs WHERE id = 'log-1'`)
-      .get() as { id: string } | null;
+      .query<
+        { id: string },
+        []
+      >(`SELECT id FROM memory_v2_activation_logs WHERE id = 'log-1'`)
+      .get();
     expect(row?.id).toBe("log-1");
 
     const indexes = raw
-      .query(
-        `SELECT name FROM sqlite_master WHERE type='index' AND tbl_name='memory_v2_activation_logs'`,
-      )
-      .all() as IndexRow[];
+      .query<
+        IndexRow,
+        []
+      >(`SELECT name FROM sqlite_master WHERE type='index' AND tbl_name='memory_v2_activation_logs'`)
+      .all();
     const indexNames = new Set(indexes.map((r) => r.name));
     for (const expected of EXPECTED_INDEXES) {
       expect(indexNames.has(expected)).toBe(true);

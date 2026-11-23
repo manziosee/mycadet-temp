@@ -1,3 +1,4 @@
+import type { SQLQueryBindings } from "bun:sqlite";
 /**
  * PR 22 — verifies that an inbound Slack thread reply triggers a lazy
  * backfill of the missing thread ancestors when the conversation has no
@@ -251,23 +252,24 @@ interface RawMessageRow {
 function readMessagesByConversation(conversationId: string): RawMessageRow[] {
   const db = getDb();
   return db.$client
-    .prepare(
-      "SELECT role, content, metadata FROM messages WHERE conversation_id = ? ORDER BY created_at ASC",
-    )
-    .all(conversationId) as RawMessageRow[];
+    .prepare<
+      RawMessageRow,
+      SQLQueryBindings[]
+    >("SELECT role, content, metadata FROM messages WHERE conversation_id = ? ORDER BY created_at ASC")
+    .all(conversationId);
 }
 
 function readMessageRowsByConversation(conversationId: string): MessageRow[] {
   const db = getDb();
   return db.$client
-    .prepare(
+    .prepare<MessageRow, SQLQueryBindings[]>(
       `SELECT id, conversation_id AS conversationId, role, content,
               created_at AS createdAt, metadata
          FROM messages
         WHERE conversation_id = ?
         ORDER BY created_at ASC`,
     )
-    .all(conversationId) as MessageRow[];
+    .all(conversationId);
 }
 
 function makeBackfillMessage(

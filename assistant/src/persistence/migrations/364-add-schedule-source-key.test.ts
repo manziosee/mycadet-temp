@@ -33,10 +33,15 @@ function createTestDb() {
 }
 
 function columnInfo(sqlite: Database) {
-  return sqlite.query("PRAGMA table_info(cron_jobs)").all() as Array<{
-    name: string;
-    notnull: number;
-  }>;
+  return sqlite
+    .query<
+      {
+        name: string;
+        notnull: number;
+      },
+      []
+    >("PRAGMA table_info(cron_jobs)")
+    .all();
 }
 
 function insertJob(
@@ -80,10 +85,11 @@ describe("migration 364: cron_jobs declaration provenance", () => {
     migrateAddScheduleSourceKey(db);
 
     const row = sqlite
-      .query(
-        "SELECT source_key, definition_hash, user_enabled FROM cron_jobs WHERE id = 'job-old'",
-      )
-      .get() as Record<string, unknown>;
+      .query<
+        Record<string, unknown>,
+        []
+      >("SELECT source_key, definition_hash, user_enabled FROM cron_jobs WHERE id = 'job-old'")
+      .get()!;
     expect(row.source_key).toBeNull();
     expect(row.definition_hash).toBeNull();
     expect(row.user_enabled).toBeNull();

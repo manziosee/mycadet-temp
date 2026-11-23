@@ -448,6 +448,36 @@ async function handleCredentialsStatus() {
 // Route definitions
 // ---------------------------------------------------------------------------
 
+export const credentialsListResponseSchema = z.object({
+  credentials: z.array(z.unknown()).describe("Local credentials with metadata"),
+});
+
+export const credentialInspectResponseSchema = z.object({
+  service: z.string(),
+  field: z.string(),
+  credentialId: z.string().nullable(),
+  scrubbedValue: z.string(),
+  hasSecret: z.boolean(),
+});
+
+export const credentialRevealResponseSchema = z.object({
+  value: z.string().describe("The plaintext credential value"),
+});
+
+export const credentialSetResponseSchema = z.object({
+  credentialId: z.string(),
+  service: z.string(),
+  field: z.string(),
+});
+
+export const credentialDeleteResponseSchema = z.object({
+  service: z.string(),
+  field: z.string(),
+  affectedConnections: z
+    .array(z.string())
+    .describe("Provider connections that depended on the deleted credential"),
+});
+
 export const ROUTES: RouteDefinition[] = [
   {
     operationId: "credentials_list",
@@ -464,11 +494,7 @@ export const ROUTES: RouteDefinition[] = [
     requestBody: z.object({
       search: z.string().optional().describe("Filter by substring match"),
     }),
-    responseBody: z.object({
-      credentials: z
-        .array(z.unknown())
-        .describe("Local credentials with metadata"),
-    }),
+    responseBody: credentialsListResponseSchema,
     handler: handleCredentialsList,
   },
   {
@@ -488,13 +514,7 @@ export const ROUTES: RouteDefinition[] = [
       field: z.string().optional().describe("Field name"),
       id: z.string().optional().describe("Credential UUID for lookup by ID"),
     }),
-    responseBody: z.object({
-      service: z.string(),
-      field: z.string(),
-      credentialId: z.string().nullable(),
-      scrubbedValue: z.string(),
-      hasSecret: z.boolean(),
-    }),
+    responseBody: credentialInspectResponseSchema,
     handler: handleCredentialsInspect,
   },
   {
@@ -520,9 +540,7 @@ export const ROUTES: RouteDefinition[] = [
           "Conversation-bound reveal nonce from the tool-shell environment. Scopes any recorded chat-redaction authority (the plaintext proof) to the conversation whose tool executed this reveal; without it the reveal succeeds but records no authority.",
         ),
     }),
-    responseBody: z.object({
-      value: z.string().describe("The plaintext credential value"),
-    }),
+    responseBody: credentialRevealResponseSchema,
     handler: handleCredentialsReveal,
   },
   {
@@ -559,11 +577,7 @@ export const ROUTES: RouteDefinition[] = [
         .optional()
         .describe("How the credential is injected into requests"),
     }),
-    responseBody: z.object({
-      credentialId: z.string(),
-      service: z.string(),
-      field: z.string(),
-    }),
+    responseBody: credentialSetResponseSchema,
     handler: handleCredentialsSet,
   },
   {
@@ -590,15 +604,7 @@ export const ROUTES: RouteDefinition[] = [
           "Delete even when provider connections depend on the credential",
         ),
     }),
-    responseBody: z.object({
-      service: z.string(),
-      field: z.string(),
-      affectedConnections: z
-        .array(z.string())
-        .describe(
-          "Provider connections that depended on the deleted credential",
-        ),
-    }),
+    responseBody: credentialDeleteResponseSchema,
     handler: handleCredentialsDelete,
   },
   {

@@ -34,8 +34,8 @@ describe("memory_v3_selections migration", () => {
     migrateAddMemoryV3Selections(db);
 
     const columns = raw
-      .query(`PRAGMA table_info(memory_v3_selections)`)
-      .all() as ColumnRow[];
+      .query<ColumnRow, []>(`PRAGMA table_info(memory_v3_selections)`)
+      .all();
     const byName = new Map(columns.map((c) => [c.name, c]));
 
     expect(byName.get("conversation_id")?.type).toBe("TEXT");
@@ -68,8 +68,8 @@ describe("memory_v3_selections migration", () => {
     migrateAddMemoryV3Selections(db);
 
     const indexes = raw
-      .query(`PRAGMA index_list(memory_v3_selections)`)
-      .all() as IndexRow[];
+      .query<IndexRow, []>(`PRAGMA index_list(memory_v3_selections)`)
+      .all();
     const indexNames = new Set(indexes.map((i) => i.name));
 
     expect(indexNames.has("idx_memory_v3_selections_conv")).toBe(true);
@@ -94,10 +94,11 @@ describe("memory_v3_selections migration", () => {
     expect(() => migrateAddMemoryV3Selections(db)).not.toThrow();
 
     const row = raw
-      .query(
-        `SELECT slug FROM memory_v3_selections WHERE conversation_id = 'conv-abc' AND turn = 3`,
-      )
-      .get() as { slug: string } | null;
+      .query<
+        { slug: string },
+        []
+      >(`SELECT slug FROM memory_v3_selections WHERE conversation_id = 'conv-abc' AND turn = 3`)
+      .get();
     expect(row?.slug).toBe("page-slug");
   });
 });

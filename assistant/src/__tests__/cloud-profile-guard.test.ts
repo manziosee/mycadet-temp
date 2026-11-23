@@ -14,10 +14,11 @@
  * Plus the wire-only profile keys (`invariant`, `supportsVision`) stamped on
  * config reads: PATCH/SET strip them so a GET → write round-trip succeeds.
  */
-
 import { readFileSync, utimesSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { beforeEach, describe, expect, mock, test } from "bun:test";
+
+import { jsonObjectSchema } from "./helpers/json-object-schema.js";
 
 // The config routes under test read and write the workspace config.json via
 // the real loader (`loadRawConfig`/`saveRawConfig`). Tests seed the raw file
@@ -59,7 +60,7 @@ function committedRaw(): Record<string, unknown> | null {
   if (text === seededRawText) {
     return null;
   }
-  return JSON.parse(text) as Record<string, unknown>;
+  return jsonObjectSchema.parse(JSON.parse(text));
 }
 
 function makeDefaultRawConfig(): Record<string, unknown> {
@@ -131,11 +132,15 @@ function expectOneCommitCycle(): void {
   expect(initializeProvidersCalls).toBe(1);
 }
 
+function savedProfiles(): Record<string, unknown> {
+  const llm = jsonObjectSchema.parse(
+    jsonObjectSchema.parse(committedRaw()).llm,
+  );
+  return jsonObjectSchema.parse(llm.profiles);
+}
+
 function savedProfile(name: string): Record<string, unknown> {
-  return (committedRaw() as Record<string, any>).llm.profiles[name] as Record<
-    string,
-    unknown
-  >;
+  return jsonObjectSchema.parse(savedProfiles()[name]);
 }
 
 describe("partial default-provider config", () => {
@@ -619,9 +624,9 @@ describe("default-profile invariant guard — allowed writes", () => {
   test("SET llm passes when the value carries the invariant profiles unchanged (incl. frozen topP override)", async () => {
     (rawConfig as Record<string, any>).llm.profiles.balanced.topP = 0.7;
     seedRawConfig(rawConfig);
-    const nextLlm = structuredClone(
-      (rawConfig as Record<string, any>).llm,
-    ) as Record<string, unknown>;
+    const nextLlm = jsonObjectSchema.parse(
+      structuredClone((rawConfig as Record<string, any>).llm),
+    );
     nextLlm.activeProfile = "my-custom";
     const result = await setRoute.handler({
       body: { path: "llm", value: nextLlm },
@@ -729,9 +734,9 @@ describe("wire-only profile keys are stripped from writes", () => {
   });
 
   test("SET llm.profiles.balanced with a wire-shaped entry (GET round-trip) succeeds", async () => {
-    const entry = structuredClone(
-      (rawConfig as Record<string, any>).llm.profiles.balanced,
-    ) as Record<string, unknown>;
+    const entry = jsonObjectSchema.parse(
+      structuredClone((rawConfig as Record<string, any>).llm.profiles.balanced),
+    );
     entry.invariant = true;
     entry.supportsVision = true;
     const result = await setRoute.handler({
@@ -768,7 +773,7 @@ describe("wire-only profile keys are stripped from writes", () => {
     balanced.supportsVision = true; // stale pre-strip persistence
     balanced.status = "disabled";
     seedRawConfig(rawConfig);
-    const entry = structuredClone(balanced) as Record<string, unknown>;
+    const entry = jsonObjectSchema.parse(structuredClone(balanced));
     entry.invariant = true; // wire stamp from GET
     entry.status = "active"; // legal re-enable
     const result = await setRoute.handler({
@@ -788,7 +793,7 @@ describe("wire-only profile keys are stripped from writes", () => {
     const balanced = (rawConfig as Record<string, any>).llm.profiles.balanced;
     balanced.supportsVision = true; // stale pre-strip persistence
     seedRawConfig(rawConfig);
-    const entry = structuredClone(balanced) as Record<string, unknown>;
+    const entry = jsonObjectSchema.parse(structuredClone(balanced));
     entry.invariant = true; // wire stamp from GET
     const result = await setRoute.handler({
       body: { path: "llm.profiles.balanced", value: entry },
@@ -926,7 +931,7 @@ describe("code-owned default profiles — BYO default provider wire view", () =>
       status: "disabled",
     });
     // No absent-default echoes exist to reduce — nothing else is written.
-    expect(savedProfile("quality-optimized")).toBeUndefined();
+    expect(savedProfiles()["quality-optimized"]).toBeUndefined();
   });
 
   test("GET → SET llm round-trip of the raw view is accepted and writes no stubs", async () => {
@@ -940,7 +945,7 @@ describe("code-owned default profiles — BYO default provider wire view", () =>
     expect(result).toHaveProperty("ok");
     // The raw response carries no materialized catalog bodies, so the
     // catalog-only default stays catalog-only.
-    expect(savedProfile("balanced")).toBeUndefined();
+    expect(savedProfiles().balanced).toBeUndefined();
   });
 });
 

@@ -1,5 +1,7 @@
 import { beforeEach, describe, expect, mock, test } from "bun:test";
 
+import { jsonObjectSchema } from "./helpers/json-object-schema.js";
+
 // ---------------------------------------------------------------------------
 // Mock @google/genai module — must be before importing the service
 // ---------------------------------------------------------------------------
@@ -144,7 +146,7 @@ describe("generateImage", () => {
     );
 
     expect(lastGenerateParams).not.toBeNull();
-    const contents = (lastGenerateParams as Record<string, unknown>)
+    const contents = jsonObjectSchema.parse(lastGenerateParams)
       .contents as Array<Record<string, unknown>>;
     const parts = contents[0].parts as Array<Record<string, unknown>>;
 
@@ -169,7 +171,7 @@ describe("generateImage", () => {
     );
 
     expect(lastGenerateParams).not.toBeNull();
-    expect((lastGenerateParams as Record<string, unknown>).model).toBe(
+    expect(jsonObjectSchema.parse(lastGenerateParams).model).toBe(
       "gemini-3.1-flash-image-preview",
     );
   });
@@ -186,7 +188,7 @@ describe("generateImage", () => {
       },
     );
 
-    expect((lastGenerateParams as Record<string, unknown>).model).toBe(
+    expect(jsonObjectSchema.parse(lastGenerateParams).model).toBe(
       "gemini-3-pro-image-preview",
     );
   });
@@ -262,8 +264,9 @@ describe("generateImage", () => {
       },
     );
 
-    const config = (lastGenerateParams as Record<string, unknown>)
-      .config as Record<string, unknown>;
+    const config = jsonObjectSchema.parse(
+      jsonObjectSchema.parse(lastGenerateParams).config,
+    );
     expect(config.responseModalities).toEqual(["TEXT", "IMAGE"]);
   });
 });

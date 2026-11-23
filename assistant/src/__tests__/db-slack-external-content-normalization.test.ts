@@ -1,3 +1,4 @@
+import type { SQLQueryBindings } from "bun:sqlite";
 import { Database } from "bun:sqlite";
 import { describe, expect, test } from "bun:test";
 
@@ -112,15 +113,21 @@ function insertMessage(
 
 function getRows(raw: Database): Record<string, MessageRow> {
   const rows = raw
-    .query(`SELECT id, content, metadata FROM messages ORDER BY id`)
-    .all() as MessageRow[];
+    .query<
+      MessageRow,
+      []
+    >(`SELECT id, content, metadata FROM messages ORDER BY id`)
+    .all();
   return Object.fromEntries(rows.map((row) => [row.id, row]));
 }
 
 function getFtsContent(raw: Database, messageId: string): string {
   const row = raw
-    .query(`SELECT content FROM messages_fts WHERE message_id = ?`)
-    .get(messageId) as FtsRow | null;
+    .query<
+      FtsRow,
+      SQLQueryBindings[]
+    >(`SELECT content FROM messages_fts WHERE message_id = ?`)
+    .get(messageId);
   return row?.content ?? "";
 }
 

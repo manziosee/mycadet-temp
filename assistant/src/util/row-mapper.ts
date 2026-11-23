@@ -31,9 +31,8 @@ type MapperSchema<TRow, TDomain> = {
 export function createRowMapper<TRow, TDomain>(
   schema: MapperSchema<TRow, TDomain>,
 ): (row: TRow) => TDomain {
-  const entries = Object.entries(schema) as Array<
-    [string, FieldDescriptor<TRow, unknown>]
-  >;
+  const entries: Array<[string, FieldDescriptor<TRow, unknown>]> =
+    Object.entries(schema);
 
   return (row: TRow): TDomain => {
     const result: Record<string, unknown> = {};
@@ -41,10 +40,10 @@ export function createRowMapper<TRow, TDomain>(
       if (typeof descriptor === "string") {
         result[key] = row[descriptor as keyof TRow];
       } else {
-        const d = descriptor as {
+        const d: {
           from: keyof TRow & string;
           transform: (value: TRow[keyof TRow]) => unknown;
-        };
+        } = descriptor;
         result[key] = d.transform(row[d.from]);
       }
     }

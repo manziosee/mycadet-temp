@@ -18,6 +18,7 @@ import { afterAll, beforeEach, describe, expect, mock, test } from "bun:test";
 
 import { z } from "zod";
 
+import { jsonObjectSchema } from "../../../__tests__/helpers/json-object-schema.js";
 import { installAcpConfigStub } from "../../../acp/__tests__/helpers/acp-config-stub.js";
 import { installExecFileStub } from "../../../acp/__tests__/helpers/exec-file-stub.js";
 import { installWhichStub } from "../../../acp/__tests__/helpers/which-stub.js";
@@ -126,11 +127,11 @@ const confirmationRequests: Array<Record<string, unknown>> = [];
 const broadcasts: Array<Record<string, unknown>> = [];
 
 setBroadcastOverrideForTesting((msg: { type?: string; requestId?: string }) => {
-  broadcasts.push(msg as Record<string, unknown>);
+  broadcasts.push(jsonObjectSchema.parse(msg));
   if (msg?.type !== "confirmation_request") {
     return;
   }
-  confirmationRequests.push(msg as Record<string, unknown>);
+  confirmationRequests.push(jsonObjectSchema.parse(msg));
   const interaction = pendingInteractions.resolve(
     msg.requestId as string,
     approvalBehavior === "allow" ? "approved" : "rejected",
@@ -657,10 +658,7 @@ describe("POST /v1/acp/spawn: sandboxed bun auto-install on missing binary", () 
     });
 
     const handler = getSpawnHandler();
-    const body = (await handler({ body: SPAWN_BODY })) as Record<
-      string,
-      unknown
-    >;
+    const body = jsonObjectSchema.parse(await handler({ body: SPAWN_BODY }));
 
     expect(body).toEqual({
       acpSessionId: "acp-route-session",
@@ -772,9 +770,11 @@ describe("POST /v1/acp/spawn: sandboxed bun auto-install on missing binary", () 
 describe("POST /v1/acp/spawn: model selection", () => {
   test("threads the requested model to the session manager", async () => {
     const handler = getSpawnHandler();
-    const body = (await handler({
-      body: { ...SPAWN_BODY, model: "opus" },
-    })) as Record<string, unknown>;
+    const body = jsonObjectSchema.parse(
+      await handler({
+        body: { ...SPAWN_BODY, model: "opus" },
+      }),
+    );
 
     expect(confirmationRequests).toHaveLength(1);
     expect(confirmationRequests[0]?.input).toEqual({
@@ -794,9 +794,11 @@ describe("POST /v1/acp/spawn: model selection", () => {
 
   test("reports the manager-normalized requested model", async () => {
     const handler = getSpawnHandler();
-    const body = (await handler({
-      body: { ...SPAWN_BODY, model: "  opus  " },
-    })) as Record<string, unknown>;
+    const body = jsonObjectSchema.parse(
+      await handler({
+        body: { ...SPAWN_BODY, model: "  opus  " },
+      }),
+    );
 
     expect(spawnMock.mock.calls[0][6]).toEqual({
       model: "  opus  ",
@@ -811,10 +813,9 @@ describe("POST /v1/acp/spawn: model selection", () => {
     const options = spawnMock.mock.calls[0][6] as {
       model?: string;
     };
-    const approvalInput = confirmationRequests[0]?.input as Record<
-      string,
-      unknown
-    >;
+    const approvalInput = jsonObjectSchema.parse(
+      confirmationRequests[0]?.input,
+    );
     expect(approvalInput).not.toHaveProperty("model");
     expect(options.model).toBeUndefined();
   });
@@ -826,9 +827,11 @@ describe("POST /v1/acp/spawn: model selection", () => {
     };
 
     const handler = getSpawnHandler();
-    const body = (await handler({
-      body: { ...SPAWN_BODY, model: "nope" },
-    })) as Record<string, unknown>;
+    const body = jsonObjectSchema.parse(
+      await handler({
+        body: { ...SPAWN_BODY, model: "nope" },
+      }),
+    );
 
     expect(body).toEqual({
       acpSessionId: "acp-route-session",

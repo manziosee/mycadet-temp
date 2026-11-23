@@ -94,7 +94,7 @@ export class VercelAIGatewayProvider extends OpenAIChatCompletionsProvider {
   protected override buildExtraCreateParams(
     options?: SendMessageOptions,
   ): Record<string, unknown> {
-    const config = options?.config as Record<string, unknown> | undefined;
+    const config: Record<string, unknown> | undefined = options?.config;
     const effort = config?.effort as string | undefined;
     const mappedEffort = effort
       ? EFFORT_TO_REASONING_EFFORT[effort]
@@ -113,7 +113,7 @@ export class VercelAIGatewayProvider extends OpenAIChatCompletionsProvider {
   }
 
   private resolveEffectiveModel(options?: SendMessageOptions): string {
-    const config = options?.config as Record<string, unknown> | undefined;
+    const config: Record<string, unknown> | undefined = options?.config;
     const override =
       typeof config?.model === "string" && config.model.trim().length > 0
         ? config.model.trim()

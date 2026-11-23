@@ -102,7 +102,10 @@ mock.module("../daemon/channel-ui-capability.js", () => ({
   conversationSupportsDynamicUi: mock(() => dynamicUiSupported),
 }));
 
-import { ROUTES } from "../runtime/routes/credential-prompt-routes.js";
+import {
+  credentialPromptResponseSchema,
+  ROUTES,
+} from "../runtime/routes/credential-prompt-routes.js";
 import { setConfig } from "./helpers/set-config.js";
 
 const promptRoute = ROUTES.find((r) => r.operationId === "credentials_prompt");
@@ -125,16 +128,6 @@ function slackResult(
     ...overrides,
   };
 }
-
-type PromptResponse = {
-  ok: boolean;
-  cancelled?: boolean;
-  error?: string;
-  service?: string;
-  field?: string;
-  message?: string;
-  redirected?: boolean;
-};
 
 describe("credentials/prompt route", () => {
   beforeEach(() => {
@@ -163,14 +156,16 @@ describe("credentials/prompt route", () => {
     expect(promptRoute).toBeDefined();
 
     // WHEN a prompt request carries a usageDescription
-    const result = (await promptRoute!.handler({
-      body: {
-        service: "linear",
-        field: "auth_token",
-        label: "Linear Auth Token",
-        usageDescription: "Needed to read issues",
-      },
-    })) as PromptResponse;
+    const result = credentialPromptResponseSchema.parse(
+      await promptRoute!.handler({
+        body: {
+          service: "linear",
+          field: "auth_token",
+          label: "Linear Auth Token",
+          usageDescription: "Needed to read issues",
+        },
+      }),
+    );
 
     // THEN the prompt is issued with the usageDescription as its purpose
     expect(result.ok).toBe(true);
@@ -187,13 +182,15 @@ describe("credentials/prompt route", () => {
      */
     // GIVEN a prompt request with no usageDescription
     // WHEN the route handles it
-    const result = (await promptRoute!.handler({
-      body: {
-        service: "github",
-        field: "pat",
-        label: "GitHub PAT",
-      },
-    })) as PromptResponse;
+    const result = credentialPromptResponseSchema.parse(
+      await promptRoute!.handler({
+        body: {
+          service: "github",
+          field: "pat",
+          label: "GitHub PAT",
+        },
+      }),
+    );
 
     // THEN no purpose is forwarded to the prompt
     expect(result.ok).toBe(true);
@@ -212,9 +209,11 @@ describe("credentials/prompt route", () => {
      */
     // GIVEN a standard store-delivery prompt for a non-slack credential
     // WHEN the route handles it
-    const result = (await promptRoute!.handler({
-      body: { service: "stripe", field: "api_key", label: "Stripe API Key" },
-    })) as PromptResponse;
+    const result = credentialPromptResponseSchema.parse(
+      await promptRoute!.handler({
+        body: { service: "stripe", field: "api_key", label: "Stripe API Key" },
+      }),
+    );
 
     // THEN the value is written to secure storage
     expect(result.ok).toBe(true);
@@ -241,18 +240,22 @@ describe("credentials/prompt route", () => {
     const closed = "The secure prompt has closed.";
 
     // GIVEN a plain vault write
-    const stored = (await promptRoute!.handler({
-      body: { service: "stripe", field: "api_key", label: "Stripe API Key" },
-    })) as PromptResponse;
+    const stored = credentialPromptResponseSchema.parse(
+      await promptRoute!.handler({
+        body: { service: "stripe", field: "api_key", label: "Stripe API Key" },
+      }),
+    );
 
     // THEN it reports the prompt as closed
     expect(stored.message).toContain(closed);
 
     // GIVEN a one-time send instead
     secretResult = { value: "secret-value", delivery: "transient_send" };
-    const transient = (await promptRoute!.handler({
-      body: { service: "stripe", field: "api_key", label: "Stripe API Key" },
-    })) as PromptResponse;
+    const transient = credentialPromptResponseSchema.parse(
+      await promptRoute!.handler({
+        body: { service: "stripe", field: "api_key", label: "Stripe API Key" },
+      }),
+    );
 
     // THEN it reports the prompt as closed too
     expect(transient.message).toContain(closed);
@@ -260,13 +263,15 @@ describe("credentials/prompt route", () => {
     // GIVEN a Slack channel token, whose status line owns the outcome summary
     secretResult = { value: "secret-value", delivery: "store" };
     slackConfigResult = slackResult({ connected: true, teamName: "Acme" });
-    const slack = (await promptRoute!.handler({
-      body: {
-        service: "slack_channel",
-        field: "bot_token",
-        label: "Slack Bot Token",
-      },
-    })) as PromptResponse;
+    const slack = credentialPromptResponseSchema.parse(
+      await promptRoute!.handler({
+        body: {
+          service: "slack_channel",
+          field: "bot_token",
+          label: "Slack Bot Token",
+        },
+      }),
+    );
 
     // THEN the close notice rides along with the connection status
     expect(slack.message).toContain("Slack channel connected to Acme.");
@@ -287,13 +292,15 @@ describe("credentials/prompt route", () => {
     });
 
     // WHEN a slack_channel bot_token is submitted
-    const result = (await promptRoute!.handler({
-      body: {
-        service: "slack_channel",
-        field: "bot_token",
-        label: "Slack Bot Token",
-      },
-    })) as PromptResponse;
+    const result = credentialPromptResponseSchema.parse(
+      await promptRoute!.handler({
+        body: {
+          service: "slack_channel",
+          field: "bot_token",
+          label: "Slack Bot Token",
+        },
+      }),
+    );
 
     // THEN the token is routed through the Slack channel config, not secure storage
     expect(slackConfigArgs).toEqual([["secret-value", undefined, undefined]]);
@@ -318,13 +325,15 @@ describe("credentials/prompt route", () => {
     });
 
     // WHEN a slack_channel app_token is submitted
-    const result = (await promptRoute!.handler({
-      body: {
-        service: "slack_channel",
-        field: "app_token",
-        label: "Slack App Token",
-      },
-    })) as PromptResponse;
+    const result = credentialPromptResponseSchema.parse(
+      await promptRoute!.handler({
+        body: {
+          service: "slack_channel",
+          field: "app_token",
+          label: "Slack App Token",
+        },
+      }),
+    );
 
     // THEN the warning is surfaced as the response message
     expect(result.ok).toBe(true);
@@ -342,13 +351,15 @@ describe("credentials/prompt route", () => {
     slackConfigResult = slackResult({ success: false, error: "invalid_auth" });
 
     // WHEN a slack_channel bot_token is submitted
-    const result = (await promptRoute!.handler({
-      body: {
-        service: "slack_channel",
-        field: "bot_token",
-        label: "Slack Bot Token",
-      },
-    })) as PromptResponse;
+    const result = credentialPromptResponseSchema.parse(
+      await promptRoute!.handler({
+        body: {
+          service: "slack_channel",
+          field: "bot_token",
+          label: "Slack Bot Token",
+        },
+      }),
+    );
 
     // THEN the route returns the configuration error
     expect(result.ok).toBe(false);
@@ -365,9 +376,11 @@ describe("credentials/prompt route", () => {
     secretResult = { value: "secret-value", delivery: "transient_send" };
 
     // WHEN a non-slack credential is submitted for one-time use
-    const result = (await promptRoute!.handler({
-      body: { service: "stripe", field: "api_key", label: "Stripe API Key" },
-    })) as PromptResponse;
+    const result = credentialPromptResponseSchema.parse(
+      await promptRoute!.handler({
+        body: { service: "stripe", field: "api_key", label: "Stripe API Key" },
+      }),
+    );
 
     // THEN the value is injected into the broker, not secure storage
     expect(transientInjections).toEqual([
@@ -390,9 +403,11 @@ describe("credentials/prompt route", () => {
     secretResult = { value: "secret-value", delivery: "transient_send" };
 
     // WHEN a credential is submitted for one-time use
-    const result = (await promptRoute!.handler({
-      body: { service: "stripe", field: "api_key", label: "Stripe API Key" },
-    })) as PromptResponse;
+    const result = credentialPromptResponseSchema.parse(
+      await promptRoute!.handler({
+        body: { service: "stripe", field: "api_key", label: "Stripe API Key" },
+      }),
+    );
 
     // THEN the request is rejected and nothing is injected
     expect(result.ok).toBe(false);
@@ -409,13 +424,15 @@ describe("credentials/prompt route", () => {
     secretResult = { value: "secret-value", delivery: "transient_send" };
 
     // WHEN a slack_channel bot_token is submitted for one-time use
-    const result = (await promptRoute!.handler({
-      body: {
-        service: "slack_channel",
-        field: "bot_token",
-        label: "Slack Bot Token",
-      },
-    })) as PromptResponse;
+    const result = credentialPromptResponseSchema.parse(
+      await promptRoute!.handler({
+        body: {
+          service: "slack_channel",
+          field: "bot_token",
+          label: "Slack Bot Token",
+        },
+      }),
+    );
 
     // THEN the request is rejected without injecting or connecting
     expect(result.ok).toBe(false);
@@ -440,9 +457,11 @@ describe("credentials/prompt route", () => {
     };
 
     // WHEN it is re-prompted without allowed-tools or allowed-domains
-    const result = (await promptRoute!.handler({
-      body: { service: "github", field: "pat", label: "GitHub PAT" },
-    })) as PromptResponse;
+    const result = credentialPromptResponseSchema.parse(
+      await promptRoute!.handler({
+        body: { service: "github", field: "pat", label: "GitHub PAT" },
+      }),
+    );
 
     // THEN the metadata upsert receives undefined for both lists
     expect(result.ok).toBe(true);
@@ -461,9 +480,11 @@ describe("credentials/prompt route", () => {
     secretResult = { value: null, delivery: "store", reason: "cancelled" };
 
     // WHEN the route handles the prompt
-    const result = (await promptRoute!.handler({
-      body: { service: "stripe", field: "api_key", label: "Stripe API Key" },
-    })) as PromptResponse;
+    const result = credentialPromptResponseSchema.parse(
+      await promptRoute!.handler({
+        body: { service: "stripe", field: "api_key", label: "Stripe API Key" },
+      }),
+    );
 
     // THEN the outcome is flagged as a cancel, not a generic error
     expect(result.ok).toBe(false);
@@ -484,9 +505,11 @@ describe("credentials/prompt route", () => {
     secretResult = { value: null, delivery: "store", reason: "timed_out" };
 
     // WHEN the route handles the prompt
-    const result = (await promptRoute!.handler({
-      body: { service: "stripe", field: "api_key", label: "Stripe API Key" },
-    })) as PromptResponse;
+    const result = credentialPromptResponseSchema.parse(
+      await promptRoute!.handler({
+        body: { service: "stripe", field: "api_key", label: "Stripe API Key" },
+      }),
+    );
 
     // THEN it is a plain failure with no cancel flag
     expect(result.ok).toBe(false);
@@ -507,14 +530,16 @@ describe("credentials/prompt route", () => {
     };
 
     // WHEN the route handles a conversation-scoped prompt
-    const result = (await promptRoute!.handler({
-      body: {
-        service: "stripe",
-        field: "api_key",
-        label: "Stripe API Key",
-        conversationId: "conv-1",
-      },
-    })) as PromptResponse;
+    const result = credentialPromptResponseSchema.parse(
+      await promptRoute!.handler({
+        body: {
+          service: "stripe",
+          field: "api_key",
+          label: "Stripe API Key",
+          conversationId: "conv-1",
+        },
+      }),
+    );
 
     // THEN it is a plain failure with no cancel flag
     expect(result.ok).toBe(false);
@@ -538,9 +563,11 @@ describe("credentials/prompt route", () => {
     };
 
     // WHEN the route handles a prompt with no conversationId
-    const result = (await promptRoute!.handler({
-      body: { service: "stripe", field: "api_key", label: "Stripe API Key" },
-    })) as PromptResponse;
+    const result = credentialPromptResponseSchema.parse(
+      await promptRoute!.handler({
+        body: { service: "stripe", field: "api_key", label: "Stripe API Key" },
+      }),
+    );
 
     // THEN it fails fast with headless-specific guidance
     expect(result.ok).toBe(false);
@@ -570,18 +597,20 @@ describe("credentials/prompt route", () => {
     };
 
     // WHEN the route handles a prompt carrying policy flags
-    const result = (await promptRoute!.handler({
-      body: {
-        service: "stripe",
-        field: "api_key",
-        label: "Stripe API Key",
-        usageDescription: "Needed for billing lookups",
-        allowedTools: ["make_authenticated_request"],
-        injectionTemplates: [
-          { hostPattern: "api.stripe.com", injectionType: "header" },
-        ],
-      },
-    })) as PromptResponse & { pending?: boolean; collectionUrl?: string };
+    const result = credentialPromptResponseSchema.parse(
+      await promptRoute!.handler({
+        body: {
+          service: "stripe",
+          field: "api_key",
+          label: "Stripe API Key",
+          usageDescription: "Needed for billing lookups",
+          allowedTools: ["make_authenticated_request"],
+          injectionTemplates: [
+            { hostPattern: "api.stripe.com", injectionType: "header" },
+          ],
+        },
+      }),
+    );
 
     // THEN it is a pending non-success carrying the link
     expect(result.ok).toBe(false);
@@ -616,9 +645,11 @@ describe("credentials/prompt route", () => {
     secretResult = { value: null, delivery: "store", reason: "superseded" };
 
     // WHEN the route handles the prompt
-    const result = (await promptRoute!.handler({
-      body: { service: "stripe", field: "api_key", label: "Stripe API Key" },
-    })) as PromptResponse;
+    const result = credentialPromptResponseSchema.parse(
+      await promptRoute!.handler({
+        body: { service: "stripe", field: "api_key", label: "Stripe API Key" },
+      }),
+    );
 
     // THEN it is a plain failure with no cancel flag
     expect(result.ok).toBe(false);
@@ -637,15 +668,17 @@ describe("credentials/prompt route", () => {
     // GIVEN a prompt request that supplies an allowed-tools list and a
     // deny-all (empty) allowed-domains list
     // WHEN the route handles it
-    const result = (await promptRoute!.handler({
-      body: {
-        service: "stripe",
-        field: "api_key",
-        label: "Stripe API Key",
-        allowedTools: ["make_authenticated_request"],
-        allowedDomains: [],
-      },
-    })) as PromptResponse;
+    const result = credentialPromptResponseSchema.parse(
+      await promptRoute!.handler({
+        body: {
+          service: "stripe",
+          field: "api_key",
+          label: "Stripe API Key",
+          allowedTools: ["make_authenticated_request"],
+          allowedDomains: [],
+        },
+      }),
+    );
 
     // THEN the metadata upsert receives the supplied lists verbatim
     expect(result.ok).toBe(true);
@@ -670,14 +703,16 @@ describe("credentials/prompt route", () => {
     cardRaised = true;
 
     // WHEN the model prompts for the ACP Claude OAuth token
-    const result = (await promptRoute!.handler({
-      body: {
-        service: "acp",
-        field: "claude_oauth_token",
-        label: "Claude OAuth Token",
-        conversationId: "conv-1",
-      },
-    })) as PromptResponse;
+    const result = credentialPromptResponseSchema.parse(
+      await promptRoute!.handler({
+        body: {
+          service: "acp",
+          field: "claude_oauth_token",
+          label: "Claude OAuth Token",
+          conversationId: "conv-1",
+        },
+      }),
+    );
 
     // THEN the prompt is redirected, not shown
     expect(result.ok).toBe(false);
@@ -706,14 +741,16 @@ describe("credentials/prompt route", () => {
     cardRaised = false;
 
     // WHEN the token is prompted for
-    const result = (await promptRoute!.handler({
-      body: {
-        service: "acp",
-        field: "claude_oauth_token",
-        label: "Claude OAuth Token",
-        conversationId: "conv-1",
-      },
-    })) as PromptResponse;
+    const result = credentialPromptResponseSchema.parse(
+      await promptRoute!.handler({
+        body: {
+          service: "acp",
+          field: "claude_oauth_token",
+          label: "Claude OAuth Token",
+          conversationId: "conv-1",
+        },
+      }),
+    );
 
     // THEN it is NOT redirected — the secure prompt proceeds normally
     expect(result.redirected).toBeUndefined();
@@ -731,14 +768,16 @@ describe("credentials/prompt route", () => {
     dynamicUiSupported = false;
 
     // WHEN the model prompts for the ACP Claude OAuth token
-    const result = (await promptRoute!.handler({
-      body: {
-        service: "acp",
-        field: "claude_oauth_token",
-        label: "Claude OAuth Token",
-        conversationId: "conv-1",
-      },
-    })) as PromptResponse;
+    const result = credentialPromptResponseSchema.parse(
+      await promptRoute!.handler({
+        body: {
+          service: "acp",
+          field: "claude_oauth_token",
+          label: "Claude OAuth Token",
+          conversationId: "conv-1",
+        },
+      }),
+    );
 
     // THEN the guard does not fire and the prompt proceeds normally
     expect(result.redirected).toBeUndefined();
@@ -756,13 +795,15 @@ describe("credentials/prompt route", () => {
     conversationExists = false;
 
     // WHEN the ACP Claude OAuth token is prompted
-    const result = (await promptRoute!.handler({
-      body: {
-        service: "acp",
-        field: "claude_oauth_token",
-        label: "Claude OAuth Token",
-      },
-    })) as PromptResponse;
+    const result = credentialPromptResponseSchema.parse(
+      await promptRoute!.handler({
+        body: {
+          service: "acp",
+          field: "claude_oauth_token",
+          label: "Claude OAuth Token",
+        },
+      }),
+    );
 
     // THEN the guard does not fire and the prompt proceeds normally
     expect(result.redirected).toBeUndefined();

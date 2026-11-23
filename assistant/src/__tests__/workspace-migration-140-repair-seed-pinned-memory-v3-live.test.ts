@@ -7,7 +7,6 @@
  * quarantined and reseeded. The repair flips `live` back to true only for
  * those two victim classes and never over a deliberate opt-out.
  */
-
 import {
   existsSync,
   mkdirSync,
@@ -24,6 +23,7 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { repairSeedPinnedMemoryV3LiveMigration } from "../workspace/migrations/140-repair-seed-pinned-memory-v3-live.js";
 import { WORKSPACE_MIGRATIONS } from "../workspace/migrations/registry.js";
 import type { MigrationRunContext } from "../workspace/migrations/types.js";
+import { jsonObjectSchema } from "./helpers/json-object-schema.js";
 
 const NEW_WORKSPACE_CTX: MigrationRunContext = { isNewWorkspace: true };
 const UPGRADE_CTX: MigrationRunContext = { isNewWorkspace: false };
@@ -48,8 +48,8 @@ function readConfig(): Record<string, unknown> {
 }
 
 function readLive(): unknown {
-  const memory = (readConfig().memory ?? {}) as Record<string, unknown>;
-  const v3 = (memory.v3 ?? {}) as Record<string, unknown>;
+  const memory = jsonObjectSchema.parse(readConfig().memory ?? {});
+  const v3 = jsonObjectSchema.parse(memory.v3 ?? {});
   return v3.live;
 }
 
@@ -133,12 +133,9 @@ describe("140-repair-seed-pinned-memory-v3-live migration", () => {
     expect(readLive()).toBe(true);
     // The rest of the config is untouched.
     const config = readConfig();
-    expect((config.llm as Record<string, unknown>).activeProfile).toBe(
-      "balanced",
-    );
+    expect(jsonObjectSchema.parse(config.llm).activeProfile).toBe("balanced");
     expect(
-      ((config.memory as Record<string, unknown>).v2 as Record<string, unknown>)
-        .enabled,
+      jsonObjectSchema.parse(jsonObjectSchema.parse(config.memory).v2).enabled,
     ).toBe(true);
   });
 

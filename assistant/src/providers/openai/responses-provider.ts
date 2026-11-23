@@ -163,7 +163,7 @@ export function mapNeutralToolChoiceForResponses(
   if (toolChoice == null || typeof toolChoice !== "object") {
     return undefined;
   }
-  const tc = toolChoice as { type?: unknown; name?: unknown };
+  const tc: { type?: unknown; name?: unknown } = toolChoice;
   switch (tc.type) {
     case "auto":
       return "auto";
@@ -302,7 +302,7 @@ export class OpenAIResponsesProvider implements Provider {
     options?: SendMessageOptions,
   ): Promise<ProviderResponse> {
     const { tools, systemPrompt, config, onEvent, signal } = options ?? {};
-    const configObj = config as Record<string, unknown> | undefined;
+    const configObj: Record<string, unknown> | undefined = config;
     const maxTokens = configObj?.max_tokens as number | undefined;
     const modelOverride = configObj?.model as string | undefined;
     const effort = configObj?.effort as string | undefined;

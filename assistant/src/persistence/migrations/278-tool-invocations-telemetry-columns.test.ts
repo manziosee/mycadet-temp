@@ -37,10 +37,15 @@ function createTestDb() {
 }
 
 function tableInfo(sqlite: Database) {
-  return sqlite.query("PRAGMA table_info(tool_invocations)").all() as Array<{
-    name: string;
-    notnull: number;
-  }>;
+  return sqlite
+    .query<
+      {
+        name: string;
+        notnull: number;
+      },
+      []
+    >("PRAGMA table_info(tool_invocations)")
+    .all();
 }
 
 describe("migration 278: tool_invocations telemetry columns", () => {
@@ -73,10 +78,11 @@ describe("migration 278: tool_invocations telemetry columns", () => {
     migrateToolInvocationsTelemetryColumns(db);
 
     const row = sqlite
-      .query(
-        `SELECT ${NEW_COLUMNS.join(", ")} FROM tool_invocations WHERE id = 'ti-1'`,
-      )
-      .get() as Record<string, unknown>;
+      .query<
+        Record<string, unknown>,
+        []
+      >(`SELECT ${NEW_COLUMNS.join(", ")} FROM tool_invocations WHERE id = 'ti-1'`)
+      .get()!;
     for (const name of NEW_COLUMNS) {
       expect(row[name]).toBeNull();
     }

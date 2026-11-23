@@ -1,3 +1,5 @@
+import type { SQLQueryBindings } from "bun:sqlite";
+
 import { memorySqliteOrNull } from "../memory-db.js";
 import { listPages } from "../substrate/page-store.js";
 import type { MemoryV2ConceptRowRecord } from "./activation-log-store.js";
@@ -83,7 +85,7 @@ export async function getConceptFrequencySummary(
   }
 
   const aggRows = raw
-    .query(
+    .query<AggRow, SQLQueryBindings[]>(
       `SELECT
          json_extract(c.value, '$.slug')   AS slug,
          json_extract(c.value, '$.status') AS status,
@@ -94,16 +96,16 @@ export async function getConceptFrequencySummary(
          AND (? IS NULL OR l.created_at >= ?)
        GROUP BY slug, status`,
     )
-    .all(conversationId, conversationId, sinceMs, sinceMs) as AggRow[];
+    .all(conversationId, conversationId, sinceMs, sinceMs);
 
   const logCountRow = raw
-    .query(
+    .query<CountRow, SQLQueryBindings[]>(
       `SELECT COUNT(*) AS count
          FROM memory_v2_activation_logs
          WHERE (? IS NULL OR conversation_id = ?)
            AND (? IS NULL OR created_at >= ?)`,
     )
-    .get(conversationId, conversationId, sinceMs, sinceMs) as CountRow | null;
+    .get(conversationId, conversationId, sinceMs, sinceMs);
 
   const bySlug = new Map<string, ConceptFrequencyRow>();
   let conceptOccurrences = 0;

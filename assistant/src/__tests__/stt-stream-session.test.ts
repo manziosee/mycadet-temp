@@ -11,8 +11,9 @@
  * - Idle timeout behavior.
  * - Binary audio frame handling.
  */
-
 import { describe, expect, test } from "bun:test";
+
+import { z } from "zod";
 
 import {
   SttStreamSession,
@@ -27,6 +28,8 @@ import {
 // ---------------------------------------------------------------------------
 // Mock WebSocket
 // ---------------------------------------------------------------------------
+
+const capturedStringSchema = z.string();
 
 class MockSocket implements SttStreamSocket {
   sent: string[] = [];
@@ -308,9 +311,9 @@ describe("SttStreamSession", () => {
       expect(frames.length).toBe(2);
       expect(frames[0].type).toBe("error");
       expect(frames[0].category).toBe("provider-error");
-      expect((frames[0].message as string).includes("not supported")).toBe(
-        true,
-      );
+      expect(
+        capturedStringSchema.parse(frames[0].message).includes("not supported"),
+      ).toBe(true);
       expect(frames[1].type).toBe("closed");
 
       // Session should be fully closed.
@@ -347,8 +350,10 @@ describe("SttStreamSession", () => {
       expect(frames[0].category).toBe("provider-error");
       // Friendly copy names the provider; the raw upstream error stays in
       // logs and must not leak to the client.
-      expect(frames[0].message as string).toContain("Deepgram");
-      expect(frames[0].message as string).not.toContain(
+      expect(capturedStringSchema.parse(frames[0].message)).toContain(
+        "Deepgram",
+      );
+      expect(capturedStringSchema.parse(frames[0].message)).not.toContain(
         "Mock provider connection refused",
       );
       expect(frames[1].type).toBe("closed");
@@ -371,8 +376,12 @@ describe("SttStreamSession", () => {
       // The cloud remediation passes through; the BYOK "check your API key"
       // rewrite must not clobber it for a connection-backed provider.
       expect(frames[0].message).toBe(managedMessage);
-      expect(frames[0].message as string).not.toContain("API key");
-      expect(frames[0].message as string).not.toContain("Settings → Voice");
+      expect(capturedStringSchema.parse(frames[0].message)).not.toContain(
+        "API key",
+      );
+      expect(capturedStringSchema.parse(frames[0].message)).not.toContain(
+        "Settings → Voice",
+      );
       expect(frames[1].type).toBe("closed");
       expect(session.isClosed).toBe(true);
     });

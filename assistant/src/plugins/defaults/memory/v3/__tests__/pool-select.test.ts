@@ -28,7 +28,6 @@
  *
  * The provider is stubbed so no network calls fire; mirrors selector.test.ts.
  */
-
 import { createRequire } from "node:module";
 import { afterAll, beforeEach, describe, expect, mock, test } from "bun:test";
 
@@ -39,6 +38,7 @@ import type {
   SendMessageOptions,
 } from "@mycadet/plugin-api";
 
+import { jsonObjectSchema } from "../../../../../__tests__/helpers/json-object-schema.js";
 import {
   estimatePromptTokensWithTools,
   estimateTextTokens,
@@ -57,11 +57,9 @@ import type { MemoryRoutingTurn, Section } from "../types.js";
 let providerStub: Provider | null = null;
 let selectorContextMockActive = false;
 let selectorMaxInputTokens = 200_000;
-const registryReal = {
-  ...(createRequire(import.meta.url)(
-    "../../../../../providers/registry.js",
-  ) as Record<string, unknown>),
-};
+const registryModule: typeof import("../../../../../providers/registry.js") =
+  createRequire(import.meta.url)("../../../../../providers/registry.js");
+const registryReal = { ...registryModule };
 
 interface ProviderCall {
   messages: Message[];
@@ -618,7 +616,7 @@ describe("selectPool — request shape", () => {
 
     expect(providerCalls).toHaveLength(1);
     const [call] = providerCalls;
-    const cfg = call.options?.config as Record<string, unknown>;
+    const cfg = jsonObjectSchema.parse(call.options?.config);
     expect(cfg?.callSite).toBe("memoryV3SelectL2");
     expect(cfg?.selectionSeed).toBe("conv-xyz");
     expect(cfg?.tool_choice).toEqual({ type: "tool", name: "select_pages" });

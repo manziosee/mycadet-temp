@@ -252,6 +252,19 @@ async function handleCredentialPrompt({ body = {} }: RouteHandlerArgs) {
 // Routes
 // ---------------------------------------------------------------------------
 
+export const credentialPromptResponseSchema = z.object({
+  ok: z.boolean(),
+  cancelled: z.boolean().optional(),
+  pending: z.boolean().optional(),
+  collectionUrl: z.string().optional(),
+  expiresAt: z.number().optional(),
+  error: z.string().optional(),
+  service: z.string().optional(),
+  field: z.string().optional(),
+  message: z.string().optional(),
+  redirected: z.boolean().optional(),
+});
+
 export const ROUTES: RouteDefinition[] = [
   {
     operationId: "credentials_prompt",
@@ -267,17 +280,6 @@ export const ROUTES: RouteDefinition[] = [
       "Trigger a secure input prompt in the user's app to collect a credential value.",
     tags: ["credentials"],
     requestBody: CredentialPromptParams,
-    responseBody: z.object({
-      ok: z.boolean(),
-      cancelled: z.boolean().optional(),
-      pending: z.boolean().optional(),
-      collectionUrl: z.string().optional(),
-      expiresAt: z.number().optional(),
-      error: z.string().optional(),
-      service: z.string().optional(),
-      field: z.string().optional(),
-      message: z.string().optional(),
-      redirected: z.boolean().optional(),
-    }),
+    responseBody: credentialPromptResponseSchema,
   },
 ];
