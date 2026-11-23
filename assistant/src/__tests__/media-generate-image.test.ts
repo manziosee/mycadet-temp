@@ -644,10 +644,10 @@ describe("image-studio cancellation", () => {
   test("an already-cancelled turn never starts a generation", async () => {
     const controller = new AbortController();
     controller.abort();
-    const context = {
+    const context: ToolContext = {
       ...makeContext(),
       signal: controller.signal,
-    } as ToolContext;
+    };
 
     await expect(run({ prompt: "a cat" }, context)).rejects.toThrow();
     expect(lastGenerateProvider).toBeNull();
@@ -655,10 +655,10 @@ describe("image-studio cancellation", () => {
 
   test("passes the turn signal to the generation request", async () => {
     const controller = new AbortController();
-    const context = {
+    const context: ToolContext = {
       ...makeContext(),
       signal: controller.signal,
-    } as ToolContext;
+    };
 
     await run({ prompt: "a cat" }, context);
 
@@ -670,10 +670,10 @@ describe("image-studio cancellation", () => {
     // returns. The generation was paid for, so its images reach the model
     // rather than being discarded as a cancellation.
     const controller = new AbortController();
-    const context = {
+    const context: ToolContext = {
       ...makeContext(),
       signal: controller.signal,
-    } as ToolContext;
+    };
     mockGenerateDelayMs = 20;
     setTimeout(() => controller.abort(), 5);
 

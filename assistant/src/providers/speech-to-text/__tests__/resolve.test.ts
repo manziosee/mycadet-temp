@@ -4,6 +4,11 @@ import { beforeEach, describe, expect, mock, test } from "bun:test";
 import { setConfig } from "../../../__tests__/helpers/set-config.js";
 import { getConfig } from "../../../config/loader.js";
 import { SttError } from "../../../stt/types.js";
+import type { DeepgramProvider } from "../deepgram.js";
+import type { DeepgramRealtimeTranscriber } from "../deepgram-realtime.js";
+import type { GoogleGeminiLiveStreamingTranscriber } from "../google-gemini-live-stream.js";
+import type { OpenAIWhisperStreamingTranscriber } from "../openai-whisper-stream.js";
+import type { XAIRealtimeTranscriber } from "../xai-realtime.js";
 
 // ---------------------------------------------------------------------------
 // Mocks — must be declared before any subject imports
@@ -66,16 +71,33 @@ function seedProviderKeys(record: Record<string, string>): void {
  * these arrays to verify the resolver plumbs options (sampleRate, diarize)
  * correctly to each provider.
  */
-const deepgramCtorCalls: Array<{ apiKey: string; options: unknown }> = [];
-const geminiCtorCalls: Array<{ apiKey: string; options: unknown }> = [];
-const whisperCtorCalls: Array<{ apiKey: string; options: unknown }> = [];
-const xaiCtorCalls: Array<{ apiKey: string; options: unknown }> = [];
+const deepgramCtorCalls: Array<{
+  apiKey: string;
+  options: ConstructorParameters<typeof DeepgramRealtimeTranscriber>[1];
+}> = [];
+const geminiCtorCalls: Array<{
+  apiKey: string;
+  options: ConstructorParameters<
+    typeof GoogleGeminiLiveStreamingTranscriber
+  >[1];
+}> = [];
+const whisperCtorCalls: Array<{
+  apiKey: string;
+  options: ConstructorParameters<typeof OpenAIWhisperStreamingTranscriber>[1];
+}> = [];
+const xaiCtorCalls: Array<{
+  apiKey: string;
+  options: ConstructorParameters<typeof XAIRealtimeTranscriber>[1];
+}> = [];
 
 mock.module("../deepgram-realtime.js", () => ({
   DeepgramRealtimeTranscriber: class {
     readonly providerId = "deepgram" as const;
     readonly boundaryId = "daemon-streaming" as const;
-    constructor(apiKey: string, options: unknown) {
+    constructor(
+      apiKey: string,
+      options: ConstructorParameters<typeof DeepgramRealtimeTranscriber>[1],
+    ) {
       deepgramCtorCalls.push({ apiKey, options });
     }
   },
@@ -85,7 +107,12 @@ mock.module("../google-gemini-live-stream.js", () => ({
   GoogleGeminiLiveStreamingTranscriber: class {
     readonly providerId = "google-gemini" as const;
     readonly boundaryId = "daemon-streaming" as const;
-    constructor(apiKey: string, options: unknown) {
+    constructor(
+      apiKey: string,
+      options: ConstructorParameters<
+        typeof GoogleGeminiLiveStreamingTranscriber
+      >[1],
+    ) {
       geminiCtorCalls.push({ apiKey, options });
     }
   },
@@ -95,7 +122,12 @@ mock.module("../openai-whisper-stream.js", () => ({
   OpenAIWhisperStreamingTranscriber: class {
     readonly providerId = "openai-whisper" as const;
     readonly boundaryId = "daemon-streaming" as const;
-    constructor(apiKey: string, options: unknown) {
+    constructor(
+      apiKey: string,
+      options: ConstructorParameters<
+        typeof OpenAIWhisperStreamingTranscriber
+      >[1],
+    ) {
       whisperCtorCalls.push({ apiKey, options });
     }
   },
@@ -106,7 +138,10 @@ mock.module("../openai-whisper-stream.js", () => ({
  * that `resolveBatchTranscriber` threads `services.stt.language` through the
  * batch factory to the provider.
  */
-const deepgramBatchCtorCalls: Array<{ apiKey: string; options: unknown }> = [];
+const deepgramBatchCtorCalls: Array<{
+  apiKey: string;
+  options: ConstructorParameters<typeof DeepgramProvider>[1];
+}> = [];
 
 // Real module captured before the mock replaces it, so pure exports
 // (deepgramLanguageOptions) stay real while the provider class
@@ -116,7 +151,10 @@ const actualDeepgram = await import("../deepgram.js");
 mock.module("../deepgram.js", () => ({
   ...actualDeepgram,
   DeepgramProvider: class {
-    constructor(apiKey: string, options?: unknown) {
+    constructor(
+      apiKey: string,
+      options: ConstructorParameters<typeof DeepgramProvider>[1],
+    ) {
       deepgramBatchCtorCalls.push({ apiKey, options });
     }
     async transcribe() {
@@ -129,7 +167,10 @@ mock.module("../xai-realtime.js", () => ({
   XAIRealtimeTranscriber: class {
     readonly providerId = "xai" as const;
     readonly boundaryId = "daemon-streaming" as const;
-    constructor(apiKey: string, options: unknown) {
+    constructor(
+      apiKey: string,
+      options: ConstructorParameters<typeof XAIRealtimeTranscriber>[1],
+    ) {
       xaiCtorCalls.push({ apiKey, options });
     }
   },
@@ -799,7 +840,7 @@ describe("resolveStreamingTranscriber diarize preference", () => {
 
     expect(transcriber).not.toBeNull();
     expect(deepgramCtorCalls).toHaveLength(1);
-    const options = deepgramCtorCalls[0]!.options as Record<string, unknown>;
+    const options = deepgramCtorCalls[0]!.options!;
     expect(options).not.toHaveProperty("diarize");
   });
 
@@ -811,7 +852,7 @@ describe("resolveStreamingTranscriber diarize preference", () => {
 
     expect(transcriber).not.toBeNull();
     expect(deepgramCtorCalls).toHaveLength(1);
-    const options = deepgramCtorCalls[0]!.options as Record<string, unknown>;
+    const options = deepgramCtorCalls[0]!.options!;
     expect(options).not.toHaveProperty("diarize");
   });
 
@@ -825,7 +866,7 @@ describe("resolveStreamingTranscriber diarize preference", () => {
 
     expect(transcriber).not.toBeNull();
     expect(deepgramCtorCalls).toHaveLength(1);
-    const options = deepgramCtorCalls[0]!.options as Record<string, unknown>;
+    const options = deepgramCtorCalls[0]!.options!;
     expect(options.diarize).toBe(true);
   });
 
@@ -839,7 +880,7 @@ describe("resolveStreamingTranscriber diarize preference", () => {
 
     expect(transcriber).not.toBeNull();
     expect(geminiCtorCalls).toHaveLength(1);
-    const options = geminiCtorCalls[0]!.options as Record<string, unknown>;
+    const options = geminiCtorCalls[0]!.options!;
     // Gemini never receives a diarize option — the resolver silently skips.
     expect(options).not.toHaveProperty("diarize");
     // No warning is logged for the silent-skip path.
@@ -879,7 +920,7 @@ describe("resolveStreamingTranscriber diarize preference", () => {
 
     expect(transcriber).not.toBeNull();
     expect(deepgramCtorCalls).toHaveLength(1);
-    const options = deepgramCtorCalls[0]!.options as Record<string, unknown>;
+    const options = deepgramCtorCalls[0]!.options!;
     expect(options.diarize).toBe(true);
     // No warning logged on the happy path.
     expect(loggerWarnings).toHaveLength(0);
@@ -895,7 +936,7 @@ describe("resolveStreamingTranscriber diarize preference", () => {
     });
 
     expect(deepgramCtorCalls).toHaveLength(1);
-    const options = deepgramCtorCalls[0]!.options as Record<string, unknown>;
+    const options = deepgramCtorCalls[0]!.options!;
     expect(options.sampleRate).toBe(48000);
     expect(options.diarize).toBe(true);
   });
@@ -926,7 +967,7 @@ describe("resolveStreamingTranscriber diarize preference", () => {
 
     expect(transcriber).not.toBeNull();
     expect(xaiCtorCalls).toHaveLength(1);
-    const options = xaiCtorCalls[0]!.options as Record<string, unknown>;
+    const options = xaiCtorCalls[0]!.options!;
     expect(options.diarize).toBe(true);
     // No warning logged — xai supports diarization per the catalog.
     expect(loggerWarnings).toHaveLength(0);
@@ -972,7 +1013,7 @@ describe("resolveStreamingTranscriber diarize preference", () => {
 
     expect(transcriber).not.toBeNull();
     expect(deepgramCtorCalls).toHaveLength(1);
-    const options = deepgramCtorCalls[0]!.options as Record<string, unknown>;
+    const options = deepgramCtorCalls[0]!.options!;
     expect(options.utteranceBoundaryFinals).toBe(true);
     expect(options.utteranceEndMs).toBe(1000);
   });
@@ -988,7 +1029,7 @@ describe("resolveStreamingTranscriber diarize preference", () => {
 
     expect(transcriber).not.toBeNull();
     expect(deepgramCtorCalls).toHaveLength(1);
-    const options = deepgramCtorCalls[0]!.options as Record<string, unknown>;
+    const options = deepgramCtorCalls[0]!.options!;
     expect(options.utteranceBoundaryFinals).toBe(true);
     expect(options.utteranceEndMs).toBe(2500);
   });
@@ -1003,7 +1044,7 @@ describe("resolveStreamingTranscriber diarize preference", () => {
 
     expect(transcriber).not.toBeNull();
     expect(deepgramCtorCalls).toHaveLength(1);
-    const options = deepgramCtorCalls[0]!.options as Record<string, unknown>;
+    const options = deepgramCtorCalls[0]!.options!;
     expect(options).not.toHaveProperty("utteranceEndMs");
     expect(options).not.toHaveProperty("utteranceBoundaryFinals");
   });

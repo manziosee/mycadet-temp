@@ -21,7 +21,7 @@ test("Windows process trees use taskkill and fall back to the direct child", () 
 });
 
 test("watchShellProcessStart is false until spawn or a pid appears", () => {
-  const child = new EventEmitter() as EventEmitter & { pid?: number };
+  const child: EventEmitter & { pid?: number } = new EventEmitter();
   const launch = watchShellProcessStart(child);
   expect(launch.didStart()).toBe(false);
 
@@ -30,7 +30,7 @@ test("watchShellProcessStart is false until spawn or a pid appears", () => {
 });
 
 test("watchShellProcessStart treats a pid assigned at construction as started", () => {
-  const child = new EventEmitter() as EventEmitter & { pid?: number };
+  const child: EventEmitter & { pid?: number } = new EventEmitter();
   child.pid = 4242;
   expect(watchShellProcessStart(child).didStart()).toBe(true);
 });

@@ -26,14 +26,14 @@ describe("readChannelAllowlist", () => {
 
 describe("intersectChannelAllowlist", () => {
   test("keeps only available channel ids", () => {
-    const available = ["cadet", "telegram"] as NotificationChannel[];
+    const available: NotificationChannel[] = ["cadet", "telegram"];
     expect(intersectChannelAllowlist(["telegram", "nope"], available)).toEqual([
       "telegram",
     ]);
   });
 
   test("deduplicates a repeated available channel", () => {
-    const available = ["cadet", "telegram"] as NotificationChannel[];
+    const available: NotificationChannel[] = ["cadet", "telegram"];
     expect(
       intersectChannelAllowlist(["telegram", "telegram"], available),
     ).toEqual(["telegram"]);

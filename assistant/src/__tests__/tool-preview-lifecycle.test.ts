@@ -108,6 +108,24 @@ import {
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
+type CapturedEvent = AssistantEvent & { seq?: number };
+
+function stampTestEvent(message: CapturedEvent): void {
+  const envelope: AssistantEventEnvelope = {
+    id: crypto.randomUUID(),
+    emittedAt: new Date().toISOString(),
+    message,
+    conversationId:
+      "conversationId" in message && typeof message.conversationId === "string"
+        ? message.conversationId
+        : undefined,
+  };
+  stampAndBuffer(envelope);
+  if (envelope.seq !== undefined) {
+    message.seq = envelope.seq;
+  }
+}
+
 function createMockDeps({
   ctx,
   ...overrides
@@ -173,7 +191,7 @@ function createMockDeps({
 
 /** Collect events by wrapping onEvent. */
 function createEventCollector(): {
-  events: AssistantEvent[];
+  events: CapturedEvent[];
   activityStates: Array<{
     phase: string;
     reason: string;
@@ -188,7 +206,7 @@ function createEventCollector(): {
     options?: { anchor?: string; requestId?: string; statusText?: string },
   ) => void;
 } {
-  const events: AssistantEvent[] = [];
+  const events: CapturedEvent[] = [];
   const activityStates: Array<{
     phase: string;
     reason: string;
@@ -493,7 +511,7 @@ describe("tool preview lifecycle", () => {
       const deps = createMockDeps({
         onEvent: (msg: AssistantEvent) => {
           collector.events.push(msg);
-          stampAndBuffer(msg as unknown as AssistantEventEnvelope);
+          stampTestEvent(msg);
         },
         ctx: {
           ...createMockDeps().ctx,
@@ -503,16 +521,16 @@ describe("tool preview lifecycle", () => {
       });
 
       // AND prior streamed text deltas have already advanced the global seq
-      stampAndBuffer({
+      stampTestEvent({
         type: "assistant_text_delta",
         text: "hello",
         conversationId,
-      } as unknown as AssistantEventEnvelope);
-      stampAndBuffer({
+      });
+      stampTestEvent({
         type: "assistant_text_delta",
         text: " world",
         conversationId,
-      } as unknown as AssistantEventEnvelope);
+      });
 
       // WHEN a tool_use is handled (its block is already durable)
       handleToolUse(state, deps, {
@@ -529,7 +547,7 @@ describe("tool preview lifecycle", () => {
       expect(toolUseStart).toBeDefined();
       expect(getConversationPersistedSeq(conversationId)).toBe(getCurrentSeq());
       expect(getConversationPersistedSeq(conversationId)).toBe(
-        (toolUseStart as unknown as AssistantEventEnvelope).seq ?? null,
+        toolUseStart?.seq ?? null,
       );
     });
   });
@@ -545,12 +563,12 @@ describe("tool preview lifecycle", () => {
     /** onEvent that stamps conversation-scoped events like the runtime hub. */
     function makeStampingDeps(
       overrides: Partial<EventHandlerDeps["ctx"]> = {},
-    ): { deps: EventHandlerDeps; events: AssistantEvent[] } {
-      const events: AssistantEvent[] = [];
+    ): { deps: EventHandlerDeps; events: CapturedEvent[] } {
+      const events: CapturedEvent[] = [];
       const deps = createMockDeps({
         onEvent: (msg: AssistantEvent) => {
           events.push(msg);
-          stampAndBuffer(msg as unknown as AssistantEventEnvelope);
+          stampTestEvent(msg);
         },
         ctx: {
           ...createMockDeps().ctx,
@@ -593,7 +611,7 @@ describe("tool preview lifecycle", () => {
         },
       ]);
       expect(state.lastStreamedContentSeq).toBe(
-        (thinkingDelta as unknown as AssistantEventEnvelope).seq ?? undefined,
+        thinkingDelta?.seq ?? undefined,
       );
     });
 
@@ -630,7 +648,7 @@ describe("tool preview lifecycle", () => {
       expect(thinkingDelta).toBeDefined();
       expect(getConversationPersistedSeq(conversationId)).toBe(getCurrentSeq());
       expect(getConversationPersistedSeq(conversationId)).toBe(
-        (thinkingDelta as unknown as AssistantEventEnvelope).seq ?? null,
+        thinkingDelta?.seq ?? null,
       );
     });
 
@@ -661,7 +679,7 @@ describe("tool preview lifecycle", () => {
       expect(toolResult).toBeDefined();
       expect(getConversationPersistedSeq(conversationId)).toBe(getCurrentSeq());
       expect(getConversationPersistedSeq(conversationId)).toBe(
-        (toolResult as unknown as AssistantEventEnvelope).seq ?? null,
+        toolResult?.seq ?? null,
       );
     });
 
@@ -710,13 +728,13 @@ describe("tool preview lifecycle", () => {
     /** onEvent that stamps conversation-scoped events like the runtime hub. */
     function makeStampingDeps(): {
       deps: EventHandlerDeps;
-      events: AssistantEvent[];
+      events: CapturedEvent[];
     } {
-      const events: AssistantEvent[] = [];
+      const events: CapturedEvent[] = [];
       const deps = createMockDeps({
         onEvent: (msg: AssistantEvent) => {
           events.push(msg);
-          stampAndBuffer(msg as unknown as AssistantEventEnvelope);
+          stampTestEvent(msg);
         },
         ctx: {
           ...createMockDeps().ctx,
@@ -902,7 +920,7 @@ describe("tool preview lifecycle", () => {
     /** Deps wired to a fresh collector. */
     function makeCollectingDeps(): {
       deps: EventHandlerDeps;
-      events: AssistantEvent[];
+      events: CapturedEvent[];
     } {
       const collector = createEventCollector();
       const deps = createMockDeps({
@@ -916,7 +934,7 @@ describe("tool preview lifecycle", () => {
     }
 
     function emittedToolResult(
-      events: AssistantEvent[],
+      events: CapturedEvent[],
     ): Record<string, unknown> {
       const toolResult = events.find((e) => e.type === "tool_result");
       expect(toolResult).toBeDefined();

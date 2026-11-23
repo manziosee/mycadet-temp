@@ -132,21 +132,21 @@ function createMockDeps(collected: AssistantEvent[]): EventHandlerDeps {
   } as EventHandlerDeps;
 }
 
-const REVEAL_TOOL_USE = {
+const REVEAL_TOOL_USE: Extract<AgentEvent, { type: "tool_use" }> = {
   type: "tool_use",
   id: "toolu_reveal",
   name: "bash",
   input: {
     command: "assistant credentials reveal --service openai --field api_key",
   },
-} as Extract<AgentEvent, { type: "tool_use" }>;
+};
 
-const REVEAL_TOOL_RESULT = {
+const REVEAL_TOOL_RESULT: Extract<AgentEvent, { type: "tool_result" }> = {
   type: "tool_result",
   toolUseId: "toolu_reveal",
   content: "(revealed value printed to stdout)",
   isError: false,
-} as Extract<AgentEvent, { type: "tool_result" }>;
+};
 
 beforeEach(() => {
   // Real flag resolution: only chat-credential-reveal is enabled.

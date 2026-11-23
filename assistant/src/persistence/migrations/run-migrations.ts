@@ -222,8 +222,11 @@ export function recoverCrashedMigrations(database: DrizzleDb): string[] {
   let rows: Array<{ key: string; value: string }>;
   try {
     rows = raw
-      .query(`SELECT key, value FROM memory_checkpoints`)
-      .all() as Array<{ key: string; value: string }>;
+      .query<
+        { key: string; value: string },
+        []
+      >(`SELECT key, value FROM memory_checkpoints`)
+      .all();
   } catch {
     return [];
   }
@@ -299,13 +302,12 @@ export async function runMigrationSteps(
   recoverCrashedMigrations(database);
 
   const applied = new Set(
-    (
-      raw
-        .query(
-          `SELECT key FROM memory_checkpoints WHERE key LIKE '${STEP_CHECKPOINT_PREFIX}%' AND value = '1'`,
-        )
-        .all() as Array<{ key: string }>
-    ).map((row) => row.key.slice(STEP_CHECKPOINT_PREFIX.length)),
+    raw
+      .query<{ key: string }, []>(
+        `SELECT key FROM memory_checkpoints WHERE key LIKE '${STEP_CHECKPOINT_PREFIX}%' AND value = '1'`,
+      )
+      .all()
+      .map((row) => row.key.slice(STEP_CHECKPOINT_PREFIX.length)),
   );
   const markStarted = raw.query(
     `INSERT OR REPLACE INTO memory_checkpoints (key, value, updated_at) VALUES (?, 'started', ?)`,

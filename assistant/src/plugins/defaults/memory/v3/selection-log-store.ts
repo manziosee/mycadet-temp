@@ -1,3 +1,5 @@
+import type { SQLQueryBindings } from "bun:sqlite";
+
 /**
  * Read-side store for the inspector's Memory V3 panel. Reads the persisted
  * `memory_v3_selections` rows for a turn (by the turn's message ids) and
@@ -24,7 +26,6 @@
  * found by its pool row's stamped message id instead and rendered as an empty
  * selection with the pool: the negative verdict is part of the audit.
  */
-
 import type { MemoryV3SelectionLog } from "../../../../api/responses/memory-v3-selection-log.js";
 import { getConfig } from "../../../../config/loader.js";
 import { isMemoryV3Live } from "../../../../config/memory-v3-gate.js";
@@ -152,7 +153,7 @@ function forkSourceIdsOf(messageIds: string[]): string[] {
   }
   const placeholders = messageIds.map(() => "?").join(", ");
   const rows = getSqliteFrom(getDb())
-    .query(
+    .query<{ src: string | null }, SQLQueryBindings[]>(
       /*sql*/ `
       SELECT json_extract(metadata, '$.forkSourceMessageId') AS src
       -- No completeness predicate: ids come from this store's own selection
@@ -161,7 +162,7 @@ function forkSourceIdsOf(messageIds: string[]): string[] {
       WHERE id IN (${placeholders})
     `,
     )
-    .all(...messageIds) as Array<{ src: string | null }>;
+    .all(...messageIds);
   return rows
     .map((r) => r.src)
     .filter((src): src is string => typeof src === "string" && src.length > 0);
@@ -447,18 +448,21 @@ function isSelectionSource(source: string): source is SelectionSource {
 export function summarizeSelections(conversationId: string): SelectionSummary {
   const raw = memorySqliteOrNull("summarizeSelections");
   const rows = raw
-    ? (raw
-        .query(
+    ? raw
+        .query<
+          {
+            turn: number;
+            slug: string;
+            source: string;
+          },
+          SQLQueryBindings[]
+        >(
           /*sql*/ `
       SELECT turn, slug, source FROM memory_v3_selections
       WHERE conversation_id = ?
     `,
         )
-        .all(conversationId) as Array<{
-        turn: number;
-        slug: string;
-        source: string;
-      }>)
+        .all(conversationId)
     : [];
 
   const bySource = Object.fromEntries(

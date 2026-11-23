@@ -18,10 +18,11 @@ export function downGuardianPrincipalIdNotNull(database: DrizzleDb): void {
 
   // Check if guardian_principal_id has NOT NULL — if not, already rolled back
   const colInfo = raw
-    .query(
-      `SELECT "notnull" FROM pragma_table_info('channel_guardian_bindings') WHERE name = 'guardian_principal_id'`,
-    )
-    .get() as { notnull: number } | null;
+    .query<
+      { notnull: number },
+      []
+    >(`SELECT "notnull" FROM pragma_table_info('channel_guardian_bindings') WHERE name = 'guardian_principal_id'`)
+    .get();
   if (!colInfo || colInfo.notnull === 0) {
     return;
   }
@@ -121,10 +122,11 @@ export function migrateGuardianPrincipalIdNotNull(database: DrizzleDb): void {
 
   // Check if the column already has NOT NULL (idempotency)
   const colInfo = raw
-    .query(
-      `SELECT "notnull" FROM pragma_table_info('channel_guardian_bindings') WHERE name = 'guardian_principal_id'`,
-    )
-    .get() as { notnull: number } | null;
+    .query<
+      { notnull: number },
+      []
+    >(`SELECT "notnull" FROM pragma_table_info('channel_guardian_bindings') WHERE name = 'guardian_principal_id'`)
+    .get();
   if (colInfo && colInfo.notnull === 1) {
     return;
   }

@@ -22,10 +22,11 @@ export function migrateEmbeddingsNullableVectorJson(database: DrizzleDb): void {
 
   // Check if vector_json has a NOT NULL constraint
   const ddl = raw
-    .query(
-      `SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'memory_embeddings'`,
-    )
-    .get() as { sql: string } | null;
+    .query<
+      { sql: string },
+      []
+    >(`SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'memory_embeddings'`)
+    .get();
   if (!ddl) {
     // Table doesn't exist yet — nothing to fix; core-tables will create it correctly.
     raw
@@ -129,10 +130,11 @@ export function downEmbeddingsNullableVectorJson(database: DrizzleDb): void {
 
   // Check if vector_json already has NOT NULL — already rolled back
   const ddl = raw
-    .query(
-      `SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'memory_embeddings'`,
-    )
-    .get() as { sql: string } | null;
+    .query<
+      { sql: string },
+      []
+    >(`SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'memory_embeddings'`)
+    .get();
   if (ddl && isColumnNotNull(ddl.sql, "vector_json")) {
     return;
   }

@@ -135,7 +135,7 @@ describe("Slack route token routing (channels + share)", () => {
       key === credentialKey("slack_channel", "bot_token") ? BOT_TOKEN : null,
     );
 
-    const result = (await handleListSlackChannels()) as { channels: unknown[] };
+    const result: { channels: unknown[] } = await handleListSlackChannels();
     expect(result).toHaveProperty("channels");
 
     const listCall = captured.find((c) =>
@@ -148,7 +148,7 @@ describe("Slack route token routing (channels + share)", () => {
   test("GET /v1/slack/channels: a stored user_token is NOT used — reads stay on the bot token", async () => {
     storeBothTokens();
 
-    const result = (await handleListSlackChannels()) as { channels: unknown[] };
+    const result: { channels: unknown[] } = await handleListSlackChannels();
     expect(result).toHaveProperty("channels");
 
     // Security guard: this edge-reachable route must not read as the installer.
@@ -162,9 +162,9 @@ describe("Slack route token routing (channels + share)", () => {
   test("POST /v1/slack/share: posts with the bot token even when a user_token is stored", async () => {
     storeBothTokens();
 
-    const result = (await handleShareToSlackChannel({
+    const result: { ok: boolean } = await handleShareToSlackChannel({
       body: { appId: "app-1", channelId: "C123" },
-    })) as { ok: boolean };
+    });
     expect(result.ok).toBe(true);
 
     // Security guard: shares must come from the neutral app identity, never the

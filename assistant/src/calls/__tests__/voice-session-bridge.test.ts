@@ -370,7 +370,7 @@ function wireTurnState(
   fake: FakeConversation,
   initial: Partial<FakeTurnState>,
 ): () => FakeTurnState {
-  const conv = fake as FakeConversation & {
+  const conv: FakeConversation & {
     assistantId?: string;
     trustContext?: unknown;
     currentTurnSourceActorPrincipalId?: string;
@@ -380,7 +380,7 @@ function wireTurnState(
     voiceCallControlPrompt?: string;
     getTurnChannelContext?: () => unknown;
     getTurnInterfaceContext?: () => unknown;
-  };
+  } = fake;
   conv.assistantId = initial.assistantId;
   conv.callSessionId = initial.callSessionId;
   conv.trustContext = initial.trustContext;
@@ -1625,12 +1625,12 @@ describe("startVoiceTurn queued-message drain race", () => {
     // The markers also store the value: the bridge's per-field
     // compare-and-restore only reverts a field that still holds the value
     // this turn installed.
-    const conv = fake.conversation as unknown as {
+    const conv: {
       voiceCallControlPrompt?: string;
       trustContext?: unknown;
       setVoiceCallControlPrompt: (prompt: string | null) => void;
       setTrustContext: (ctx: unknown) => void;
-    };
+    } = fake.conversation;
     conv.setVoiceCallControlPrompt = (prompt) => {
       conv.voiceCallControlPrompt = prompt ?? undefined;
       events.push(prompt === null ? "prompt:clear" : "prompt:install");
@@ -2614,7 +2614,7 @@ describe("front-door hub stream gate", () => {
       type: "process",
       filter: { conversationId: "conv-voice-bridge-test" },
       callback: (event) => {
-        const msg = event.message as { type: string; text?: string };
+        const msg: { type: string; text?: string } = event.message;
         if (msg.type === "assistant_text_delta") {
           texts.push(msg.text ?? "");
         }

@@ -96,9 +96,9 @@ describe("handleListSlackChannels", () => {
       },
     });
 
-    const result = (await handleListSlackChannels()) as {
+    const result: {
       channels: Array<Record<string, unknown>>;
-    };
+    } = await handleListSlackChannels();
 
     expect(result.channels).toHaveLength(4);
     expect(result.channels[0]).toEqual({
@@ -174,9 +174,9 @@ describe("handleListSlackChannels", () => {
       ],
     };
 
-    const result = (await handleListSlackChannels()) as {
+    const result: {
       channels: Array<Record<string, unknown>>;
-    };
+    } = await handleListSlackChannels();
 
     expect(result.channels[0]).toEqual({
       id: "C3",
@@ -241,9 +241,9 @@ describe("handleListSlackChannels", () => {
       },
     });
 
-    const result = (await handleListSlackChannels()) as {
+    const result: {
       channels: Array<Record<string, unknown>>;
-    };
+    } = await handleListSlackChannels();
 
     expect(result.channels[0]).toEqual({
       id: "D1",
@@ -279,9 +279,10 @@ describe("handleListSlackChannels", () => {
       ],
     };
 
-    const result = (await handleListSlackChannels({
-      queryParams: { memberOnly: "true" },
-    })) as { channels: Array<Record<string, unknown>> };
+    const result: { channels: Array<Record<string, unknown>> } =
+      await handleListSlackChannels({
+        queryParams: { memberOnly: "true" },
+      });
 
     expect(result.channels).toHaveLength(1);
     expect(result.channels[0]).toEqual({
@@ -308,9 +309,10 @@ describe("handleListSlackChannels", () => {
       ],
     };
 
-    const result = (await handleListSlackChannels({
-      queryParams: { memberOnly: "true" },
-    })) as { channels: Array<Record<string, unknown>> };
+    const result: { channels: Array<Record<string, unknown>> } =
+      await handleListSlackChannels({
+        queryParams: { memberOnly: "true" },
+      });
 
     expect(result.channels.map((c) => c.id)).toEqual(["G1"]);
     expect(result.channels[0]).toEqual({
@@ -347,9 +349,9 @@ describe("handleListSlackChannels", () => {
       user: { id: "U3", name: "carol", profile: { display_name: "Carol" } },
     });
 
-    const all = (await handleListSlackChannels({})) as {
+    const all: {
       channels: Array<Record<string, unknown>>;
-    };
+    } = await handleListSlackChannels({});
     expect(all.channels.map((c) => c.id)).toEqual(["D3"]);
   });
 
@@ -364,9 +366,9 @@ describe("handleListSlackChannels", () => {
       ],
     };
 
-    const result = (await handleListSlackChannels({})) as {
+    const result: {
       channels: Array<Record<string, unknown>>;
-    };
+    } = await handleListSlackChannels({});
 
     expect(result.channels).toHaveLength(2);
   });

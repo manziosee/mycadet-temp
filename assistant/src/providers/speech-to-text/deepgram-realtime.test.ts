@@ -833,10 +833,10 @@ describe("DeepgramRealtimeTranscriber", () => {
         }),
       );
 
-      const finals = events.filter((e) => e.type === "final") as {
+      const finals: {
         type: "final";
         text: string;
-      }[];
+      }[] = events.filter((e) => e.type === "final");
       expect(finals.map((f) => f.text)).toEqual([
         "first part done",
         "second utterance",
@@ -1509,11 +1509,11 @@ describe("DeepgramRealtimeTranscriber", () => {
     expect(errorEvents).toHaveLength(1);
     expect(closedEvents).toHaveLength(1);
 
-    const err = errorEvents[0] as {
+    const err: {
       type: "error";
       category: string;
       message: string;
-    };
+    } = errorEvents[0];
     expect(err.category).toBe("provider-error");
     expect(err.message).toContain("1006");
   });
@@ -1525,7 +1525,7 @@ describe("DeepgramRealtimeTranscriber", () => {
 
     const errorEvents = events.filter((e) => e.type === "error");
     expect(errorEvents).toHaveLength(1);
-    const err = errorEvents[0] as { type: "error"; category: string };
+    const err: { type: "error"; category: string } = errorEvents[0];
     expect(err.category).toBe("auth");
   });
 
@@ -1536,7 +1536,7 @@ describe("DeepgramRealtimeTranscriber", () => {
 
     const errorEvents = events.filter((e) => e.type === "error");
     expect(errorEvents).toHaveLength(1);
-    const err = errorEvents[0] as { type: "error"; category: string };
+    const err: { type: "error"; category: string } = errorEvents[0];
     expect(err.category).toBe("rate-limit");
   });
 
@@ -1550,11 +1550,11 @@ describe("DeepgramRealtimeTranscriber", () => {
     expect(errorEvents).toHaveLength(1);
     expect(closedEvents).toHaveLength(1);
 
-    const err = errorEvents[0] as {
+    const err: {
       type: "error";
       category: string;
       message: string;
-    };
+    } = errorEvents[0];
     expect(err.category).toBe("provider-error");
     expect(err.message).toContain("network failure");
   });
@@ -1577,11 +1577,11 @@ describe("DeepgramRealtimeTranscriber", () => {
     expect(errorEvents).toHaveLength(1);
     expect(closedEvents).toHaveLength(1);
 
-    const err = errorEvents[0] as {
+    const err: {
       type: "error";
       category: string;
       message: string;
-    };
+    } = errorEvents[0];
     expect(err.category).toBe("timeout");
     expect(err.message).toContain("inactivity");
   });

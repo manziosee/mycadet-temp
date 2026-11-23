@@ -116,9 +116,8 @@ describe("OpenAIChatCompletionsProvider XML tool-call salvage", () => {
     expect(textDeltas).not.toContain("<invoke");
     expect(textDeltas).not.toContain("<inv");
 
-    const textBlock = response.content.find((b) => b.type === "text") as
-      | { type: "text"; text: string }
-      | undefined;
+    const textBlock: { type: "text"; text: string } | undefined =
+      response.content.find((b) => b.type === "text");
     expect(textBlock?.text).toBe("Let me actually run the check.");
 
     const toolUse = response.content.filter((b) => b.type === "tool_use");
@@ -149,9 +148,8 @@ describe("OpenAIChatCompletionsProvider XML tool-call salvage", () => {
     );
 
     expect(response.content.some((b) => b.type === "tool_use")).toBe(true);
-    const textBlock = response.content.find((b) => b.type === "text") as
-      | { type: "text"; text: string }
-      | undefined;
+    const textBlock: { type: "text"; text: string } | undefined =
+      response.content.find((b) => b.type === "text");
     expect(textBlock?.text).toBe("Okay.");
   });
 
@@ -197,9 +195,8 @@ describe("OpenAIChatCompletionsProvider XML tool-call salvage", () => {
       name: "bash",
       input: { command: "pwd" },
     });
-    const textBlock = response.content.find((b) => b.type === "text") as
-      | { type: "text"; text: string }
-      | undefined;
+    const textBlock: { type: "text"; text: string } | undefined =
+      response.content.find((b) => b.type === "text");
     expect(textBlock?.text).toContain("<invoke");
   });
 
@@ -238,9 +235,8 @@ describe("OpenAIChatCompletionsProvider XML tool-call salvage", () => {
     );
 
     expect(response.content.some((b) => b.type === "tool_use")).toBe(false);
-    const textBlock = response.content.find((b) => b.type === "text") as
-      | { type: "text"; text: string }
-      | undefined;
+    const textBlock: { type: "text"; text: string } | undefined =
+      response.content.find((b) => b.type === "text");
     expect(textBlock?.text).toContain("<invoke");
   });
 
@@ -253,9 +249,8 @@ describe("OpenAIChatCompletionsProvider XML tool-call salvage", () => {
     );
 
     expect(response.content.some((b) => b.type === "tool_use")).toBe(false);
-    const textBlock = response.content.find((b) => b.type === "text") as
-      | { type: "text"; text: string }
-      | undefined;
+    const textBlock: { type: "text"; text: string } | undefined =
+      response.content.find((b) => b.type === "text");
     expect(textBlock?.text).toContain("<invoke");
   });
 
@@ -287,9 +282,8 @@ describe("OpenAIChatCompletionsProvider XML tool-call salvage", () => {
     );
 
     expect(response.content.some((b) => b.type === "tool_use")).toBe(false);
-    const textBlock = response.content.find((b) => b.type === "text") as
-      | { type: "text"; text: string }
-      | undefined;
+    const textBlock: { type: "text"; text: string } | undefined =
+      response.content.find((b) => b.type === "text");
     expect(textBlock?.text).toContain("<invoke");
   });
 });

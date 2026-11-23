@@ -99,7 +99,7 @@ export function rawExec(sql: string): void {
  * returns void and discards the changes count.
  */
 export function rawChanges(): number {
-  return (getSqlite().query("SELECT changes() AS c").get() as { c: number }).c;
+  return getSqlite().query<{ c: number }, []>("SELECT changes() AS c").get()!.c;
 }
 
 // ---------------------------------------------------------------------------
@@ -147,12 +147,12 @@ export function rawMemoryRun(
     .label(label)
     .query(sql)
     .run(...params);
-  return (sqlite.query("SELECT changes() AS c").get() as { c: number }).c;
+  return sqlite.query<{ c: number }, []>("SELECT changes() AS c").get()!.c;
 }
 
 /** {@link rawChanges} against the memory connection. */
 export function rawMemoryChanges(): number {
-  return (memorySqlite().query("SELECT changes() AS c").get() as { c: number })
+  return memorySqlite().query<{ c: number }, []>("SELECT changes() AS c").get()!
     .c;
 }
 
@@ -167,7 +167,7 @@ export function rawLogsRun(
     .label(label)
     .query(sql)
     .run(...params);
-  return (sqlite.query("SELECT changes() AS c").get() as { c: number }).c;
+  return sqlite.query<{ c: number }, []>("SELECT changes() AS c").get()!.c;
 }
 
 /**

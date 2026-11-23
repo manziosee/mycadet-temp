@@ -6,7 +6,6 @@ import type {
   MessageRow,
 } from "../../persistence/conversation-crud.js";
 import type { SubagentRecord } from "../../persistence/subagent-store.js";
-import type { ContentBlock } from "../../providers/types.js";
 import { getLogger } from "../../util/logger.js";
 import type { EmitSignalParams } from "../emit-signal.js";
 
@@ -1052,7 +1051,7 @@ describe("background result ownership", () => {
         ...row("send", "assistant", "", 150),
         content: [
           { type: "tool_use", name: "messaging_send", id: "send-1", input: {} },
-        ] as ContentBlock[],
+        ],
       });
       rows.set(result.id, result);
       await emit();
@@ -1068,14 +1067,14 @@ describe("background result ownership", () => {
               is_error: true,
               content: "failed",
             },
-          ] as ContentBlock[],
+          ],
         },
       ];
       await emit();
       expect(signals).toHaveLength(1);
       resultRows[0].content = [
         { type: "tool_result", tool_use_id: "send-1", content: "sent" },
-      ] as ContentBlock[];
+      ];
       await emit();
       expect(signals).toHaveLength(1);
     },

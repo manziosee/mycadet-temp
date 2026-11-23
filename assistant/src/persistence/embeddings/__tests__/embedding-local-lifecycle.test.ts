@@ -883,17 +883,14 @@ describe("one backend per model", () => {
    * that window, and the embeds in flight keep their worker.
    */
   test("needing the model again while a disposal is pending keeps the busy worker", () => {
-    const backend = LocalEmbeddingBackend.forModel(
-      "per-model-reopen",
-    ) as Internals;
+    const backend: Internals =
+      LocalEmbeddingBackend.forModel("per-model-reopen");
     const proc = liveProc(7101);
     backend.workerProc = proc;
     backend.activeEmbeds = 1;
     backend.dispose();
 
-    const again = LocalEmbeddingBackend.forModel(
-      "per-model-reopen",
-    ) as Internals;
+    const again: Internals = LocalEmbeddingBackend.forModel("per-model-reopen");
     backend.activeEmbeds = 0;
     backend.disposeIfIdle();
 
@@ -903,9 +900,8 @@ describe("one backend per model", () => {
   });
 
   test("a pending disposal nobody withdraws still releases the worker once idle", () => {
-    const backend = LocalEmbeddingBackend.forModel(
-      "per-model-dispose",
-    ) as Internals;
+    const backend: Internals =
+      LocalEmbeddingBackend.forModel("per-model-dispose");
     const proc = liveProc(7102);
     backend.workerProc = proc;
     backend.activeEmbeds = 1;
@@ -934,9 +930,8 @@ describe("one backend per model", () => {
    * teardown reaches it through the class's own list.
    */
   test("shutdownAll reaps a busy backend no cache still holds", async () => {
-    const backend = LocalEmbeddingBackend.forModel(
-      "per-model-evicted",
-    ) as Internals;
+    const backend: Internals =
+      LocalEmbeddingBackend.forModel("per-model-evicted");
     const proc = liveProc(7103);
     backend.workerProc = proc;
     backend.activeEmbeds = 1;
@@ -949,9 +944,9 @@ describe("one backend per model", () => {
   });
 
   test("terminateAllNow kills a busy backend no cache still holds", () => {
-    const backend = LocalEmbeddingBackend.forModel(
+    const backend: Internals = LocalEmbeddingBackend.forModel(
       "per-model-evicted-now",
-    ) as Internals;
+    );
     const proc = liveProc(7104);
     backend.workerProc = proc;
     backend.activeEmbeds = 1;

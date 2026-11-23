@@ -16,9 +16,14 @@ import { type DrizzleDb, getSqliteFrom } from "../db-connection.js";
 export function migrateMessagesClientMessageId(database: DrizzleDb): void {
   const raw = getSqliteFrom(database);
 
-  const columns = raw.query(`PRAGMA table_info(messages)`).all() as Array<{
-    name: string;
-  }>;
+  const columns = raw
+    .query<
+      {
+        name: string;
+      },
+      []
+    >(`PRAGMA table_info(messages)`)
+    .all();
   const columnNames = new Set(columns.map((c) => c.name));
 
   if (!columnNames.has("client_message_id")) {
@@ -28,9 +33,14 @@ export function migrateMessagesClientMessageId(database: DrizzleDb): void {
   // Partial unique index: only enforced when client_message_id is non-NULL.
   // Messages without a client_message_id (assistant messages, system-generated
   // messages, legacy rows) are unconstrained.
-  const indexes = raw.query(`PRAGMA index_list(messages)`).all() as Array<{
-    name: string;
-  }>;
+  const indexes = raw
+    .query<
+      {
+        name: string;
+      },
+      []
+    >(`PRAGMA index_list(messages)`)
+    .all();
   const indexNames = new Set(indexes.map((i) => i.name));
 
   if (!indexNames.has("idx_messages_conv_client_msg_id")) {

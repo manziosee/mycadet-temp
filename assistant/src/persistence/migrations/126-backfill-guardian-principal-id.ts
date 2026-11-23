@@ -1,3 +1,5 @@
+import type { SQLQueryBindings } from "bun:sqlite";
+
 import { type DrizzleDb, getSqliteFrom } from "../db-connection.js";
 
 /**
@@ -128,12 +130,12 @@ export function migrateBackfillGuardianPrincipalId(database: DrizzleDb): void {
 
     // ── Step 1b: Derive canonical principal from cadet binding ──
     const cadetRow = raw
-      .query(
+      .query<{ guardian_principal_id: string }, []>(
         `SELECT guardian_principal_id FROM channel_guardian_bindings
      WHERE assistant_id = 'self' AND channel = 'cadet' AND status = 'active'
      AND guardian_principal_id IS NOT NULL LIMIT 1`,
       )
-      .get() as { guardian_principal_id: string } | null;
+      .get();
 
     if (cadetRow) {
       // Unify non-cadet bindings onto the canonical principal
@@ -164,13 +166,16 @@ export function migrateBackfillGuardianPrincipalId(database: DrizzleDb): void {
     // The cadet binding's guardianExternalUserId is the canonical
     // assistant principal used for desktop-originated requests.
     const cadetBinding = raw
-      .query(
+      .query<
+        {
+          guardian_external_user_id: string;
+          guardian_principal_id: string | null;
+        },
+        []
+      >(
         `SELECT guardian_external_user_id, guardian_principal_id FROM channel_guardian_bindings WHERE assistant_id = 'self' AND channel = 'cadet' AND status = 'active' LIMIT 1`,
       )
-      .get() as {
-      guardian_external_user_id: string;
-      guardian_principal_id: string | null;
-    } | null;
+      .get();
 
     // Use the (now-backfilled) principal from the cadet binding
     const assistantPrincipal =
@@ -193,31 +198,37 @@ export function migrateBackfillGuardianPrincipalId(database: DrizzleDb): void {
         // to an active binding — use the binding's principal.
         // Includes all kinds; binding is always useful when available.
         const pendingWithGuardian = raw
-          .query(
+          .query<
+            {
+              id: string;
+              guardian_external_user_id: string;
+              kind: string;
+            },
+            []
+          >(
             `SELECT r.id, r.guardian_external_user_id, r.kind
          FROM canonical_guardian_requests r
          WHERE r.status = 'pending'
            AND r.guardian_principal_id IS NULL
            AND r.guardian_external_user_id IS NOT NULL`,
           )
-          .all() as Array<{
-          id: string;
-          guardian_external_user_id: string;
-          kind: string;
-        }>;
+          .all();
 
         // Build a lookup of guardianExternalUserId -> principalId from
         // active bindings (all already backfilled in step 1).
         const activeBindings = raw
-          .query(
+          .query<
+            {
+              guardian_external_user_id: string;
+              guardian_principal_id: string;
+            },
+            []
+          >(
             `SELECT guardian_external_user_id, guardian_principal_id
          FROM channel_guardian_bindings
          WHERE assistant_id = 'self' AND status = 'active' AND guardian_principal_id IS NOT NULL`,
           )
-          .all() as Array<{
-          guardian_external_user_id: string;
-          guardian_principal_id: string;
-        }>;
+          .all();
 
         const externalToP = new Map<string, string>();
         for (const b of activeBindings) {
@@ -267,12 +278,12 @@ export function migrateBackfillGuardianPrincipalId(database: DrizzleDb): void {
         // proactively. This includes access_request rows which are
         // now decisionable and principal-bound.
         const stillUnbound = raw
-          .query(
+          .query<{ id: string }, []>(
             `SELECT id FROM canonical_guardian_requests
          WHERE guardian_principal_id IS NULL
            AND status = 'pending'`,
           )
-          .all() as Array<{ id: string }>;
+          .all();
 
         for (const req of stillUnbound) {
           expireStmt.run(now, req.id);
@@ -281,10 +292,11 @@ export function migrateBackfillGuardianPrincipalId(database: DrizzleDb): void {
         // Also expire requests identified in 3a that had no binding match.
         for (const id of unboundRequestIds) {
           const check = raw
-            .query(
-              `SELECT guardian_principal_id FROM canonical_guardian_requests WHERE id = ? AND status = 'pending'`,
-            )
-            .get(id) as { guardian_principal_id: string | null } | null;
+            .query<
+              { guardian_principal_id: string | null },
+              SQLQueryBindings[]
+            >(`SELECT guardian_principal_id FROM canonical_guardian_requests WHERE id = ? AND status = 'pending'`)
+            .get(id);
           if (check && !check.guardian_principal_id) {
             expireStmt.run(now, id);
           }

@@ -84,10 +84,11 @@ function hasIntegerAffinity(
   column: string,
 ): boolean {
   const row = raw
-    .query(
-      `SELECT type FROM pragma_table_info('${table}') WHERE name = '${column}'`,
-    )
-    .get() as { type: string } | null;
+    .query<
+      { type: string },
+      []
+    >(`SELECT type FROM pragma_table_info('${table}') WHERE name = '${column}'`)
+    .get();
   if (!row) {
     return true;
   } // column doesn't exist — nothing to fix
@@ -345,10 +346,11 @@ export function migrateGuardianTimestampsRebuildDown(
 
 function hasTextAffinity(raw: RawDb, table: string, column: string): boolean {
   const row = raw
-    .query(
-      `SELECT type FROM pragma_table_info('${table}') WHERE name = '${column}'`,
-    )
-    .get() as { type: string } | null;
+    .query<
+      { type: string },
+      []
+    >(`SELECT type FROM pragma_table_info('${table}') WHERE name = '${column}'`)
+    .get();
   if (!row) {
     return true;
   } // column doesn't exist — nothing to fix

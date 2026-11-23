@@ -21,9 +21,14 @@ function hasColumns(
   table: string,
   required: readonly string[],
 ): boolean {
-  const columns = raw.prepare(`PRAGMA table_info(${table})`).all() as {
-    name: string;
-  }[];
+  const columns = raw
+    .prepare<
+      {
+        name: string;
+      },
+      []
+    >(`PRAGMA table_info(${table})`)
+    .all();
   const present = new Set(columns.map((c) => c.name));
   return required.every((name) => present.has(name));
 }
@@ -87,14 +92,14 @@ export function migrateBackfillScheduleInferenceProfile(
 
 function backfillWakeRows(raw: Database): void {
   const rows = raw
-    .prepare(
+    .prepare<{ id: string; wakeConversationId: string }, []>(
       `SELECT id, wake_conversation_id AS wakeConversationId
          FROM cron_jobs
         WHERE inference_profile IS NULL
           AND mode = 'wake'
           AND wake_conversation_id IS NOT NULL`,
     )
-    .all() as { id: string; wakeConversationId: string }[];
+    .all();
   if (rows.length === 0) {
     return;
   }

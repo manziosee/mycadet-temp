@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
+import { jsonObjectSchema } from "../../../../__tests__/helpers/json-object-schema.js";
 import {
   captureScreenshotJpeg,
   dispatchClickAt,
@@ -616,19 +617,17 @@ describe("dispatchKeyPress", () => {
     expect(cdp.calls).toHaveLength(3);
     for (const call of cdp.calls) {
       expect(call.method).toBe("Input.dispatchKeyEvent");
-      const params = call.params as Record<string, unknown>;
+      const params = jsonObjectSchema.parse(call.params);
       expect(params.key).toBe("Enter");
       expect(params.code).toBe("Enter");
       expect(params.windowsVirtualKeyCode).toBe(13);
     }
-    expect((cdp.calls[0]!.params as Record<string, unknown>).type).toBe(
+    expect(jsonObjectSchema.parse(cdp.calls[0]!.params).type).toBe(
       "rawKeyDown",
     );
     expect(cdp.calls[0]!.params?.text).toBeUndefined();
     expect(cdp.calls[1]!.params).toMatchObject({ type: "char", text: "\r" });
-    expect((cdp.calls[2]!.params as Record<string, unknown>).type).toBe(
-      "keyUp",
-    );
+    expect(jsonObjectSchema.parse(cdp.calls[2]!.params).type).toBe("keyUp");
     expect(cdp.calls[2]!.params?.text).toBeUndefined();
   });
 
@@ -668,18 +667,16 @@ describe("dispatchKeyPress", () => {
     // ArrowDown is non-printing → no char event (just keyDown + keyUp).
     expect(cdp.calls).toHaveLength(2);
     for (const call of cdp.calls) {
-      const params = call.params as Record<string, unknown>;
+      const params = jsonObjectSchema.parse(call.params);
       expect(params.key).toBe("ArrowDown");
       expect(params.code).toBe("ArrowDown");
       expect(params.windowsVirtualKeyCode).toBe(40);
       expect(params.text).toBeUndefined();
     }
-    expect((cdp.calls[0]!.params as Record<string, unknown>).type).toBe(
+    expect(jsonObjectSchema.parse(cdp.calls[0]!.params).type).toBe(
       "rawKeyDown",
     );
-    expect((cdp.calls[1]!.params as Record<string, unknown>).type).toBe(
-      "keyUp",
-    );
+    expect(jsonObjectSchema.parse(cdp.calls[1]!.params).type).toBe("keyUp");
   });
 
   test("digit '7' sends keyCode 55 and code Digit7", async () => {
@@ -688,7 +685,7 @@ describe("dispatchKeyPress", () => {
     await dispatchKeyPress(cdp, "7");
 
     expect(cdp.calls).toHaveLength(3);
-    const params = cdp.calls[1]!.params as Record<string, unknown>;
+    const params = jsonObjectSchema.parse(cdp.calls[1]!.params);
     expect(params.key).toBe("7");
     expect(params.code).toBe("Digit7");
     expect(params.windowsVirtualKeyCode).toBe(55);
@@ -701,7 +698,7 @@ describe("dispatchKeyPress", () => {
     await dispatchKeyPress(cdp, "Tab");
 
     expect(cdp.calls).toHaveLength(2);
-    const params = cdp.calls[0]!.params as Record<string, unknown>;
+    const params = jsonObjectSchema.parse(cdp.calls[0]!.params);
     expect(params.windowsVirtualKeyCode).toBe(9);
     expect(params.text).toBeUndefined();
   });
@@ -712,7 +709,7 @@ describe("dispatchKeyPress", () => {
     await dispatchKeyPress(cdp, "Escape");
 
     expect(cdp.calls).toHaveLength(2);
-    const params = cdp.calls[0]!.params as Record<string, unknown>;
+    const params = jsonObjectSchema.parse(cdp.calls[0]!.params);
     expect(params.windowsVirtualKeyCode).toBe(27);
     expect(params.text).toBeUndefined();
   });
@@ -744,7 +741,7 @@ describe("dispatchKeyPress", () => {
 
     await dispatchKeyPress(cdp, " ");
 
-    const params = cdp.calls[1]!.params as Record<string, unknown>;
+    const params = jsonObjectSchema.parse(cdp.calls[1]!.params);
     expect(params.code).toBe("Space");
     expect(params.windowsVirtualKeyCode).toBe(32);
     expect(params.text).toBe(" ");
@@ -762,7 +759,7 @@ describe("dispatchKeyPress", () => {
       await dispatchKeyPress(cdp, key);
       // Navigation keys are non-printing → keyDown + keyUp only.
       expect(cdp.calls).toHaveLength(2);
-      const params = cdp.calls[0]!.params as Record<string, unknown>;
+      const params = jsonObjectSchema.parse(cdp.calls[0]!.params);
       expect(params.key).toBe(key);
       expect(params.code).toBe(key);
       expect(params.windowsVirtualKeyCode).toBe(expectedKeyCode);
@@ -774,7 +771,7 @@ describe("dispatchKeyPress", () => {
     const cdp = fakeCdp(() => ({}));
     await dispatchKeyPress(cdp, "Insert");
     expect(cdp.calls).toHaveLength(2);
-    const params = cdp.calls[0]!.params as Record<string, unknown>;
+    const params = jsonObjectSchema.parse(cdp.calls[0]!.params);
     expect(params.windowsVirtualKeyCode).toBe(45);
     expect(params.text).toBeUndefined();
   });
@@ -798,7 +795,7 @@ describe("dispatchKeyPress", () => {
       const cdp = fakeCdp(() => ({}));
       await dispatchKeyPress(cdp, key);
       expect(cdp.calls).toHaveLength(2);
-      const params = cdp.calls[0]!.params as Record<string, unknown>;
+      const params = jsonObjectSchema.parse(cdp.calls[0]!.params);
       expect(params.key).toBe(key);
       expect(params.code).toBe(key);
       expect(params.windowsVirtualKeyCode).toBe(expectedKeyCode);
@@ -1247,7 +1244,7 @@ function fakeNavCdp(opts: {
       }
     }
     throw new Error(
-      `unexpected: ${method} ${JSON.stringify((params as Record<string, unknown>)?.expression ?? params)}`,
+      `unexpected: ${method} ${JSON.stringify(jsonObjectSchema.parse(params)?.expression ?? params)}`,
     );
   });
 }
@@ -1490,7 +1487,7 @@ describe("navigateAndWait", () => {
         }
       }
       throw new Error(
-        `unexpected: ${method} ${JSON.stringify((params as Record<string, unknown>)?.expression ?? params)}`,
+        `unexpected: ${method} ${JSON.stringify(jsonObjectSchema.parse(params)?.expression ?? params)}`,
       );
     });
 

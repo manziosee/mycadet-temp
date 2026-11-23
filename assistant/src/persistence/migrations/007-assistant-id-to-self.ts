@@ -1,3 +1,5 @@
+import type { SQLQueryBindings } from "bun:sqlite";
+
 import { type DrizzleDb, getSqliteFrom } from "../db-connection.js";
 
 /**
@@ -50,8 +52,11 @@ export function migrateAssistantIdToSelf(database: DrizzleDb): void {
   ];
   const anyHasAssistantId = affectedTables.some((tbl) => {
     const ddl = raw
-      .query(`SELECT sql FROM sqlite_master WHERE type = 'table' AND name = ?`)
-      .get(tbl) as { sql: string } | null;
+      .query<
+        { sql: string },
+        SQLQueryBindings[]
+      >(`SELECT sql FROM sqlite_master WHERE type = 'table' AND name = ?`)
+      .get(tbl);
     return ddl?.sql.includes("assistant_id") ?? false;
   });
   if (!anyHasAssistantId) {
@@ -66,8 +71,11 @@ export function migrateAssistantIdToSelf(database: DrizzleDb): void {
   // Helper: returns true if the given table's current DDL contains 'assistant_id'.
   const tableHasAssistantId = (tbl: string): boolean => {
     const ddl = raw
-      .query(`SELECT sql FROM sqlite_master WHERE type = 'table' AND name = ?`)
-      .get(tbl) as { sql: string } | null;
+      .query<
+        { sql: string },
+        SQLQueryBindings[]
+      >(`SELECT sql FROM sqlite_master WHERE type = 'table' AND name = ?`)
+      .get(tbl);
     return ddl?.sql.includes("assistant_id") ?? false;
   };
 

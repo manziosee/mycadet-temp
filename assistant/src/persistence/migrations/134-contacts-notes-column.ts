@@ -28,11 +28,15 @@ export function migrateContactsNotesColumn(database: DrizzleDb): void {
   // Check which legacy columns still exist — handles partial completion
   // if a previous run crashed after dropping some columns but not all.
   const cols = new Set(
-    (
-      raw.query(`PRAGMA table_info(contacts)`).all() as Array<{
-        name: string;
-      }>
-    ).map((c) => c.name),
+    raw
+      .query<
+        {
+          name: string;
+        },
+        []
+      >(`PRAGMA table_info(contacts)`)
+      .all()
+      .map((c) => c.name),
   );
 
   const legacyCols = [
@@ -47,7 +51,16 @@ export function migrateContactsNotesColumn(database: DrizzleDb): void {
   // haven't been populated yet (only run once, before any columns are dropped).
   if (remaining.length === legacyCols.length) {
     const rows = raw
-      .query(
+      .query<
+        {
+          id: string;
+          relationship: string | null;
+          importance: number;
+          response_expectation: string | null;
+          preferred_tone: string | null;
+        },
+        []
+      >(
         `SELECT id, relationship, importance, response_expectation, preferred_tone
      FROM contacts
      WHERE relationship IS NOT NULL
@@ -55,13 +68,7 @@ export function migrateContactsNotesColumn(database: DrizzleDb): void {
         OR response_expectation IS NOT NULL
         OR preferred_tone IS NOT NULL`,
       )
-      .all() as Array<{
-      id: string;
-      relationship: string | null;
-      importance: number;
-      response_expectation: string | null;
-      preferred_tone: string | null;
-    }>;
+      .all();
 
     const update = raw.prepare(`UPDATE contacts SET notes = ? WHERE id = ?`);
 

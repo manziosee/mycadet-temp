@@ -4,17 +4,18 @@
  * Validates that guardian dispatch relies on the generic notification
  * pipeline (including conversation-created callbacks) without a custom dispatch path.
  */
-
 import { beforeEach, describe, expect, mock, test } from "bun:test";
 
 import type { ConversationCreatedInfo } from "../notifications/broadcaster.js";
+import type { emitNotificationSignal } from "../notifications/emit-signal.js";
 import type { NotificationDeliveryResult } from "../notifications/types.js";
 
 // Note: stale mock for channel-guardian-store.js removed — the barrel was
 // deleted and none of the functions it mocked (getActiveBinding, createBinding,
 // listActiveBindingsByAssistant) existed in the barrel.
 
-const emitCalls: unknown[] = [];
+type EmittedSignal = Parameters<typeof emitNotificationSignal>[0];
+const emitCalls: EmittedSignal[] = [];
 let mockConversationCreated: ConversationCreatedInfo | null = null;
 let mockEmitResult: {
   signalId: string;
@@ -38,7 +39,7 @@ let mockEmitResult: {
 };
 
 mock.module("../notifications/emit-signal.js", () => ({
-  emitNotificationSignal: async (params: Record<string, unknown>) => {
+  emitNotificationSignal: async (params: EmittedSignal) => {
     emitCalls.push(params);
     const onConversationCreated = params.onConversationCreated;
     if (
@@ -175,18 +176,18 @@ describe("ASK_GUARDIAN notification path", () => {
     });
 
     expect(emitCalls.length).toBe(1);
-    const signalParams = emitCalls[0] as Record<string, unknown>;
+    const signalParams = emitCalls[0];
     expect(signalParams.sourceEventName).toBe("guardian.question");
     expect(signalParams.sourceChannel).toBe("phone");
     expect(signalParams.dedupeKey).toMatch(/^guardian:/);
 
-    const hints = signalParams.attentionHints as Record<string, unknown>;
+    const hints = signalParams.attentionHints!;
     expect(hints.requiresAction).toBe(true);
     expect(hints.urgency).toBe("high");
     expect(hints.isAsyncBackground).toBe(false);
     expect(hints.visibleInSourceNow).toBe(false);
 
-    const payload = signalParams.contextPayload as Record<string, unknown>;
+    const payload = signalParams.contextPayload!;
     expect(payload.questionText).toBe("What is the gate code?");
     expect(payload.callSessionId).toBe(session.id);
     expect(payload.requestKind).toBe("pending_question");
@@ -234,7 +235,7 @@ describe("ASK_GUARDIAN notification path", () => {
       pendingQuestion: pq,
     });
 
-    const signalParams = emitCalls[0] as Record<string, unknown>;
+    const signalParams = emitCalls[0];
     expect(typeof signalParams.onConversationCreated).toBe("function");
   });
 
@@ -353,8 +354,8 @@ describe("ASK_GUARDIAN notification path", () => {
     });
 
     expect(emitCalls.length).toBe(1);
-    const signalParams = emitCalls[0] as Record<string, unknown>;
-    const payload = signalParams.contextPayload as Record<string, unknown>;
+    const signalParams = emitCalls[0];
+    const payload = signalParams.contextPayload!;
 
     // callSessionId is present for the decision engine to match candidates to the current call
     expect(payload.callSessionId).toBe(session.id);

@@ -264,7 +264,7 @@ describe("getPluginDetails (mocked cloud catalog)", () => {
     const caveman = bundledMatch("caveman");
     // AND a fetch that records the ref query param of every contents request
     const contentsRefs = new Map<string, string>();
-    const fetch = (async (input: RequestInfo | URL) => {
+    const fetch: FetchLike = async (input: RequestInfo | URL) => {
       const url = typeof input === "string" ? input : input.toString();
       if (url.includes("/contents")) {
         const ref = new URL(url).searchParams.get("ref") ?? "";
@@ -299,7 +299,7 @@ describe("getPluginDetails (mocked cloud catalog)", () => {
         );
       }
       return new Response("unexpected url: " + url, { status: 500 });
-    }) as FetchLike;
+    };
 
     // WHEN we resolve the detail view at a catalog ref that isn't the pin
     const details = await getPluginDetails(
@@ -535,10 +535,10 @@ describe("getPluginDetails (mocked cloud catalog)", () => {
     // nothing and a not-installed plugin 404s.
     const historicalRef = "a".repeat(40);
     let fetchCalls = 0;
-    const fetch = (async () => {
+    const fetch: FetchLike = async () => {
       fetchCalls += 1;
       return new Response("unexpected request", { status: 500 });
-    }) as FetchLike;
+    };
 
     await expect(
       getPluginDetails(
@@ -552,10 +552,10 @@ describe("getPluginDetails (mocked cloud catalog)", () => {
   test("hides a gated integration at an explicit historical ref", async () => {
     const historicalRef = "a".repeat(40);
     let fetchCalls = 0;
-    const fetch = (async () => {
+    const fetch: FetchLike = async () => {
       fetchCalls += 1;
       return new Response("unexpected request", { status: 500 });
-    }) as FetchLike;
+    };
 
     await expect(
       getPluginDetails(
@@ -575,10 +575,10 @@ describe("getPluginDetails (mocked cloud catalog)", () => {
       JSON.stringify({ version: "1.0.0", description: "local gamma" }),
     );
     let fetchCalls = 0;
-    const fetch = (async () => {
+    const fetch: FetchLike = async () => {
       fetchCalls += 1;
       return new Response("unexpected request", { status: 500 });
-    }) as FetchLike;
+    };
 
     const details = await getPluginDetails(
       { name: "gamma", ref: "a".repeat(40) },
@@ -751,9 +751,9 @@ describe("getPluginDetails (mocked cloud catalog)", () => {
 describe("getPluginDetails (catalog unavailable, platform enabled)", () => {
   // A fetch that always rejects — the cloud catalog fetch fails, and no
   // GitHub enrichment should be attempted for the degraded cases below.
-  const failingFetch = (async () => {
+  const failingFetch: FetchLike = async () => {
     throw new Error("network down");
-  }) as FetchLike;
+  };
 
   beforeEach(() => {
     workspace = mkdtempSync(join(tmpdir(), "plugin-details-"));
@@ -876,11 +876,11 @@ describe("getPluginDetails (catalog unavailable, platform enabled)", () => {
   test("a successful catalog lookup with no match still throws PluginDetailsNotFoundError", async () => {
     // GIVEN a catalog that resolves successfully but has no entry for the name,
     // and no installed copy — a real not-found, not an outage
-    const emptyCatalogFetch = (async () =>
+    const emptyCatalogFetch: FetchLike = async () =>
       new Response(JSON.stringify({ plugins: [] }), {
         status: 200,
         headers: { "content-type": "application/json" },
-      })) as FetchLike;
+      });
 
     // WHEN / THEN the missing name is a permanent 404, unchanged by the outage rule
     await expect(

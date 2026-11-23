@@ -1,3 +1,5 @@
+import type { SQLQueryBindings } from "bun:sqlite";
+
 import { type DrizzleDb, getSqliteFrom } from "../db-connection.js";
 
 /**
@@ -34,10 +36,11 @@ export function migrateRemoveAssistantIdColumns(database: DrizzleDb): void {
 
     // --- conversation_keys ---
     const ckDdl = raw
-      .query(
-        `SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'conversation_keys'`,
-      )
-      .get() as { sql: string } | null;
+      .query<
+        { sql: string },
+        []
+      >(`SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'conversation_keys'`)
+      .get();
     if (ckDdl?.sql.includes("assistant_id")) {
       raw.exec(/*sql*/ `
         CREATE TABLE conversation_keys_new (
@@ -59,10 +62,11 @@ export function migrateRemoveAssistantIdColumns(database: DrizzleDb): void {
 
     // --- attachments ---
     const attDdl = raw
-      .query(
-        `SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'attachments'`,
-      )
-      .get() as { sql: string } | null;
+      .query<
+        { sql: string },
+        []
+      >(`SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'attachments'`)
+      .get();
     if (attDdl?.sql.includes("assistant_id")) {
       raw.exec(/*sql*/ `
         CREATE TABLE attachments_new (
@@ -87,10 +91,11 @@ export function migrateRemoveAssistantIdColumns(database: DrizzleDb): void {
 
     // --- channel_inbound_events ---
     const cieDdl = raw
-      .query(
-        `SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'channel_inbound_events'`,
-      )
-      .get() as { sql: string } | null;
+      .query<
+        { sql: string },
+        []
+      >(`SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'channel_inbound_events'`)
+      .get();
     if (cieDdl?.sql.includes("assistant_id")) {
       raw.exec(/*sql*/ `
         CREATE TABLE channel_inbound_events_new (
@@ -134,10 +139,11 @@ export function migrateRemoveAssistantIdColumns(database: DrizzleDb): void {
 
     // --- message_runs ---
     const mrDdl = raw
-      .query(
-        `SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'message_runs'`,
-      )
-      .get() as { sql: string } | null;
+      .query<
+        { sql: string },
+        []
+      >(`SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'message_runs'`)
+      .get();
     if (mrDdl?.sql.includes("assistant_id")) {
       raw.exec(/*sql*/ `
         CREATE TABLE message_runs_new (
@@ -170,10 +176,11 @@ export function migrateRemoveAssistantIdColumns(database: DrizzleDb): void {
 
     // --- llm_usage_events ---
     const lueDdl = raw
-      .query(
-        `SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'llm_usage_events'`,
-      )
-      .get() as { sql: string } | null;
+      .query<
+        { sql: string },
+        []
+      >(`SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'llm_usage_events'`)
+      .get();
     if (lueDdl?.sql.includes("assistant_id")) {
       raw.exec(/*sql*/ `
         CREATE TABLE llm_usage_events_new (
@@ -251,8 +258,11 @@ export function downRemoveAssistantIdColumns(database: DrizzleDb): void {
   for (const table of tables) {
     // Check if the table exists and lacks assistant_id
     const ddl = raw
-      .query(`SELECT sql FROM sqlite_master WHERE type = 'table' AND name = ?`)
-      .get(table) as { sql: string } | null;
+      .query<
+        { sql: string },
+        SQLQueryBindings[]
+      >(`SELECT sql FROM sqlite_master WHERE type = 'table' AND name = ?`)
+      .get(table);
     if (!ddl || ddl.sql.includes("assistant_id")) {
       continue;
     }

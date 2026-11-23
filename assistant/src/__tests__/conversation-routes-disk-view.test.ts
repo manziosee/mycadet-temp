@@ -818,10 +818,10 @@ describe("host-proxy preactivation across an interrupt", () => {
     // yes to it without a connected client to stand in for.
     const conversationKey = `macos-interrupt-${crypto.randomUUID()}`;
     const { conversationId } = getOrCreateConversationMapping(conversationKey);
-    const conv = busyConversation(conversationId) as Conversation & {
+    const conv: Conversation & {
       hostCuProxy?: unknown;
       preactivatedSkillIds?: string[];
-    };
+    } = busyConversation(conversationId);
 
     const response = await sendMacosMessage(
       conversationKey,
@@ -1003,9 +1003,9 @@ describe("host-proxy preactivation across an interrupt", () => {
     await addMessage(conversationId, "user", "already sent", {
       clientMessageId,
     });
-    const conv = getOrCreateFakeConversation(conversationId) as Conversation & {
+    const conv: Conversation & {
       pendingInterruptActivityBridge: boolean;
-    };
+    } = getOrCreateFakeConversation(conversationId);
     // Armed as a completed interrupt would leave it, on an idle conversation so
     // the send takes `completeSend` directly and dedups without a turn.
     conv.pendingInterruptActivityBridge = true;
@@ -1024,10 +1024,10 @@ describe("host-proxy preactivation across an interrupt", () => {
     const conversationKey = `macos-prepersist-${crypto.randomUUID()}`;
     const { conversationId } = getOrCreateConversationMapping(conversationKey);
     const clientMessageId = `cmid-${crypto.randomUUID()}`;
-    const conv = busyConversation(conversationId) as Conversation & {
+    const conv: Conversation & {
       currentTurnClientMessageId?: string;
       currentRequestId?: string;
-    };
+    } = busyConversation(conversationId);
     // The turn is armed and holding the lock, but its row is not inserted yet.
     conv.currentTurnClientMessageId = clientMessageId;
     conv.currentRequestId = "in-flight-req";

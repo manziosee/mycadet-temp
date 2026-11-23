@@ -144,7 +144,7 @@ describe("SendMessageOptions.config.overrideProfile", () => {
         _messages: Message[],
         options?: SendMessageOptions,
       ): Promise<ProviderResponse> {
-        captured = options?.config as Record<string, unknown> | undefined;
+        captured = options?.config;
         return makeResponse("together");
       },
     };
@@ -179,7 +179,7 @@ describe("SendMessageOptions.config.overrideProfile", () => {
         _messages: Message[],
         options?: SendMessageOptions,
       ): Promise<ProviderResponse> {
-        captured = options?.config as Record<string, unknown> | undefined;
+        captured = options?.config;
         return makeResponse("anthropic");
       },
     };
@@ -344,7 +344,7 @@ describe("SendMessageOptions.config.overrideProfile", () => {
         _messages: Message[],
         options?: SendMessageOptions,
       ): Promise<ProviderResponse> {
-        captured = options?.config as Record<string, unknown> | undefined;
+        captured = options?.config;
         return makeResponse("anthropic");
       },
     };
@@ -376,7 +376,7 @@ describe("SendMessageOptions.config.overrideProfile", () => {
         _messages: Message[],
         options?: SendMessageOptions,
       ): Promise<ProviderResponse> {
-        captured = options?.config as Record<string, unknown> | undefined;
+        captured = options?.config;
         return makeResponse("anthropic");
       },
     };
@@ -397,7 +397,7 @@ describe("SendMessageOptions.config.overrideProfile", () => {
         _messages: Message[],
         options?: SendMessageOptions,
       ): Promise<ProviderResponse> {
-        captured = options?.config as Record<string, unknown> | undefined;
+        captured = options?.config;
         return makeResponse("anthropic");
       },
     };
@@ -474,7 +474,7 @@ describe("SendMessageOptions.config.forceOverrideProfile", () => {
           _messages: Message[],
           options?: SendMessageOptions,
         ): Promise<ProviderResponse> {
-          captured = options?.config as Record<string, unknown> | undefined;
+          captured = options?.config;
           return makeResponse("anthropic");
         },
       };

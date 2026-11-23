@@ -5,7 +5,9 @@ import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 // Module mocks — must be declared before importing the tool under test.
 // ---------------------------------------------------------------------------
 
-const mockWakeAgentForOpportunity = mock(() => Promise.resolve());
+const mockWakeAgentForOpportunity = mock(
+  (..._args: Parameters<typeof wakeAgentForOpportunity>) => Promise.resolve(),
+);
 
 mock.module("../runtime/agent-wake.js", () => ({
   wakeAgentForOpportunity: mockWakeAgentForOpportunity,
@@ -45,11 +47,12 @@ type FakeChild = EventEmitter & {
 let latestChild: FakeChild | undefined;
 
 function makeFakeChild(): FakeChild {
-  const child = new EventEmitter() as FakeChild;
-  child.pid = 12345;
-  child.stdout = new EventEmitter();
-  child.stderr = new EventEmitter();
-  child.kill = mock(() => {});
+  const child: FakeChild = Object.assign(new EventEmitter(), {
+    pid: 12345,
+    stdout: new EventEmitter(),
+    stderr: new EventEmitter(),
+    kill: mock(() => {}),
+  });
   latestChild = child;
   return child;
 }
@@ -88,7 +91,10 @@ mock.module("../daemon/host-bash-proxy.js", () => ({
 // Import under test — MUST come after mock.module calls.
 // ---------------------------------------------------------------------------
 
-import type { WakeOptions } from "../runtime/agent-wake.js";
+import type {
+  wakeAgentForOpportunity,
+  WakeOptions,
+} from "../runtime/agent-wake.js";
 import type {
   BackgroundTool,
   CompletedBackgroundTool,
@@ -190,16 +196,14 @@ describe("host_bash background mode — proxy path", () => {
           context,
         );
         context.cronRunId = "cron-run-later";
-        const ownedCommand = (
-          mockRegisterBackgroundTool.mock.calls as unknown[][]
-        )[0]![0] as BackgroundTool;
+        const ownedCommand = mockRegisterBackgroundTool.mock
+          .calls[0]![0] as BackgroundTool;
         expect(ownedCommand.cronRunId).toBe(cronRunId ?? undefined);
         const cancelled =
           outcome === "cancelled" || outcome === "cancelled-rejection";
         if (cancelled) {
-          const registered = (
-            mockRegisterBackgroundTool.mock.calls as unknown[][]
-          )[0]![0] as BackgroundTool;
+          const registered = mockRegisterBackgroundTool.mock
+            .calls[0]![0] as BackgroundTool;
           registered.cancel();
         }
         if (outcome === "rejected" || outcome === "cancelled-rejection") {
@@ -210,9 +214,8 @@ describe("host_bash background mode — proxy path", () => {
         await new Promise((resolve) => setTimeout(resolve, 10));
 
         expect(mockWakeAgentForOpportunity).toHaveBeenCalledTimes(1);
-        const wake = (
-          mockWakeAgentForOpportunity.mock.calls as unknown[][]
-        )[0]![0] as WakeOptions;
+        const wake = mockWakeAgentForOpportunity.mock
+          .calls[0]![0] as WakeOptions;
         expect(wake.cronRunId).toBe(cronRunId ?? undefined);
         expect(wake.backgroundToolCompletion?.status).toBe(
           cancelled ? "cancelled" : outcome === "rejected" ? "failed" : outcome,
@@ -256,9 +259,7 @@ describe("host_bash background mode — proxy path", () => {
     );
 
     expect(mockRegisterBackgroundTool).toHaveBeenCalledTimes(1);
-    const registered = (
-      mockRegisterBackgroundTool.mock.calls as unknown[][]
-    )[0]![0] as Record<string, unknown>;
+    const registered = mockRegisterBackgroundTool.mock.calls[0]![0];
     expect(registered.toolName).toBe("host_bash");
     expect(registered.conversationId).toBe("conv-xyz");
     expect(registered.command).toBe("echo bg-proxy");
@@ -283,9 +284,7 @@ describe("host_bash background mode — proxy path", () => {
     await new Promise((r) => setTimeout(r, 10));
 
     expect(mockWakeAgentForOpportunity).toHaveBeenCalledTimes(1);
-    const wakeCall = (
-      mockWakeAgentForOpportunity.mock.calls as unknown[][]
-    )[0]![0] as Record<string, unknown>;
+    const wakeCall = mockWakeAgentForOpportunity.mock.calls[0]![0];
     expect(wakeCall.conversationId).toBe("conv-xyz");
     expect(wakeCall.hint).toBe(
       "Background host command completed (id=bg-test-0001):",
@@ -322,9 +321,7 @@ describe("host_bash background mode — proxy path", () => {
     await new Promise((r) => setTimeout(r, 10));
 
     expect(mockWakeAgentForOpportunity).toHaveBeenCalledTimes(1);
-    const wakeCall = (
-      mockWakeAgentForOpportunity.mock.calls as unknown[][]
-    )[0]![0] as Record<string, unknown>;
+    const wakeCall = mockWakeAgentForOpportunity.mock.calls[0]![0];
     expect(wakeCall.hint).toContain("Background host command failed");
     expect(wakeCall.untrustedOutput).toEqual({
       content: "command not found",
@@ -348,9 +345,7 @@ describe("host_bash background mode — proxy path", () => {
     await new Promise((r) => setTimeout(r, 10));
 
     expect(mockWakeAgentForOpportunity).toHaveBeenCalledTimes(1);
-    const wakeCall = (
-      mockWakeAgentForOpportunity.mock.calls as unknown[][]
-    )[0]![0] as Record<string, unknown>;
+    const wakeCall = mockWakeAgentForOpportunity.mock.calls[0]![0];
     expect(wakeCall.hint).toContain("Background host command failed");
     expect(wakeCall.hint).toContain("proxy transport error");
   });
@@ -409,14 +404,12 @@ describe("host_bash background mode — direct execution path", () => {
           context,
         );
         context.cronRunId = "cron-run-later";
-        const ownedCommand = (
-          mockRegisterBackgroundTool.mock.calls as unknown[][]
-        )[0]![0] as BackgroundTool;
+        const ownedCommand = mockRegisterBackgroundTool.mock
+          .calls[0]![0] as BackgroundTool;
         expect(ownedCommand.cronRunId).toBe(cronRunId ?? undefined);
         if (outcome === "cancelled") {
-          const registered = (
-            mockRegisterBackgroundTool.mock.calls as unknown[][]
-          )[0]![0] as BackgroundTool;
+          const registered = mockRegisterBackgroundTool.mock
+            .calls[0]![0] as BackgroundTool;
           registered.cancel();
         }
         if (outcome === "spawn-error") {
@@ -427,9 +420,8 @@ describe("host_bash background mode — direct execution path", () => {
         }
 
         expect(mockWakeAgentForOpportunity).toHaveBeenCalledTimes(1);
-        const wake = (
-          mockWakeAgentForOpportunity.mock.calls as unknown[][]
-        )[0]![0] as WakeOptions;
+        const wake = mockWakeAgentForOpportunity.mock
+          .calls[0]![0] as WakeOptions;
         expect(wake.cronRunId).toBe(cronRunId ?? undefined);
         expect(wake.backgroundToolCompletion?.status).toBe(
           outcome === "spawn-error" ? "failed" : outcome,
@@ -461,9 +453,7 @@ describe("host_bash background mode — direct execution path", () => {
     );
 
     expect(mockRegisterBackgroundTool).toHaveBeenCalledTimes(1);
-    const registered = (
-      mockRegisterBackgroundTool.mock.calls as unknown[][]
-    )[0]![0] as Record<string, unknown>;
+    const registered = mockRegisterBackgroundTool.mock.calls[0]![0];
     expect(registered.toolName).toBe("host_bash");
     expect(registered.conversationId).toBe("conv-xyz");
     expect(registered.command).toBe("echo bg-local");
@@ -488,9 +478,7 @@ describe("host_bash background mode — direct execution path", () => {
     await new Promise((r) => setTimeout(r, 10));
 
     expect(mockWakeAgentForOpportunity).toHaveBeenCalledTimes(1);
-    const wakeCall = (
-      mockWakeAgentForOpportunity.mock.calls as unknown[][]
-    )[0]![0] as Record<string, unknown>;
+    const wakeCall = mockWakeAgentForOpportunity.mock.calls[0]![0];
     expect(wakeCall.conversationId).toBe("conv-xyz");
     expect(wakeCall.source).toBe("background-tool");
     expect(wakeCall.hint).toContain("Background host command completed");
@@ -517,9 +505,7 @@ describe("host_bash background mode — direct execution path", () => {
     await new Promise((r) => setTimeout(r, 10));
 
     expect(mockWakeAgentForOpportunity).toHaveBeenCalledTimes(1);
-    const wakeCall = (
-      mockWakeAgentForOpportunity.mock.calls as unknown[][]
-    )[0]![0] as Record<string, unknown>;
+    const wakeCall = mockWakeAgentForOpportunity.mock.calls[0]![0];
     expect(wakeCall.hint).toContain("Background host command failed");
   });
 
@@ -538,9 +524,7 @@ describe("host_bash background mode — direct execution path", () => {
     await new Promise((r) => setTimeout(r, 10));
 
     expect(mockWakeAgentForOpportunity).toHaveBeenCalledTimes(1);
-    const wakeCall = (
-      mockWakeAgentForOpportunity.mock.calls as unknown[][]
-    )[0]![0] as Record<string, unknown>;
+    const wakeCall = mockWakeAgentForOpportunity.mock.calls[0]![0];
     expect(wakeCall.hint).toContain("Background host command failed");
     expect(wakeCall.hint).toContain("spawn ENOENT");
   });

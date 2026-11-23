@@ -1,4 +1,5 @@
 import { readFileSync, unlinkSync } from "node:fs";
+import type { SQLQueryBindings } from "bun:sqlite";
 
 import type { DrizzleDb } from "../db-connection.js";
 import { getSqliteFrom } from "../db-connection.js";
@@ -54,7 +55,15 @@ export function migrateScrubCorruptedImageAttachments(
   let lastRowid = 0;
   for (;;) {
     const rows = raw
-      .query(
+      .query<
+        {
+          rowid: number;
+          id: string;
+          data_base64: string;
+          file_path: string | null;
+        },
+        SQLQueryBindings[]
+      >(
         `SELECT rowid, id, data_base64, file_path FROM attachments
          WHERE mime_type LIKE 'image/%'
            AND data_base64 IS NOT NULL
@@ -63,12 +72,7 @@ export function migrateScrubCorruptedImageAttachments(
          ORDER BY rowid
          LIMIT ?`,
       )
-      .all(lastRowid, BATCH_SIZE) as Array<{
-      rowid: number;
-      id: string;
-      data_base64: string;
-      file_path: string | null;
-    }>;
+      .all(lastRowid, BATCH_SIZE);
 
     if (rows.length === 0) {
       break;
@@ -90,13 +94,13 @@ export function migrateScrubCorruptedImageAttachments(
   // Step B — Find and remove corrupted attachments stored on disk (file_path)
   // Disk-backed attachments are typically fewer; query all at once.
   const diskRows = raw
-    .query(
+    .query<{ id: string; file_path: string }, []>(
       `SELECT id, file_path FROM attachments
        WHERE mime_type LIKE 'image/%'
          AND file_path IS NOT NULL
          AND (data_base64 IS NULL OR data_base64 = '')`,
     )
-    .all() as Array<{ id: string; file_path: string }>;
+    .all();
 
   for (const row of diskRows) {
     try {

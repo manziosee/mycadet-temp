@@ -9,7 +9,10 @@ interface FakeImagesResponse {
 }
 
 let lastGenerateParams: Record<string, unknown> | null = null;
-let lastEditParams: Record<string, unknown> | null = null;
+interface CapturedEditParams extends Record<string, unknown> {
+  image: Record<string, unknown>[];
+}
+let lastEditParams: CapturedEditParams | null = null;
 let lastConstructorOptions: Record<string, unknown> | null = null;
 let fakeResponse: FakeImagesResponse = { data: [] };
 let shouldThrow: Error | null = null;
@@ -40,7 +43,7 @@ mock.module("openai", () => {
       generate: (
         params: Record<string, unknown>,
       ) => Promise<FakeImagesResponse>;
-      edit: (params: Record<string, unknown>) => Promise<FakeImagesResponse>;
+      edit: (params: CapturedEditParams) => Promise<FakeImagesResponse>;
     };
     constructor(opts: Record<string, unknown>) {
       lastConstructorOptions = opts;
@@ -53,7 +56,7 @@ mock.module("openai", () => {
           }
           return fakeResponse;
         },
-        edit: async (params: Record<string, unknown>) => {
+        edit: async (params: CapturedEditParams) => {
           lastEditParams = params;
           editCallCount++;
           if (shouldThrow) {
@@ -146,7 +149,7 @@ describe("generateImageOpenAI", () => {
 
     // Exactly one call; n forwarded to the SDK instead of calling thrice.
     expect(generateCallCount).toBe(1);
-    expect((lastGenerateParams as Record<string, unknown>).n).toBe(3);
+    expect(lastGenerateParams!.n).toBe(3);
     expect(result.images).toHaveLength(3);
     expect(result.images.map((i) => i.dataBase64)).toEqual(["a", "b", "c"]);
   });
@@ -158,13 +161,13 @@ describe("generateImageOpenAI", () => {
       { type: "direct", apiKey: "test-key" },
       { prompt: "test", mode: "generate", variants: 10 },
     );
-    expect((lastGenerateParams as Record<string, unknown>).n).toBe(4);
+    expect(lastGenerateParams!.n).toBe(4);
 
     await generateImageOpenAI(
       { type: "direct", apiKey: "test-key" },
       { prompt: "test", mode: "generate", variants: 0 },
     );
-    expect((lastGenerateParams as Record<string, unknown>).n).toBe(1);
+    expect(lastGenerateParams!.n).toBe(1);
   });
 
   test("model falls back to gpt-image-2 when unknown", async () => {
@@ -175,9 +178,7 @@ describe("generateImageOpenAI", () => {
       { prompt: "test", mode: "generate", model: "invalid-model" },
     );
 
-    expect((lastGenerateParams as Record<string, unknown>).model).toBe(
-      "gpt-image-2",
-    );
+    expect(lastGenerateParams!.model).toBe("gpt-image-2");
   });
 
   test("edit mode with one source image calls toFile once and passes files[] to edit", async () => {
@@ -198,9 +199,9 @@ describe("generateImageOpenAI", () => {
     expect(toFileCalls[0].filename).toBe("input.png");
     expect(toFileCalls[0].options).toEqual({ type: "image/jpeg" });
 
-    const editParams = lastEditParams as Record<string, unknown>;
+    const editParams = lastEditParams!;
     expect(editParams.prompt).toBe("remove background");
-    const image = editParams.image as Array<Record<string, unknown>>;
+    const image = editParams.image;
     expect(Array.isArray(image)).toBe(true);
     expect(image).toHaveLength(1);
     expect(image[0].__sentinel).toBe(TO_FILE_SENTINEL);
@@ -227,8 +228,8 @@ describe("generateImageOpenAI", () => {
     expect(toFileCalls[1].options?.type).toBe("image/jpeg");
     expect(toFileCalls[2].options?.type).toBe("image/webp");
 
-    const editParams = lastEditParams as Record<string, unknown>;
-    const image = editParams.image as Array<Record<string, unknown>>;
+    const editParams = lastEditParams!;
+    const image = editParams.image;
     expect(image).toHaveLength(3);
     for (const entry of image) {
       expect(entry.__sentinel).toBe(TO_FILE_SENTINEL);

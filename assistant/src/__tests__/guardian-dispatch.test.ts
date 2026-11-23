@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, mock, test } from "bun:test";
 
 import type { ConversationCreatedInfo } from "../notifications/broadcaster.js";
+import type { emitNotificationSignal } from "../notifications/emit-signal.js";
 import type { NotificationDeliveryResult } from "../notifications/types.js";
 
 // Note: stale mock for channel-guardian-store.js removed — the barrel was
@@ -27,7 +28,8 @@ mock.module("../contacts/guardian-delivery-reader.js", () => ({
   ) => list.find((g) => g.channelType === channelType && g.status === "active"),
 }));
 
-const emitCalls: unknown[] = [];
+type EmittedSignal = Parameters<typeof emitNotificationSignal>[0];
+const emitCalls: EmittedSignal[] = [];
 let conversationCreatedFromMock: ConversationCreatedInfo | null = null;
 let mockEmitResult: {
   signalId: string;
@@ -51,7 +53,7 @@ let mockEmitResult: {
 };
 
 mock.module("../notifications/emit-signal.js", () => ({
-  emitNotificationSignal: async (params: Record<string, unknown>) => {
+  emitNotificationSignal: async (params: EmittedSignal) => {
     emitCalls.push(params);
     const callback = params.onConversationCreated;
     if (typeof callback === "function" && conversationCreatedFromMock) {
@@ -184,7 +186,7 @@ describe("guardian-dispatch", () => {
     expect(cadetDelivery!.status).toBe("sent");
     expect(cadetDelivery!.destinationConversationId).toBe("conv-cadet-1");
 
-    const signalParams = emitCalls[0] as Record<string, unknown>;
+    const signalParams = emitCalls[0];
     expect(typeof signalParams.onConversationCreated).toBe("function");
   });
 
@@ -420,8 +422,8 @@ describe("guardian-dispatch", () => {
     expect(request!.toolName).toBe("send_email");
     expect(request!.inputDigest).toBe("abc123def456");
 
-    const signalParams = emitCalls[0] as Record<string, unknown>;
-    const payload = signalParams.contextPayload as Record<string, unknown>;
+    const signalParams = emitCalls[0];
+    const payload = signalParams.contextPayload!;
     expect(payload.requestKind).toBe("pending_question");
     expect(payload.toolName).toBe("send_email");
   });
@@ -470,8 +472,8 @@ describe("guardian-dispatch", () => {
       pendingQuestion: pq,
     });
 
-    const signalParams = emitCalls[0] as Record<string, unknown>;
-    const payload = signalParams.contextPayload as Record<string, unknown>;
+    const signalParams = emitCalls[0];
+    const payload = signalParams.contextPayload!;
     // The request was just created so there is 1 pending request for this session
     expect(payload.activeGuardianRequestCount).toBe(1);
     expect(payload.callSessionId).toBe(session.id);
@@ -564,8 +566,7 @@ describe("guardian-dispatch", () => {
     expect(allDeliveries).toHaveLength(2);
 
     // Second dispatch should report a higher activeGuardianRequestCount
-    const secondPayload = (emitCalls[0] as Record<string, unknown>)
-      .contextPayload as Record<string, unknown>;
+    const secondPayload = emitCalls[0].contextPayload!;
     expect(secondPayload.activeGuardianRequestCount).toBe(2);
   });
 
@@ -606,7 +607,7 @@ describe("guardian-dispatch", () => {
       pendingQuestion: pq1,
     });
 
-    const firstParams = emitCalls[0] as Record<string, unknown>;
+    const firstParams = emitCalls[0];
     // First dispatch should not have an affinity hint
     expect(firstParams.conversationAffinityHint).toBeUndefined();
 
@@ -635,7 +636,7 @@ describe("guardian-dispatch", () => {
       pendingQuestion: pq2,
     });
 
-    const secondParams = emitCalls[0] as Record<string, unknown>;
+    const secondParams = emitCalls[0];
     expect(secondParams.conversationAffinityHint).toEqual({
       cadet: sharedConversationId,
     });
@@ -682,7 +683,7 @@ describe("guardian-dispatch", () => {
       toolName: "send_email",
     });
 
-    const firstParams = emitCalls[0] as Record<string, unknown>;
+    const firstParams = emitCalls[0];
     expect(firstParams.conversationAffinityHint).toBeUndefined();
 
     // Second dispatch — also with toolName
@@ -714,7 +715,7 @@ describe("guardian-dispatch", () => {
       toolName: "run_script",
     });
 
-    const secondParams = emitCalls[0] as Record<string, unknown>;
+    const secondParams = emitCalls[0];
     expect(secondParams.conversationAffinityHint).toEqual({
       cadet: sharedConversationId,
     });
@@ -759,7 +760,7 @@ describe("guardian-dispatch", () => {
         pendingQuestion: pq,
       });
 
-      const params = emitCalls[0] as Record<string, unknown>;
+      const params = emitCalls[0];
       if (i === 0) {
         // First dispatch — no affinity hint
         expect(params.conversationAffinityHint).toBeUndefined();

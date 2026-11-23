@@ -1599,10 +1599,10 @@ describe("WorkspaceGitService", () => {
       const proto = Object.getPrototypeOf(service);
       const originalStreaming = proto.execGitStreaming;
       proto.execGitStreaming = async function () {
-        const err = new Error(
+        const err: Error & { code?: string } = new Error(
           "Git command failed: git status --porcelain\n" +
             "Error: stdout maxBuffer length exceeded",
-        ) as Error & { code?: string };
+        );
         err.code = "ERR_CHILD_PROCESS_STDIO_MAXBUFFER";
         throw err;
       };
@@ -1648,9 +1648,9 @@ describe("WorkspaceGitService", () => {
           args[1] === "--cached" &&
           args[2] === "--quiet"
         ) {
-          const err = new Error(
+          const err: Error & { code?: number } = new Error(
             "Git command failed: git diff --cached --quiet\nError: simulated error\nStderr: ",
-          ) as Error & { code?: number };
+          );
           err.code = 2;
           throw err;
         }
