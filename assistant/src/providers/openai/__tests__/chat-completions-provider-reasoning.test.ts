@@ -941,8 +941,8 @@ describe("thinking-mode tool_choice rejection fallback", () => {
       );
       throw new Error("expected ProviderError");
     } catch (error) {
-      expect(error).toBeInstanceOf(ProviderError);
-      const rejected = error as ProviderError;
+      assert(error instanceof ProviderError, "Expected ProviderError");
+      const rejected = error;
       expect(
         (rejected.rawRequest as { tool_choice?: unknown } | undefined)
           ?.tool_choice,

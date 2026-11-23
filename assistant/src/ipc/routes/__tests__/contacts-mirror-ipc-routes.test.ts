@@ -4,8 +4,9 @@
  * route set / `get_route_schema`. They write info-only mirror state on top of
  * the `contact-store` primitives; the gateway DB stays the ACL source of truth.
  */
-
 import { afterAll, beforeAll, describe, expect, mock, test } from "bun:test";
+
+import { jsonObjectSchema } from "../../../__tests__/helpers/json-object-schema.js";
 
 const upsertContactChannelCalls: unknown[] = [];
 const upsertContactCalls: unknown[] = [];
@@ -194,7 +195,7 @@ describe("contacts_mirror_upsert_channel", () => {
       },
     });
 
-    const call = upsertContactChannelCalls[0] as Record<string, unknown>;
+    const call = jsonObjectSchema.parse(upsertContactChannelCalls[0]);
     // Gateway-minted channel id is reused verbatim (id-alignment).
     expect(call.channelId).toBe("gw-ch-42");
     // Inbound seed refreshes the display name rather than preserving it.
@@ -214,7 +215,7 @@ describe("contacts_mirror_upsert_channel", () => {
       },
     });
 
-    const call = upsertContactChannelCalls[0] as Record<string, unknown>;
+    const call = jsonObjectSchema.parse(upsertContactChannelCalls[0]);
     // No refresh flag → the primitive preserves the curated contact name.
     expect(call.refreshDisplayName).toBeUndefined();
     expect(call.channelId).toBeUndefined();
@@ -241,8 +242,8 @@ describe("contacts_mirror_upsert_channel", () => {
       },
     });
 
-    const seedCall = upsertContactChannelCalls[0] as Record<string, unknown>;
-    const inviteCall = upsertContactChannelCalls[1] as Record<string, unknown>;
+    const seedCall = jsonObjectSchema.parse(upsertContactChannelCalls[0]);
+    const inviteCall = jsonObjectSchema.parse(upsertContactChannelCalls[1]);
     expect(seedCall.reassignConflictingChannels).toBe(false);
     expect(inviteCall.reassignConflictingChannels).toBe(true);
   });
@@ -252,7 +253,7 @@ describe("contacts_mirror_upsert_channel", () => {
     handleContactsMirrorUpsertChannel({
       body: { contactId: "co-x", type: "slack", address: "UX" },
     });
-    const call = upsertContactChannelCalls[0] as Record<string, unknown>;
+    const call = jsonObjectSchema.parse(upsertContactChannelCalls[0]);
     expect(call.reassignConflictingChannels).toBeUndefined();
   });
 
@@ -445,7 +446,7 @@ describe("contacts_mirror_apply", () => {
       userFile: null,
     });
     expect(upsertContactChannelCalls).toHaveLength(1);
-    const chCall = upsertContactChannelCalls[0] as Record<string, unknown>;
+    const chCall = jsonObjectSchema.parse(upsertContactChannelCalls[0]);
     expect(chCall.contactId).toBe("co-1");
     // isPrimary threads through so the guardian mirror keeps its primary flag.
     expect(chCall.isPrimary).toBe(true);

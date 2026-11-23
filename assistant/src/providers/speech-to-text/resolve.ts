@@ -130,32 +130,23 @@ export async function resolveBatchTranscriber(
   const stt = getConfig().services.stt;
   const provider = sttCatalogKeyForRole(stt, options.role);
   logRoleSelection(options.role, provider, resolveSttCatalogKey(stt));
-  const language = effectiveSttLanguage(
-    provider as SttProviderId,
-    stt.language,
-  );
+  const language = effectiveSttLanguage(provider, stt.language);
 
   // Look up credential provider via the catalog.
-  const credentialProviderName = getCredentialProvider(
-    provider as SttProviderId,
-  );
+  const credentialProviderName = getCredentialProvider(provider);
   if (!credentialProviderName) {
     return null;
   }
 
   // Verify the provider supports the daemon-batch boundary.
-  if (!supportsBoundary(provider as SttProviderId, "daemon-batch")) {
-    const reason = batchBoundaryGapReason(provider as SttProviderId);
+  if (!supportsBoundary(provider, "daemon-batch")) {
+    const reason = batchBoundaryGapReason(provider);
     log.warn({ providerId: provider }, reason);
     throw new SttError("provider-error", reason, { userFacing: true });
   }
 
   const apiKey = await getProviderKeyAsync(credentialProviderName);
-  return createDaemonBatchTranscriber(
-    apiKey,
-    provider as SttProviderId,
-    language,
-  );
+  return createDaemonBatchTranscriber(apiKey, provider, language);
 }
 
 // ---------------------------------------------------------------------------
@@ -216,7 +207,7 @@ export async function resolveTelephonySttCapability(): Promise<TelephonySttCapab
   const config = getConfig();
   const provider = sttCatalogKeyForRole(config.services.stt, "telephony");
 
-  const entry = getProviderEntry(provider as SttProviderId);
+  const entry = getProviderEntry(provider);
   if (!entry) {
     return {
       status: "unconfigured",
@@ -305,7 +296,7 @@ export async function resolveConversationStreamingSttCapability(): Promise<Conve
   const config = getConfig();
   const provider = resolveSttCatalogKey(config.services.stt);
 
-  const entry = getProviderEntry(provider as SttProviderId);
+  const entry = getProviderEntry(provider);
   if (!entry) {
     return {
       status: "unconfigured",

@@ -236,7 +236,7 @@ function handleUpdateProvider({
     );
   }
 
-  const b = body as Record<string, unknown>;
+  const b = body;
   const params: Record<string, unknown> = {};
 
   if (b.auth_url !== undefined) {
@@ -362,7 +362,7 @@ async function handleDeleteProvider({
     );
   }
 
-  const force = (body as Record<string, unknown>).force === true;
+  const force = body.force === true;
 
   const dependentApps = listApps().filter((a) => a.provider === providerKey);
   const dependentConnections = listConnections(providerKey);
@@ -380,7 +380,7 @@ async function handleDeleteProvider({
     const result = await disconnectOAuthProvider(
       providerKey,
       undefined,
-      conn.id as string,
+      conn.id,
     );
     if (result === "error") {
       deleteConnection(conn.id);

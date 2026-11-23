@@ -10,7 +10,7 @@ import {
   CALL_SITE_CATALOG,
   CALL_SITE_DOMAINS,
 } from "../../config/schemas/call-site-catalog.js";
-import type { LLMCallSite, LLMConfig } from "../../config/schemas/llm.js";
+import type { LLMConfig } from "../../config/schemas/llm.js";
 import { ACTOR_PRINCIPALS } from "../auth/route-policy.js";
 import type { RouteDefinition } from "./types.js";
 
@@ -46,11 +46,8 @@ const callSiteCatalogResponseSchema = z.object({
 export function buildCallSiteCatalog(llm: LLMConfig) {
   return CALL_SITE_CATALOG.map((entry) => ({
     ...entry,
-    defaultProfile: resolveDefaultProfileKey(entry.id as LLMCallSite, llm),
-    shippedDefaultProfile: resolveShippedDefaultProfileKey(
-      entry.id as LLMCallSite,
-      llm,
-    ),
+    defaultProfile: resolveDefaultProfileKey(entry.id, llm),
+    shippedDefaultProfile: resolveShippedDefaultProfileKey(entry.id, llm),
   }));
 }
 

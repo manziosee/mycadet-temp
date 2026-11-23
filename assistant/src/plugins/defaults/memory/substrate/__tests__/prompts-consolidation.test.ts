@@ -25,6 +25,8 @@ import {
   test,
 } from "bun:test";
 
+import { jsonObjectSchema } from "../../../../../__tests__/helpers/json-object-schema.js";
+
 const warnCalls: Array<{ data: unknown; msg: string }> = [];
 const recordingLogger = {
   warn: (data: unknown, msg: string) => {
@@ -525,7 +527,7 @@ describe("resolveConsolidationPrompt — with override", () => {
       );
       expect(result).toBe(bundledPrompt());
       expect(warnCalls).toHaveLength(1);
-      const data = warnCalls[0].data as Record<string, unknown>;
+      const data = jsonObjectSchema.parse(warnCalls[0].data);
       expect(data.reason).toBe("outside_workspace");
     } finally {
       rmSync(path, { force: true });
@@ -589,7 +591,7 @@ describe("resolveConsolidationPrompt — failure modes", () => {
 
     expect(result).toBe(bundledPrompt());
     expect(warnCalls).toHaveLength(1);
-    const data = warnCalls[0].data as Record<string, unknown>;
+    const data = jsonObjectSchema.parse(warnCalls[0].data);
     expect(data.code).toBe("ENOENT");
     expect(data.fallback).toBe("bundled");
   });
@@ -602,7 +604,7 @@ describe("resolveConsolidationPrompt — failure modes", () => {
 
     expect(result).toBe(bundledPrompt());
     expect(warnCalls).toHaveLength(1);
-    const data = warnCalls[0].data as Record<string, unknown>;
+    const data = jsonObjectSchema.parse(warnCalls[0].data);
     expect(data.reason).toBe("empty_override");
   });
 
@@ -614,7 +616,7 @@ describe("resolveConsolidationPrompt — failure modes", () => {
 
     expect(result).toBe(bundledPrompt());
     expect(warnCalls).toHaveLength(1);
-    const data = warnCalls[0].data as Record<string, unknown>;
+    const data = jsonObjectSchema.parse(warnCalls[0].data);
     expect(data.reason).toBe("empty_override");
   });
 
@@ -627,7 +629,7 @@ describe("resolveConsolidationPrompt — failure modes", () => {
 
     expect(result).toBe(bundledPrompt());
     expect(warnCalls).toHaveLength(1);
-    const data = warnCalls[0].data as Record<string, unknown>;
+    const data = jsonObjectSchema.parse(warnCalls[0].data);
     expect(data.reason).toBe("oversized_override");
     expect(data.size).toBe(1 * 1024 * 1024 + 1);
   });
@@ -642,7 +644,7 @@ describe("resolveConsolidationPrompt — failure modes", () => {
 
     expect(result).toBe(bundledPrompt());
     expect(warnCalls).toHaveLength(1);
-    const data = warnCalls[0].data as Record<string, unknown>;
+    const data = jsonObjectSchema.parse(warnCalls[0].data);
     expect(data.reason).toBe("not_regular_file");
   });
 
@@ -659,7 +661,7 @@ describe("resolveConsolidationPrompt — failure modes", () => {
 
     expect(result).toBe(bundledPrompt());
     expect(warnCalls).toHaveLength(1);
-    const data = warnCalls[0].data as Record<string, unknown>;
+    const data = jsonObjectSchema.parse(warnCalls[0].data);
     expect(data.reason).toBe("not_regular_file");
   });
 });

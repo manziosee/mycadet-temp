@@ -105,7 +105,7 @@ export async function handleBootstrapIntercept(
     isDuplicate ||
     commandIntent?.type !== "start" ||
     typeof commandIntent.payload !== "string" ||
-    !(commandIntent.payload as string).startsWith("gv_") ||
+    !commandIntent.payload.startsWith("gv_") ||
     !rawSenderId
   ) {
     return null;
@@ -115,7 +115,7 @@ export async function handleBootstrapIntercept(
   // threads the session through — no second lookup. Otherwise resolve here;
   // a gateway failure must never fall through to normal processing (the
   // floor may have been skipped), so degrade to a handled "try again" reply.
-  const bootstrapToken = (commandIntent.payload as string).slice(3);
+  const bootstrapToken = commandIntent.payload.slice(3);
   let bootstrapSession: VerificationSessionWire | null;
   if (validatedBootstrapSession) {
     bootstrapSession = validatedBootstrapSession;

@@ -1,3 +1,4 @@
+import assert from "node:assert/strict";
 import { describe, expect, test } from "bun:test";
 
 import { RateLimitConfig } from "../config/schemas/timeouts.js";
@@ -179,8 +180,8 @@ describe("RateLimitProvider", () => {
         await provider.sendMessage(messages);
         expect(true).toBe(false); // should not reach
       } catch (err) {
-        expect(err).toBeInstanceOf(RateLimitError);
-        const msg = (err as RateLimitError).message;
+        assert(err instanceof RateLimitError, "Expected RateLimitError");
+        const msg = err.message;
         // Wait time should be ~30s, not 60s
         const waitMatch = msg.match(/(\d+)s/);
         expect(waitMatch).toBeTruthy();

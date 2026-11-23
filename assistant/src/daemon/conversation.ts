@@ -1615,7 +1615,7 @@ export class Conversation {
             typeof meta[MEMORY_V3_POINTER_BLOCK_METADATA_KEY] === "string"
           ) {
             const pointer = filterResidentPointerEntries(
-              meta[MEMORY_V3_POINTER_BLOCK_METADATA_KEY] as string,
+              meta[MEMORY_V3_POINTER_BLOCK_METADATA_KEY],
               index,
               v3PrunedSections(),
               v3NewestCopy(),
@@ -1639,9 +1639,7 @@ export class Conversation {
             content = [
               {
                 type: "text" as const,
-                text: meta[
-                  LEGACY_MEMORY_V3_SPOTLIGHT_BLOCK_METADATA_KEY
-                ] as string,
+                text: meta[LEGACY_MEMORY_V3_SPOTLIGHT_BLOCK_METADATA_KEY],
               },
               ...content,
             ];
@@ -1674,9 +1672,7 @@ export class Conversation {
             personalMemoryAllowed &&
             typeof meta[MEMORY_V3_INJECTED_BLOCK_METADATA_KEY] === "string"
           ) {
-            const v3Block = meta[
-              MEMORY_V3_INJECTED_BLOCK_METADATA_KEY
-            ] as string;
+            const v3Block = meta[MEMORY_V3_INJECTED_BLOCK_METADATA_KEY];
             // The block's rendering format is the row's own provenance (the
             // persisting build's stamp, absent on pre-stamp rows), never
             // read off the block's content: a current block is filtered by

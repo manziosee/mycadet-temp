@@ -645,7 +645,7 @@ async function handleCreateProfile({ body = {} }: RouteHandlerArgs) {
   assertSaneMaxTokens(input.provider, input.model, input.maxTokens);
 
   const entry: Record<string, unknown> = {
-    ...fragmentFromBody(body as Record<string, unknown>),
+    ...fragmentFromBody(body),
     provider: input.provider,
     model: input.model,
     source: "user",
@@ -796,7 +796,7 @@ async function handleUpdateProfile({
 
   const merged: Record<string, unknown> = {
     ...existing,
-    ...fragmentFromBody(body as Record<string, unknown>),
+    ...fragmentFromBody(body),
     ...(input.provider !== undefined ? { provider: input.provider } : {}),
     ...(input.model !== undefined ? { model: input.model } : {}),
   };

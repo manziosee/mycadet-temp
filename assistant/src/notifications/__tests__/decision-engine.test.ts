@@ -160,10 +160,7 @@ function makeLlmSignal(): NotificationSignal {
 describe("assistant_tool pass-through in notification decision engine", () => {
   test("uses producer-supplied title and body verbatim, no LLM call", async () => {
     const signal = makeAssistantToolSignal();
-    const decision = await evaluateSignal(signal, [
-      "cadet",
-      "telegram",
-    ] as NotificationChannel[]);
+    const decision = await evaluateSignal(signal, ["cadet", "telegram"]);
 
     expect(decision.shouldNotify).toBe(true);
     expect(decision.selectedChannels).toContain("cadet");
@@ -183,9 +180,7 @@ describe("assistant_tool pass-through in notification decision engine", () => {
     const signal = makeAssistantToolSignal({
       dedupeKey: "deploy-status:prod",
     });
-    const decision = await evaluateSignal(signal, [
-      "cadet",
-    ] as NotificationChannel[]);
+    const decision = await evaluateSignal(signal, ["cadet"]);
 
     expect(decision.dedupeKey).toBe("deploy-status:prod");
   });
@@ -196,9 +191,7 @@ describe("assistant_tool pass-through in notification decision engine", () => {
         requestedMessage: "First sentence. Second sentence follows here.",
       },
     });
-    const decision = await evaluateSignal(signal, [
-      "cadet",
-    ] as NotificationChannel[]);
+    const decision = await evaluateSignal(signal, ["cadet"]);
 
     expect(decision.shouldNotify).toBe(true);
     expect(decision.renderedCopy.cadet?.body).toBe(
@@ -240,9 +233,7 @@ describe("assistant_tool pass-through in notification decision engine", () => {
         deepLinkMetadata: { route: "settings", anchor: "notifications" },
       },
     });
-    const decision = await evaluateSignal(signal, [
-      "cadet",
-    ] as NotificationChannel[]);
+    const decision = await evaluateSignal(signal, ["cadet"]);
 
     expect(decision.deepLinkTarget).toEqual({
       route: "settings",
@@ -257,9 +248,7 @@ describe("assistant_tool pass-through in notification decision engine", () => {
         deepLinkMetadata: ["not", "a", "plain", "object"],
       },
     });
-    const decision = await evaluateSignal(signal, [
-      "cadet",
-    ] as NotificationChannel[]);
+    const decision = await evaluateSignal(signal, ["cadet"]);
 
     expect(decision.deepLinkTarget).toBeUndefined();
   });
@@ -271,10 +260,7 @@ describe("assistant_tool pass-through in notification decision engine", () => {
         preferredChannels: ["telegram"],
       },
     });
-    const decision = await evaluateSignal(signal, [
-      "cadet",
-      "telegram",
-    ] as NotificationChannel[]);
+    const decision = await evaluateSignal(signal, ["cadet", "telegram"]);
 
     // Cadet (canonical inbox) stays in selectedChannels; telegram is
     // added on top. `--preferred-channels` is additive push, never a
@@ -348,10 +334,7 @@ describe("assistant_tool pass-through in notification decision engine", () => {
         preferredChannels: ["disconnected_channel"],
       },
     });
-    const decision = await evaluateSignal(signal, [
-      "cadet",
-      "telegram",
-    ] as NotificationChannel[]);
+    const decision = await evaluateSignal(signal, ["cadet", "telegram"]);
 
     expect(decision.selectedChannels).toEqual(["cadet"]);
     expect(decision.renderedCopy.cadet?.body).toBe("fyi");
@@ -364,10 +347,7 @@ describe("assistant_tool pass-through in notification decision engine", () => {
         channelAllowlist: ["telegram"],
       },
     });
-    const decision = await evaluateSignal(signal, [
-      "cadet",
-      "telegram",
-    ] as NotificationChannel[]);
+    const decision = await evaluateSignal(signal, ["cadet", "telegram"]);
 
     expect(decision.selectedChannels).toEqual(["telegram"]);
     expect(decision.shouldNotify).toBe(true);
@@ -386,7 +366,7 @@ describe("assistant_tool pass-through in notification decision engine", () => {
       "cadet",
       "telegram",
       "slack",
-    ] as NotificationChannel[]);
+    ]);
 
     expect(decision.selectedChannels).toEqual(["telegram"]);
     expect(decision.selectedChannels).not.toContain("cadet");
@@ -410,7 +390,7 @@ describe("assistant_tool pass-through in notification decision engine", () => {
       "cadet",
       "telegram",
       "slack",
-    ] as NotificationChannel[]);
+    ]);
 
     expect(decision.selectedChannels).toEqual(["telegram"]);
     expect(decision.shouldNotify).toBe(true);
@@ -423,10 +403,7 @@ describe("assistant_tool pass-through in notification decision engine", () => {
         channelAllowlist: ["disconnected_channel"],
       },
     });
-    const decision = await evaluateSignal(signal, [
-      "cadet",
-      "telegram",
-    ] as NotificationChannel[]);
+    const decision = await evaluateSignal(signal, ["cadet", "telegram"]);
 
     expect(decision.selectedChannels).toEqual([]);
     expect(decision.shouldNotify).toBe(false);
@@ -478,10 +455,7 @@ describe("chat.assistant_reply pass-through in notification decision engine", ()
 
   test("uses producer-supplied title and body verbatim, no LLM call", async () => {
     const signal = makeAssistantReplySignal();
-    const decision = await evaluateSignal(signal, [
-      "cadet",
-      "platform",
-    ] as NotificationChannel[]);
+    const decision = await evaluateSignal(signal, ["cadet", "platform"]);
 
     expect(decision.shouldNotify).toBe(true);
     expect(decision.renderedCopy.platform?.body).toBe("Here is your answer.");
@@ -497,7 +471,7 @@ describe("chat.assistant_reply pass-through in notification decision engine", ()
       "cadet",
       "telegram",
       "platform",
-    ] as NotificationChannel[]);
+    ]);
 
     expect(decision.selectedChannels).toEqual(["cadet", "platform"]);
     expect(decision.shouldNotify).toBe(true);
@@ -507,7 +481,7 @@ describe("chat.assistant_reply pass-through in notification decision engine", ()
     const decision = await evaluateSignal(makeAssistantReplySignal(), [
       "cadet",
       "telegram",
-    ] as NotificationChannel[]);
+    ]);
 
     expect(decision.selectedChannels).toEqual(["cadet"]);
     expect(decision.shouldNotify).toBe(true);
@@ -544,9 +518,7 @@ describe("chat.assistant_reply pass-through in notification decision engine", ()
         requestedMessage: "First sentence. Second sentence follows here.",
       },
     });
-    const decision = await evaluateSignal(signal, [
-      "platform",
-    ] as NotificationChannel[]);
+    const decision = await evaluateSignal(signal, ["platform"]);
 
     expect(decision.renderedCopy.platform?.title).toBe("First sentence.");
   });
@@ -555,18 +527,14 @@ describe("chat.assistant_reply pass-through in notification decision engine", ()
     const signal = makeAssistantReplySignal({
       dedupeKey: "chat.assistant_reply:conv-1:msg-1",
     });
-    const decision = await evaluateSignal(signal, [
-      "platform",
-    ] as NotificationChannel[]);
+    const decision = await evaluateSignal(signal, ["platform"]);
 
     expect(decision.dedupeKey).toBe("chat.assistant_reply:conv-1:msg-1");
   });
 
   test("falls back to the signal id when the producer supplies no dedupeKey", async () => {
     const signal = makeAssistantReplySignal();
-    const decision = await evaluateSignal(signal, [
-      "platform",
-    ] as NotificationChannel[]);
+    const decision = await evaluateSignal(signal, ["platform"]);
 
     expect(decision.dedupeKey).toBe(signal.signalId);
   });
@@ -578,18 +546,14 @@ describe("chat.assistant_reply pass-through in notification decision engine", ()
         deepLinkMetadata: { conversationId: "conv-1" },
       },
     });
-    const decision = await evaluateSignal(signal, [
-      "platform",
-    ] as NotificationChannel[]);
+    const decision = await evaluateSignal(signal, ["platform"]);
 
     expect(decision.deepLinkTarget).toEqual({ conversationId: "conv-1" });
   });
 
   test("persists the decision", async () => {
     const signal = makeAssistantReplySignal();
-    const decision = await evaluateSignal(signal, [
-      "platform",
-    ] as NotificationChannel[]);
+    const decision = await evaluateSignal(signal, ["platform"]);
 
     expect(decision.persistedDecisionId).toBeDefined();
     expect(persistedDecisions.length).toBe(1);
@@ -611,9 +575,7 @@ describe("chat.assistant_reply pass-through in notification decision engine", ()
     };
 
     try {
-      const decision = await evaluateSignal(signal, [
-        "platform",
-      ] as NotificationChannel[]);
+      const decision = await evaluateSignal(signal, ["platform"]);
 
       expect(providerCalled).toBe(true);
       expect(decision.verbatimCopy).toBeUndefined();
@@ -637,7 +599,7 @@ describe("recipient notes injection (ACL from gateway, notes joined locally)", (
       return {};
     };
 
-    await evaluateSignal(makeLlmSignal(), ["cadet"] as NotificationChannel[]);
+    await evaluateSignal(makeLlmSignal(), ["cadet"]);
 
     expect(capturedSystemPrompt).toContain("<recipient-context>");
     expect(capturedSystemPrompt).toContain("Prefers terse updates.");
@@ -653,7 +615,7 @@ describe("recipient notes injection (ACL from gateway, notes joined locally)", (
       return {};
     };
 
-    await evaluateSignal(makeLlmSignal(), ["cadet"] as NotificationChannel[]);
+    await evaluateSignal(makeLlmSignal(), ["cadet"]);
 
     expect(capturedSystemPrompt).not.toContain("<recipient-context>");
   });
@@ -670,7 +632,7 @@ describe("decision tool title field specification", () => {
       return {};
     };
 
-    await evaluateSignal(makeLlmSignal(), ["cadet"] as NotificationChannel[]);
+    await evaluateSignal(makeLlmSignal(), ["cadet"]);
 
     const tool = capturedTools?.[0] as {
       input_schema: {
@@ -722,9 +684,7 @@ describe("title normalization", () => {
     };
 
     try {
-      const decision = await evaluateSignal(makeLlmSignal(), [
-        "cadet",
-      ] as NotificationChannel[]);
+      const decision = await evaluateSignal(makeLlmSignal(), ["cadet"]);
       return decision.renderedCopy.cadet?.title;
     } finally {
       toolUseBlock = null;
@@ -775,9 +735,7 @@ describe("title normalization", () => {
         requestedTitle,
       },
     });
-    const decision = await evaluateSignal(signal, [
-      "cadet",
-    ] as NotificationChannel[]);
+    const decision = await evaluateSignal(signal, ["cadet"]);
 
     expect(decision.renderedCopy.cadet?.title).toBe("Backup finished.");
   });
@@ -820,7 +778,7 @@ describe("schedule.result pass-through in notification decision engine", () => {
     const decision = await evaluateSignal(makeScheduleResultSignal(), [
       "cadet",
       "platform",
-    ] as NotificationChannel[]);
+    ]);
 
     expect(decision.renderedCopy.cadet?.body).toBe(
       "- **3 new emails**\n- `deploy.sh` failed overnight",
@@ -838,7 +796,7 @@ describe("schedule.result pass-through in notification decision engine", () => {
       "cadet",
       "telegram",
       "platform",
-    ] as NotificationChannel[]);
+    ]);
 
     expect(decision.selectedChannels).toEqual(["cadet", "platform"]);
     expect(decision.shouldNotify).toBe(true);
@@ -848,7 +806,7 @@ describe("schedule.result pass-through in notification decision engine", () => {
     const decision = await evaluateSignal(makeScheduleResultSignal(), [
       "cadet",
       "telegram",
-    ] as NotificationChannel[]);
+    ]);
 
     expect(decision.selectedChannels).toEqual(["cadet"]);
     expect(decision.shouldNotify).toBe(true);
@@ -966,7 +924,7 @@ describe("scheduler requested-message pass-through in notification decision engi
             requestedTitle: "Your day",
           },
         }),
-        ["cadet", "telegram", "platform"] as NotificationChannel[],
+        ["cadet", "telegram", "platform"],
       );
 
       expect(providerCalled).toBe(true);
@@ -1007,7 +965,7 @@ describe("scheduler requested-message pass-through in notification decision engi
             visibleInSourceNow: false,
           },
         },
-        ["cadet", "telegram", "platform"] as NotificationChannel[],
+        ["cadet", "telegram", "platform"],
       );
 
       expect(providerCalled).toBe(true);

@@ -1,3 +1,4 @@
+import assert from "node:assert/strict";
 /**
  * Guards that a `cadet` provider_connection only takes the provider-agnostic
  * routing path when the resolving profile declares a cloud-routable upstream.
@@ -5,7 +6,6 @@
  * is a misconfiguration and must use the normal mismatch recovery/error path,
  * not route as platform auth and silently fall back.
  */
-
 import { beforeEach, describe, expect, mock, test } from "bun:test";
 
 const dbSentinel = { __mock: "db" };
@@ -107,10 +107,11 @@ describe("cadet connection mismatch handling", () => {
     } catch (err) {
       caught = err;
     }
-    expect(caught).toBeInstanceOf(ConnectionResolutionError);
-    expect((caught as ConnectionResolutionError).reason).toBe(
-      "provider_mismatch",
+    assert(
+      caught instanceof ConnectionResolutionError,
+      "Expected ConnectionResolutionError",
     );
+    expect(caught.reason).toBe("provider_mismatch");
     // Never routed as a cadet cloud-auth request.
     expect(resolveCalls).toHaveLength(0);
   });

@@ -1,3 +1,4 @@
+import assert from "node:assert/strict";
 /**
  * Tests for the host-file-result route 403 guard.
  *
@@ -228,8 +229,8 @@ describe("handleHostFileResult — targetClientId guard", () => {
         caught = e;
       });
 
-      expect(caught).toBeInstanceOf(ForbiddenError);
-      const msg = (caught as ForbiddenError).message;
+      assert(caught instanceof ForbiddenError, "Expected ForbiddenError");
+      const msg = caught.message;
       expect(msg).toContain("client-B");
       expect(msg).toContain("client-A");
     });

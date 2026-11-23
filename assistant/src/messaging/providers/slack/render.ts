@@ -443,7 +443,7 @@ function toRichText(
         break;
       default:
         if ("children" in node) {
-          out.push(...toRichText(node.children as PhrasingContent[], style));
+          out.push(...toRichText(node.children, style));
         }
     }
   }
@@ -484,7 +484,7 @@ function serializePlain(nodes: PhrasingContent[]): string {
         break;
       default:
         if ("children" in node) {
-          out += serializePlain(node.children as PhrasingContent[]);
+          out += serializePlain(node.children);
         }
     }
   }

@@ -10,6 +10,7 @@ import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
 import { backfillDefaultProviderMigration } from "../workspace/migrations/127-backfill-default-provider.js";
+import { jsonObjectSchema } from "./helpers/json-object-schema.js";
 
 let workspaceDir: string;
 
@@ -33,7 +34,7 @@ function readConfig(): Record<string, unknown> {
 }
 
 function defaultProvider(): unknown {
-  return (readConfig().llm as Record<string, unknown>).defaultProvider;
+  return jsonObjectSchema.parse(readConfig().llm).defaultProvider;
 }
 
 let originalIsPlatform: string | undefined;
@@ -99,7 +100,7 @@ describe("127-backfill-default-provider", () => {
     backfillDefaultProviderMigration.run(workspaceDir);
 
     expect(
-      (readConfig().llm as Record<string, unknown>).defaultProvider,
+      jsonObjectSchema.parse(readConfig().llm).defaultProvider,
     ).toBeUndefined();
   });
 
@@ -109,7 +110,7 @@ describe("127-backfill-default-provider", () => {
     backfillDefaultProviderMigration.run(workspaceDir);
 
     expect(
-      (readConfig().llm as Record<string, unknown>).defaultProvider,
+      jsonObjectSchema.parse(readConfig().llm).defaultProvider,
     ).toBeUndefined();
   });
 
@@ -229,7 +230,7 @@ describe("127-backfill-default-provider", () => {
       backfillDefaultProviderMigration.run(workspaceDir);
 
       expect(
-        (readConfig().llm as Record<string, unknown>).defaultProvider,
+        jsonObjectSchema.parse(readConfig().llm).defaultProvider,
       ).toBeUndefined();
     });
 
@@ -249,7 +250,7 @@ describe("127-backfill-default-provider", () => {
       // anthropic — it defers the entire resolution to the ensure pass,
       // which checks the vault first.
       expect(
-        (readConfig().llm as Record<string, unknown>).defaultProvider,
+        jsonObjectSchema.parse(readConfig().llm).defaultProvider,
       ).toBeUndefined();
     });
 

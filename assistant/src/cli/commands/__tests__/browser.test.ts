@@ -7,11 +7,11 @@
  *   - Correct IPC payload mapping (kebab-case CLI -> snake_case input)
  *   - --json and error exit-code behavior
  */
-
 import { beforeEach, describe, expect, mock, test } from "bun:test";
 
 import { Command } from "commander";
 
+import { jsonObjectSchema } from "../../../__tests__/helpers/json-object-schema.js";
 import { BROWSER_OPERATION_META } from "../../../browser/operation-meta.js";
 import { BROWSER_OPERATIONS } from "../../../browser/types.js";
 
@@ -27,7 +27,7 @@ let lastIpcCall: {
 
 /** Access the body bag from the last IPC call params. */
 function lastBody(): Record<string, unknown> {
-  return lastIpcCall!.params!.body as Record<string, unknown>;
+  return jsonObjectSchema.parse(lastIpcCall!.params!.body);
 }
 
 /** The result that cliIpcCall will return. */
@@ -271,7 +271,7 @@ describe("IPC payload mapping", () => {
       "300",
     ]);
     expect(lastBody().operation).toBe("scroll");
-    const input = lastBody().input as Record<string, unknown>;
+    const input = jsonObjectSchema.parse(lastBody().input);
     expect(input.direction).toBe("down");
     expect(input.amount).toBe(300);
     expect(typeof input.amount).toBe("number");
@@ -327,7 +327,7 @@ describe("IPC payload mapping", () => {
       "5000",
     ]);
     expect(lastBody().operation).toBe("wait_for");
-    const input = lastBody().input as Record<string, unknown>;
+    const input = jsonObjectSchema.parse(lastBody().input);
     expect(input.selector).toBe(".loaded");
     expect(input.timeout).toBe(5000);
   });
@@ -412,14 +412,14 @@ describe("IPC payload mapping", () => {
       "http://localhost:3000",
     ]);
     expect(lastBody().operation).toBe("navigate");
-    const input = lastBody().input as Record<string, unknown>;
+    const input = jsonObjectSchema.parse(lastBody().input);
     expect(input.browser_mode).toBe("local");
     expect(input.url).toBe("http://localhost:3000");
   });
 
   test("--browser-mode is omitted from input when not specified", async () => {
     await runCommand(["browser", "snapshot"]);
-    const input = lastBody().input as Record<string, unknown>;
+    const input = jsonObjectSchema.parse(lastBody().input);
     expect(input.browser_mode).toBeUndefined();
   });
 
@@ -646,9 +646,7 @@ for (const desktopFlag of ["--virtual-desktop", "--desktop"]) {
         operation: "click",
         input: { element_id: "e7" },
       });
-      expect(
-        (lastBody().input as Record<string, unknown>).desktop,
-      ).toBeUndefined();
+      expect(jsonObjectSchema.parse(lastBody().input).desktop).toBeUndefined();
     });
 
     test.each([

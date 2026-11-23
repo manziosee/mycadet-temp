@@ -306,8 +306,8 @@ export async function executeScaffoldCloudSkill(
       }
       collected.push({
         path: path.trim(),
-        ...(content !== undefined ? { content: content as string } : {}),
-        ...(copy_from !== undefined ? { copyFrom: copy_from as string } : {}),
+        ...(content !== undefined ? { content: content } : {}),
+        ...(copy_from !== undefined ? { copyFrom: copy_from } : {}),
       });
     }
     if (collected.length > 0) {

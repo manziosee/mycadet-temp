@@ -345,7 +345,7 @@ async function handlePing({ body = {} }: RouteHandlerArgs) {
     );
   }
 
-  const pingUrl = providerRow.pingUrl as string;
+  const pingUrl = providerRow.pingUrl;
   const parsed = new URL(pingUrl);
   const baseUrl = `${parsed.protocol}//${parsed.host}`;
   const path = parsed.pathname;
@@ -365,14 +365,14 @@ async function handlePing({ body = {} }: RouteHandlerArgs) {
 
   const connection = await resolveOAuthConnection(b.provider, resolveOptions);
 
-  const method = (providerRow.pingMethod as string | null) ?? "GET";
+  const method = providerRow.pingMethod ?? "GET";
 
   const pingHeaders: Record<string, string> = providerRow.pingHeaders
-    ? JSON.parse(providerRow.pingHeaders as string)
+    ? JSON.parse(providerRow.pingHeaders)
     : {};
 
   const pingBody: unknown = providerRow.pingBody
-    ? JSON.parse(providerRow.pingBody as string)
+    ? JSON.parse(providerRow.pingBody)
     : undefined;
 
   const response = await connection.request({

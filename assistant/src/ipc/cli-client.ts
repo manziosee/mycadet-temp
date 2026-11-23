@@ -344,7 +344,7 @@ export async function cliIpcCallBinary(
         } else {
           finish({
             ok: true,
-            headers: (envelope.headers ?? {}) as Record<string, string>,
+            headers: envelope.headers ?? {},
             bytes: binary,
           });
         }
@@ -558,7 +558,7 @@ export async function cliIpcCallStream(
           clearTimeout(connectTimer);
           resolve({
             ok: true,
-            headers: (envelope.headers ?? {}) as Record<string, string>,
+            headers: envelope.headers ?? {},
             body,
             abort,
           });

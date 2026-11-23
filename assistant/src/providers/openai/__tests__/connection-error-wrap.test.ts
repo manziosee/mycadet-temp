@@ -1,3 +1,4 @@
+import assert from "node:assert/strict";
 import { describe, expect, test } from "bun:test";
 
 import OpenAI from "openai";
@@ -35,8 +36,8 @@ describe("connection-error wrapping", () => {
         () => null,
         (e: unknown) => e,
       );
-    expect(thrown).toBeInstanceOf(ProviderError);
-    const providerError = thrown as ProviderError;
+    assert(thrown instanceof ProviderError, "Expected ProviderError");
+    const providerError = thrown;
     expect(providerError.reason).toBe("network_error");
     expect(providerError.statusCode).toBeUndefined();
     expect(providerError.cause).toBe(sdkError);

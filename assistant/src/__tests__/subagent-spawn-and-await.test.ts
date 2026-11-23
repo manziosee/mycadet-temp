@@ -1,3 +1,4 @@
+import assert from "node:assert/strict";
 /**
  * Tests for `SubagentManager.spawnAndAwait` — the synchronous run primitive.
  *
@@ -580,10 +581,11 @@ describe("SubagentManager.spawnAndAwait", () => {
         () => undefined,
         (e) => e,
       );
-    expect(err).toBeInstanceOf(SubagentAbortedError);
-    expect((err as SubagentAbortedError).partialText).toContain(
-      "partial advice so far",
+    assert(
+      err instanceof SubagentAbortedError,
+      "Expected SubagentAbortedError",
     );
+    expect(err.partialText).toContain("partial advice so far");
   });
 
   test("an already-aborted signal does not run the agent loop", async () => {

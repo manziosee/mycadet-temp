@@ -1,3 +1,4 @@
+import assert from "node:assert/strict";
 /**
  * Tests for the gateway-backed invite client.
  *
@@ -6,7 +7,6 @@
  * rejection, and unchanged propagation of transport errors (fail-closed —
  * an `IpcCallError` keeps its gateway statusCode for the relay routes).
  */
-
 import { beforeEach, describe, expect, mock, test } from "bun:test";
 
 import { INVITES_IPC_METHODS } from "@mycadet/gateway-client";
@@ -250,8 +250,8 @@ describe("transport failures", () => {
       await client.revokeInvite("missing");
       throw new Error("expected revokeInvite to throw");
     } catch (err) {
-      expect(err).toBeInstanceOf(IpcCallError);
-      expect((err as IpcCallError).statusCode).toBe(404);
+      assert(err instanceof IpcCallError, "Expected IpcCallError");
+      expect(err.statusCode).toBe(404);
     }
   });
 });

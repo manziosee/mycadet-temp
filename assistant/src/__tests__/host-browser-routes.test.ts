@@ -1,3 +1,4 @@
+import assert from "node:assert/strict";
 /**
  * Unit tests for the /v1/host-browser-result route handler.
  *
@@ -273,8 +274,8 @@ describe("handleHostBrowserResult — same-actor guard", () => {
         caught = e;
       }
 
-      expect(caught).toBeInstanceOf(ForbiddenError);
-      const msg = (caught as ForbiddenError).message;
+      assert(caught instanceof ForbiddenError, "Expected ForbiddenError");
+      const msg = caught.message;
       expect(msg).toContain("client-A");
       expect(msg).toContain("client-B");
     });

@@ -464,13 +464,13 @@ export function registerChangelogCommand(program: Command): void {
 
       subcommand(cmd, "show").action(
         async (version: string, _opts, command: Command) => {
-          const merged = command.optsWithGlobals() as CommonOpts;
+          const merged = command.optsWithGlobals();
           await withErrorHandling(() => runShow(version, merged));
         },
       );
 
       subcommand(cmd, "list").action(async (_opts, command: Command) => {
-        const merged = command.optsWithGlobals() as CommonOpts;
+        const merged = command.optsWithGlobals();
         await withErrorHandling(() => runList(merged));
       });
     },

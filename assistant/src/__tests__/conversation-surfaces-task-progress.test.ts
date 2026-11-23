@@ -10,6 +10,7 @@ import {
   surfaceProxyResolver,
 } from "../daemon/conversation-surfaces.js";
 import { UiSurfaceShow } from "../daemon/message-types/surfaces.js";
+import { jsonObjectSchema } from "./helpers/json-object-schema.js";
 import {
   asConversation,
   mockChannelCapabilities,
@@ -124,9 +125,7 @@ describe("task_progress surface compatibility", () => {
     expect(result.isError).toBe(false);
     const data = ctx.currentTurnSurfaces.find((s) => s.surfaceId === surfaceId)
       ?.data as CardSurfaceData;
-    expect((data.templateData as Record<string, unknown>).status).toBe(
-      "completed",
-    );
+    expect(jsonObjectSchema.parse(data.templateData).status).toBe("completed");
   });
 
   test("blocks ui_update when channel lacks dynamic UI support", async () => {
@@ -269,7 +268,7 @@ describe("task_progress surface compatibility", () => {
     expect(card.template).toBe("task_progress");
     expect(card.title).toBe("Ordering from DoorDash");
     expect(card.body).toBe("");
-    expect((card.templateData as Record<string, unknown>).status).toBe(
+    expect(jsonObjectSchema.parse(card.templateData).status).toBe(
       "in_progress",
     );
   });
@@ -297,7 +296,7 @@ describe("task_progress surface compatibility", () => {
 
     const card = showMessage.data;
     expect(card.template).toBe("task_progress");
-    const templateData = card.templateData as Record<string, unknown>;
+    const templateData = jsonObjectSchema.parse(card.templateData);
     expect(templateData.status).toBe("in_progress");
     expect(templateData.title).toBe("Researching");
     expect(templateData.steps).toEqual([]);
@@ -332,10 +331,7 @@ describe("task_progress surface compatibility", () => {
       return;
     }
 
-    const templateData = showMessage.data.templateData as Record<
-      string,
-      unknown
-    >;
+    const templateData = jsonObjectSchema.parse(showMessage.data.templateData);
     expect(templateData.status).toBe("in_progress");
     const steps = templateData.steps as Array<Record<string, unknown>>;
     expect(steps).toHaveLength(2);
@@ -511,7 +507,7 @@ describe("task_progress surface compatibility", () => {
       Record<string, unknown>;
     expect(updatedCard.template).toBe("task_progress");
     expect("status" in updatedCard).toBe(false);
-    const templateData = updatedCard.templateData as Record<string, unknown>;
+    const templateData = jsonObjectSchema.parse(updatedCard.templateData);
     expect(templateData.status).toBe("completed");
     expect(Array.isArray(templateData.steps)).toBe(true);
   });
@@ -545,8 +541,9 @@ describe("task_progress surface compatibility", () => {
     if (!updateMessage) {
       return;
     }
-    const templateData = (updateMessage.data as CardSurfaceData)
-      .templateData as Record<string, unknown>;
+    const templateData = jsonObjectSchema.parse(
+      (updateMessage.data as CardSurfaceData).templateData,
+    );
     expect(templateData.status).toBe("completed");
   });
 
@@ -715,7 +712,7 @@ describe("ui_show card content recovery", () => {
     const card = shownCard(sent);
     expect(card?.body).toBe("Archived 1,240 emails");
     // The alias key is not a card field; it must not survive on the surface.
-    expect((card as Record<string, unknown>).text).toBeUndefined();
+    expect(jsonObjectSchema.parse(card).text).toBeUndefined();
   });
 
   test("recovers body from a confirmation-style `message` field", async () => {
@@ -814,7 +811,7 @@ describe("ui_show card content recovery", () => {
 
     const card = shownCard(sent);
     expect(card?.body).toBe("Found 12 matching documents.");
-    expect((card as Record<string, unknown>).description).toBeUndefined();
+    expect(jsonObjectSchema.parse(card).description).toBeUndefined();
   });
 
   test("recovers body from work_result-style `summary` field", async () => {

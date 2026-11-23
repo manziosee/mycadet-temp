@@ -41,9 +41,9 @@ async function tryBundledPlaywright(): Promise<
 > {
   try {
     const pw = await import("playwright");
-    const mod = resolveChromium(pw as unknown as Record<string, unknown>);
+    const mod = resolveChromium(pw);
     if (mod?.chromium) {
-      return mod as unknown as typeof import("playwright");
+      return mod as typeof import("playwright");
     }
   } catch {
     // Bundled import failed entirely
@@ -123,7 +123,7 @@ export async function importPlaywright(): Promise<typeof import("playwright")> {
       "Failed to resolve Playwright chromium from runtime-installed copy",
     );
   }
-  return mod as unknown as typeof import("playwright");
+  return mod as typeof import("playwright");
 }
 
 /** In-flight headless shell install promise to deduplicate concurrent callers. */

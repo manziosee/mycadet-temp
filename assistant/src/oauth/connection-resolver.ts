@@ -103,9 +103,7 @@ export async function resolveOAuthConnectionWithMeta(
     // disconnection.
     const availableLabels =
       account || clientId
-        ? getActiveConnections(provider).map(
-            (row) => (row.accountInfo as string | null) ?? (row.id as string),
-          )
+        ? getActiveConnections(provider).map((row) => row.accountInfo ?? row.id)
         : [];
     throw new Error(
       formatNoConnectionError({ provider, account, clientId, availableLabels }),
@@ -132,9 +130,7 @@ export async function resolveOAuthConnectionWithMeta(
   }
   const conn = selectionPool[0];
 
-  const allAccounts = selectionPool.map(
-    (row) => (row.accountInfo as string | null) ?? (row.id as string),
-  );
+  const allAccounts = selectionPool.map((row) => row.accountInfo ?? row.id);
   const ambiguous = selectionPool.length > 1 && !account;
   if (ambiguous) {
     log.warn(

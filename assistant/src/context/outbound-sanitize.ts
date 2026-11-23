@@ -7,11 +7,7 @@
  */
 
 import { stripHistoricalWebSearchResults } from "../daemon/web-search-history.js";
-import type {
-  ContentBlock,
-  Message,
-  ToolResultContent,
-} from "../providers/types.js";
+import type { ContentBlock, Message } from "../providers/types.js";
 
 /** Number of most-recent AX tree snapshots to keep in conversation history. */
 const MAX_AX_TREES_IN_HISTORY = 2;
@@ -241,9 +237,7 @@ function stripOldMediaBlocks(history: Message[]): Message[] {
     const isMedia = (cb: ContentBlock) =>
       cb.type === "image" || cb.type === "file";
     const hasMedia = msg.content.some(
-      (b) =>
-        b.type === "tool_result" &&
-        (b as ToolResultContent).contentBlocks?.some(isMedia),
+      (b) => b.type === "tool_result" && b.contentBlocks?.some(isMedia),
     );
     if (!hasMedia) {
       return msg;
@@ -259,7 +253,7 @@ function stripOldMediaBlocks(history: Message[]): Message[] {
         if (b.type !== "tool_result") {
           return b;
         }
-        const tr = b as ToolResultContent;
+        const tr = b;
         if (!tr.contentBlocks?.some(isMedia)) {
           return b;
         }

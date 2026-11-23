@@ -20,6 +20,8 @@ import {
 
 import { drizzle } from "drizzle-orm/bun-sqlite";
 
+import { jsonObjectSchema } from "./helpers/json-object-schema.js";
+
 // ---------------------------------------------------------------------------
 // Mocks — declared before imports that depend on platform/logger
 // ---------------------------------------------------------------------------
@@ -98,13 +100,10 @@ function applyHatchProviderSelection(options: {
   db?: DrizzleDb;
 }): void {
   const raw = existsSync(CONFIG_PATH)
-    ? (JSON.parse(readFileSync(CONFIG_PATH, "utf-8")) as Record<
-        string,
-        unknown
-      >)
+    ? jsonObjectSchema.parse(JSON.parse(readFileSync(CONFIG_PATH, "utf-8")))
     : {};
   const llm: Record<string, unknown> = {
-    ...((raw.llm as Record<string, unknown>) ?? {}),
+    ...jsonObjectSchema.parse(raw.llm ?? {}),
   };
   const hadDefaultProviderBefore =
     (llm.default as Record<string, unknown> | undefined)?.provider != null;
@@ -115,7 +114,7 @@ function applyHatchProviderSelection(options: {
     llm.activeProfile = options.activeProfile;
   }
   llm.default = {
-    ...((llm.default as Record<string, unknown>) ?? {}),
+    ...jsonObjectSchema.parse(llm.default ?? {}),
     ...(options.model !== undefined ? { model: options.model } : {}),
     provider: options.provider,
   };
@@ -203,7 +202,7 @@ describe("deepMergeOverwrite", () => {
     };
     deepMergeOverwrite(target, { a: { b: null } });
     expect(target).toEqual({ a: { b: null, c: 2, d: 3 } });
-    expect("b" in (target.a as Record<string, unknown>)).toBe(true);
+    expect("b" in jsonObjectSchema.parse(target.a)).toBe(true);
   });
 
   test("assigns null to existing null fields (no-op for already-null)", () => {

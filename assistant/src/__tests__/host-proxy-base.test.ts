@@ -1,15 +1,18 @@
 import { afterEach, describe, expect, jest, mock, test } from "bun:test";
 
+import { z } from "zod";
+
 import {
   setBroadcastOverrideForTesting,
   setHubClientsForTesting,
 } from "../runtime/assistant-event-hub.js";
 
-const sentMessages: unknown[] = [];
+const requestIdSchema = z.string();
+const sentMessages: Record<string, unknown>[] = [];
 const resolvedInteractionIds: string[] = [];
 let mockHasClient = false;
 
-setBroadcastOverrideForTesting((msg: unknown) => sentMessages.push(msg));
+setBroadcastOverrideForTesting((msg) => sentMessages.push(msg));
 setHubClientsForTesting({
   getActorPrincipalIdForClient: () => undefined,
   getMostRecentClientByCapability: (cap: string) =>
@@ -90,14 +93,14 @@ describe("HostProxyBase", () => {
       const promise = proxy.send("tool-1", { payload: "hello" }, "conv-1");
 
       expect(sentMessages).toHaveLength(1);
-      const sent = sentMessages[0] as Record<string, unknown>;
+      const sent = sentMessages[0];
       expect(sent.type).toBe("test_request");
       expect(sent.conversationId).toBe("conv-1");
       expect(sent.toolName).toBe("tool-1");
       expect(sent.input).toEqual({ payload: "hello" });
       expect(typeof sent.requestId).toBe("string");
 
-      const requestId = sent.requestId as string;
+      const requestId = requestIdSchema.parse(sent.requestId);
       expect(proxy.hasPendingRequest(requestId)).toBe(true);
 
       proxy.resolve(requestId, { result: "ok" });
@@ -117,13 +120,13 @@ describe("HostProxyBase", () => {
         { stepNumber: 7, reasoning: "because" },
       );
 
-      const sent = sentMessages[0] as Record<string, unknown>;
+      const sent = sentMessages[0];
       expect(sent.stepNumber).toBe(7);
       expect(sent.reasoning).toBe("because");
       expect(sent.input).toEqual({ payload: "hi" }); // input not nested under extras
 
       // Resolve so afterEach.dispose() doesn't see an orphan pending request.
-      proxy.resolve(sent.requestId as string, { result: "ok" });
+      proxy.resolve(requestIdSchema.parse(sent.requestId), { result: "ok" });
       await promise;
     });
 
@@ -141,8 +144,7 @@ describe("HostProxyBase", () => {
       jest.useFakeTimers();
       try {
         const promise = proxy.send("tool-1", { payload: "x" }, "conv-1");
-        const requestId = (sentMessages[0] as Record<string, unknown>)
-          .requestId as string;
+        const requestId = requestIdSchema.parse(sentMessages[0].requestId);
         expect(proxy.hasPendingRequest(requestId)).toBe(true);
 
         // Default timeout is 60s.
@@ -184,8 +186,7 @@ describe("HostProxyBase", () => {
         controller.signal,
       );
 
-      const requestId = (sentMessages[0] as Record<string, unknown>)
-        .requestId as string;
+      const requestId = requestIdSchema.parse(sentMessages[0].requestId);
 
       controller.abort();
 
@@ -193,7 +194,7 @@ describe("HostProxyBase", () => {
 
       // Second message should be the cancel envelope.
       expect(sentMessages).toHaveLength(2);
-      const cancel = sentMessages[1] as Record<string, unknown>;
+      const cancel = sentMessages[1];
       expect(cancel.type).toBe("test_cancel");
       expect(cancel.requestId).toBe(requestId);
       expect(cancel.conversationId).toBe("conv-1");
@@ -225,8 +226,7 @@ describe("HostProxyBase", () => {
         controller.signal,
       );
 
-      const requestId = (sentMessages[0] as Record<string, unknown>)
-        .requestId as string;
+      const requestId = requestIdSchema.parse(sentMessages[0].requestId);
       proxy.resolve(requestId, { result: "ok" });
       await promise;
 
@@ -250,7 +250,7 @@ describe("HostProxyBase", () => {
       p2.catch(() => {});
 
       const beforeIds = (sentMessages as Array<Record<string, unknown>>).map(
-        (m) => m.requestId as string,
+        (m) => requestIdSchema.parse(m.requestId),
       );
       expect(beforeIds).toHaveLength(2);
 
@@ -266,11 +266,13 @@ describe("HostProxyBase", () => {
       // Cancel envelopes broadcast for each pending request.
       const cancelMessages = sentMessages
         .slice(2)
-        .filter(
-          (m) => (m as Record<string, unknown>).type === "test_cancel",
-        ) as Array<Record<string, unknown>>;
+        .filter((m) => m.type === "test_cancel") as Array<
+        Record<string, unknown>
+      >;
       expect(cancelMessages).toHaveLength(2);
-      const cancelIds = cancelMessages.map((m) => m.requestId as string);
+      const cancelIds = cancelMessages.map((m) =>
+        requestIdSchema.parse(m.requestId),
+      );
       expect(cancelIds).toEqual(expect.arrayContaining(beforeIds));
 
       // pendingInteractions notified for each pending request.
