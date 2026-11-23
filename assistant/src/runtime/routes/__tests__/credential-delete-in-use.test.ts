@@ -1,10 +1,10 @@
+import assert from "node:assert/strict";
 /**
  * Deleting a credential an LLM connection dispatches with must be refused
  * until the caller confirms, because losing it silently takes that connection
  * offline: the adapter keeps routing to the provider with no key and the turn
  * comes back empty.
  */
-
 import { beforeEach, describe, expect, test } from "bun:test";
 
 import { useMemorySecureKeys } from "../../../__tests__/helpers/secure-keys.js";
@@ -90,8 +90,11 @@ describe("credential delete in-use guard", () => {
     );
 
     // THEN the delete is refused as a client error naming the connections
-    expect(error).toBeInstanceOf(CredentialInUseError);
-    const refusal = error as CredentialInUseError;
+    assert(
+      error instanceof CredentialInUseError,
+      "Expected CredentialInUseError",
+    );
+    const refusal = error;
     expect(refusal.statusCode).toBe(400);
     expect(refusal.code).toBe("CREDENTIAL_IN_USE");
     expect(refusal.connections).toEqual(["router-fallback", "router-primary"]);
@@ -149,10 +152,11 @@ describe("credential delete in-use guard", () => {
     );
 
     // THEN the same refusal applies and the key survives
-    expect(error).toBeInstanceOf(CredentialInUseError);
-    expect((error as CredentialInUseError).connections).toEqual([
-      "router-primary",
-    ]);
+    assert(
+      error instanceof CredentialInUseError,
+      "Expected CredentialInUseError",
+    );
+    expect(error.connections).toEqual(["router-primary"]);
     expect(await getSecureKeyAsync(apiKeyAccount)).toBe("sk-test-value");
     await deleteSecureKeyAsync(apiKeyAccount);
   });

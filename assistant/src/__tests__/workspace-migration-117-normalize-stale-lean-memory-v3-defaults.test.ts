@@ -8,7 +8,6 @@
  * preserving deliberate (non-lean) values, pre-lean full values, and untouched
  * sibling fields. It never creates config.json and is idempotent.
  */
-
 import {
   existsSync,
   mkdtempSync,
@@ -22,6 +21,7 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
 import { MemoryV3ConfigSchema } from "../config/schemas/memory-v3.js";
 import { normalizeStaleLeanMemoryV3DefaultsMigration } from "../workspace/migrations/117-normalize-stale-lean-memory-v3-defaults.js";
+import { jsonObjectSchema } from "./helpers/json-object-schema.js";
 
 let workspaceDir: string;
 let configPath: string;
@@ -37,13 +37,13 @@ afterEach(() => {
   }
 });
 
-function readConfig(): Record<string, unknown> {
-  return JSON.parse(readFileSync(configPath, "utf-8"));
+function readConfig() {
+  return jsonObjectSchema.parse(JSON.parse(readFileSync(configPath, "utf-8")));
 }
 
 /** A config.json as the first-launch seed would persist it on the lean build:
  *  the full v3 block with every tuning value at its lean default. */
-function leanSeedConfig(): Record<string, unknown> {
+function leanSeedConfig() {
   return {
     memory: {
       v3: {
@@ -86,28 +86,27 @@ describe("117-normalize-stale-lean-memory-v3-defaults migration", () => {
 
     normalizeStaleLeanMemoryV3DefaultsMigration.run(workspaceDir);
 
-    const v3 = (readConfig().memory as Record<string, unknown>).v3 as Record<
-      string,
-      unknown
-    >;
+    const v3 = jsonObjectSchema.parse(
+      jsonObjectSchema.parse(readConfig().memory).v3,
+    );
     // The switched leaves are gone…
     expect("needleK" in v3).toBe(false);
     expect("denseK" in v3).toBe(false);
     expect("replyQueryK" in v3).toBe(false);
     expect("selectorEnabled" in v3).toBe(false);
-    expect("k" in (v3.hotSet as Record<string, unknown>)).toBe(false);
-    expect("k" in (v3.freshSet as Record<string, unknown>)).toBe(false);
-    expect("cap" in (v3.learnedEdges as Record<string, unknown>)).toBe(false);
-    const edge = v3.edge as Record<string, unknown>;
+    expect("k" in jsonObjectSchema.parse(v3.hotSet)).toBe(false);
+    expect("k" in jsonObjectSchema.parse(v3.freshSet)).toBe(false);
+    expect("cap" in jsonObjectSchema.parse(v3.learnedEdges)).toBe(false);
+    const edge = jsonObjectSchema.parse(v3.edge);
     expect("seedCount" in edge).toBe(false);
     expect("perSeed" in edge).toBe(false);
     expect("cap" in edge).toBe(false);
 
     // …untouched siblings survive…
     expect(v3.live).toBe(true);
-    expect((v3.hotSet as Record<string, unknown>).halfLifeDays).toBe(14);
+    expect(jsonObjectSchema.parse(v3.hotSet).halfLifeDays).toBe(14);
     expect(edge.hubDegree).toBe(30);
-    expect((v3.learnedEdges as Record<string, unknown>).perSeed).toBe(3);
+    expect(jsonObjectSchema.parse(v3.learnedEdges).perSeed).toBe(3);
 
     // …and re-parsing yields the restored full profile.
     const parsed = MemoryV3ConfigSchema.parse(v3);
@@ -131,9 +130,7 @@ describe("117-normalize-stale-lean-memory-v3-defaults migration", () => {
     // the all-lean signature, so the migration leaves it alone rather than
     // partially rewriting an explicit config.
     const config = leanSeedConfig();
-    (
-      (config.memory as Record<string, unknown>).v3 as Record<string, unknown>
-    ).needleK = 50;
+    config.memory.v3.needleK = 50;
     const original = JSON.stringify(config);
     writeFileSync(configPath, original, "utf-8");
 

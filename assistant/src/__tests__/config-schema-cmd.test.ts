@@ -2,6 +2,8 @@ import { existsSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, mock, test } from "bun:test";
 
+import { jsonObjectSchema } from "./helpers/json-object-schema.js";
+
 // ---------------------------------------------------------------------------
 // Mocks - declared before imports that depend on platform/logger/ipc
 // ---------------------------------------------------------------------------
@@ -86,11 +88,13 @@ describe("getSchemaAtPath", () => {
     );
     expect(result).not.toBeNull();
     // Verify we can produce JSON Schema with the expected properties
-    const jsonSchema = z.toJSONSchema(result!, {
-      unrepresentable: "any",
-      io: "input",
-    }) as Record<string, unknown>;
-    const properties = jsonSchema.properties as Record<string, unknown>;
+    const jsonSchema = jsonObjectSchema.parse(
+      z.toJSONSchema(result!, {
+        unrepresentable: "any",
+        io: "input",
+      }),
+    );
+    const properties = jsonObjectSchema.parse(jsonSchema.properties);
     expect(properties).toBeDefined();
     expect(properties.targetTokens).toBeDefined();
     expect(properties.overlapTokens).toBeDefined();
@@ -100,11 +104,13 @@ describe("getSchemaAtPath", () => {
     const result = getSchemaAtPath(AssistantConfigSchema, "calls");
     expect(result).not.toBeNull();
     // Verify we can produce JSON Schema with the expected properties
-    const jsonSchema = z.toJSONSchema(result!, {
-      unrepresentable: "any",
-      io: "input",
-    }) as Record<string, unknown>;
-    const properties = jsonSchema.properties as Record<string, unknown>;
+    const jsonSchema = jsonObjectSchema.parse(
+      z.toJSONSchema(result!, {
+        unrepresentable: "any",
+        io: "input",
+      }),
+    );
+    const properties = jsonObjectSchema.parse(jsonSchema.properties);
     expect(properties).toBeDefined();
     expect(properties.enabled).toBeDefined();
     expect(properties.voice).toBeDefined();
@@ -116,11 +122,13 @@ describe("getSchemaAtPath", () => {
     expect(result).not.toBeNull();
     // ingress uses .transform() which creates a pipe — getSchemaAtPath
     // must unwrap through the pipe to reach the input object shape
-    const jsonSchema = z.toJSONSchema(result!, {
-      unrepresentable: "any",
-      io: "input",
-    }) as Record<string, unknown>;
-    const properties = jsonSchema.properties as Record<string, unknown>;
+    const jsonSchema = jsonObjectSchema.parse(
+      z.toJSONSchema(result!, {
+        unrepresentable: "any",
+        io: "input",
+      }),
+    );
+    const properties = jsonObjectSchema.parse(jsonSchema.properties);
     expect(properties).toBeDefined();
     expect(properties.enabled).toBeDefined();
     expect(properties.webhook).toBeDefined();
@@ -130,11 +138,13 @@ describe("getSchemaAtPath", () => {
   test("navigates nested path through .transform() wrapper (ingress.webhook)", () => {
     const result = getSchemaAtPath(AssistantConfigSchema, "ingress.webhook");
     expect(result).not.toBeNull();
-    const jsonSchema = z.toJSONSchema(result!, {
-      unrepresentable: "any",
-      io: "input",
-    }) as Record<string, unknown>;
-    const properties = jsonSchema.properties as Record<string, unknown>;
+    const jsonSchema = jsonObjectSchema.parse(
+      z.toJSONSchema(result!, {
+        unrepresentable: "any",
+        io: "input",
+      }),
+    );
+    const properties = jsonObjectSchema.parse(jsonSchema.properties);
     expect(properties).toBeDefined();
     expect(properties.secret).toBeDefined();
     expect(properties.timeoutMs).toBeDefined();
@@ -164,12 +174,14 @@ describe("getSchemaAtPath", () => {
 
 describe("z.toJSONSchema integration", () => {
   test("full schema produces valid JSON Schema with type object and properties", () => {
-    const jsonSchema = z.toJSONSchema(AssistantConfigSchema, {
-      unrepresentable: "any",
-      io: "input",
-    }) as Record<string, unknown>;
+    const jsonSchema = jsonObjectSchema.parse(
+      z.toJSONSchema(AssistantConfigSchema, {
+        unrepresentable: "any",
+        io: "input",
+      }),
+    );
     expect(jsonSchema.type).toBe("object");
-    const properties = jsonSchema.properties as Record<string, unknown>;
+    const properties = jsonObjectSchema.parse(jsonSchema.properties);
     expect(properties).toBeDefined();
     // Check that top-level keys are present
     expect(properties.services).toBeDefined();
@@ -181,15 +193,17 @@ describe("z.toJSONSchema integration", () => {
   });
 
   test("full schema emits real properties for transformed fields (ingress)", () => {
-    const jsonSchema = z.toJSONSchema(AssistantConfigSchema, {
-      unrepresentable: "any",
-      io: "input",
-    }) as Record<string, unknown>;
-    const properties = jsonSchema.properties as Record<string, unknown>;
-    const ingress = properties.ingress as Record<string, unknown>;
+    const jsonSchema = jsonObjectSchema.parse(
+      z.toJSONSchema(AssistantConfigSchema, {
+        unrepresentable: "any",
+        io: "input",
+      }),
+    );
+    const properties = jsonObjectSchema.parse(jsonSchema.properties);
+    const ingress = jsonObjectSchema.parse(properties.ingress);
     // Without io: "input", transforms produce empty {} — verify we get real content
     expect(ingress.properties).toBeDefined();
-    const ingressProps = ingress.properties as Record<string, unknown>;
+    const ingressProps = jsonObjectSchema.parse(ingress.properties);
     expect(ingressProps.enabled).toBeDefined();
     expect(ingressProps.webhook).toBeDefined();
     expect(ingressProps.rateLimit).toBeDefined();
@@ -198,10 +212,12 @@ describe("z.toJSONSchema integration", () => {
   test("sub-schema at calls produces JSON Schema with expected properties", () => {
     const callsSchema = getSchemaAtPath(AssistantConfigSchema, "calls");
     expect(callsSchema).not.toBeNull();
-    const jsonSchema = z.toJSONSchema(callsSchema!, {
-      unrepresentable: "any",
-      io: "input",
-    }) as Record<string, unknown>;
+    const jsonSchema = jsonObjectSchema.parse(
+      z.toJSONSchema(callsSchema!, {
+        unrepresentable: "any",
+        io: "input",
+      }),
+    );
     const properties = jsonSchema.properties as
       | Record<string, unknown>
       | undefined;
@@ -217,10 +233,12 @@ describe("z.toJSONSchema integration", () => {
       "llm.profileSession.defaultTtlSeconds",
     );
     expect(maxTokensSchema).not.toBeNull();
-    const jsonSchema = z.toJSONSchema(maxTokensSchema!, {
-      unrepresentable: "any",
-      io: "input",
-    }) as Record<string, unknown>;
+    const jsonSchema = jsonObjectSchema.parse(
+      z.toJSONSchema(maxTokensSchema!, {
+        unrepresentable: "any",
+        io: "input",
+      }),
+    );
     expect(jsonSchema.type).toBe("integer");
   });
 
@@ -230,10 +248,12 @@ describe("z.toJSONSchema integration", () => {
       "memory.segmentation",
     );
     expect(segSchema).not.toBeNull();
-    const jsonSchema = z.toJSONSchema(segSchema!, {
-      unrepresentable: "any",
-      io: "input",
-    }) as Record<string, unknown>;
+    const jsonSchema = jsonObjectSchema.parse(
+      z.toJSONSchema(segSchema!, {
+        unrepresentable: "any",
+        io: "input",
+      }),
+    );
     expect(jsonSchema.type).toBe("object");
     const properties = jsonSchema.properties as
       | Record<string, unknown>

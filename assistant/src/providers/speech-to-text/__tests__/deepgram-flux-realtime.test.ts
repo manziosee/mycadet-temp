@@ -1,3 +1,4 @@
+import assert from "node:assert/strict";
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 
 import { setConfig } from "../../../__tests__/helpers/set-config.js";
@@ -404,8 +405,8 @@ describe("DeepgramFluxRealtimeTranscriber", () => {
       mockWs.simulateClose(1008, "invalid credentials");
 
       const err = await startPromise.catch((e: unknown) => e);
-      expect(err).toBeInstanceOf(SttError);
-      expect((err as SttError).category).toBe("auth");
+      assert(err instanceof SttError, "Expected SttError");
+      expect(err.category).toBe("auth");
     });
 
     test("a connect timeout rejects with a timeout SttError", async () => {
@@ -414,8 +415,8 @@ describe("DeepgramFluxRealtimeTranscriber", () => {
       });
 
       const err = await transcriber.start(() => {}).catch((e: unknown) => e);
-      expect(err).toBeInstanceOf(SttError);
-      expect((err as SttError).category).toBe("timeout");
+      assert(err instanceof SttError, "Expected SttError");
+      expect(err.category).toBe("timeout");
     });
 
     test("an in-session auth close emits an auth error then closed", async () => {

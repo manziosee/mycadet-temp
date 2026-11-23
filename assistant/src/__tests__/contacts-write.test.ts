@@ -7,9 +7,9 @@
  * `CADET_WORKSPACE_DIR` to a per-file temp directory, so all filesystem
  * writes land under that temp dir and are cleaned up automatically.
  */
-
 import { existsSync } from "node:fs";
 import { join } from "node:path";
+import type { SQLQueryBindings } from "bun:sqlite";
 import { beforeEach, describe, expect, test } from "bun:test";
 
 import { upsertContactChannel } from "../contacts/contacts-write.js";
@@ -32,28 +32,33 @@ function channelOwnerById(channelId: string): string | undefined {
 
 function channelCount(type: string, address: string): number {
   const row = getSqlite()
-    .query(
-      "SELECT COUNT(*) AS n FROM contact_channels WHERE type = ? AND address = ? COLLATE NOCASE",
-    )
-    .get(type, address) as { n: number };
+    .query<
+      { n: number },
+      SQLQueryBindings[]
+    >("SELECT COUNT(*) AS n FROM contact_channels WHERE type = ? AND address = ? COLLATE NOCASE")
+    .get(type, address)!;
   return row.n;
 }
 
 function contactExists(contactId: string): boolean {
   // bun:sqlite .get() returns null (not undefined) when no row matches.
   const row = getSqlite()
-    .query("SELECT 1 AS one FROM contacts WHERE id = ?")
-    .get(contactId) as { one: number } | null;
+    .query<
+      { one: number },
+      SQLQueryBindings[]
+    >("SELECT 1 AS one FROM contacts WHERE id = ?")
+    .get(contactId);
   return row !== null;
 }
 
 /** Contacts parenting zero channels: the guardian-duplicate shape. */
 function channelLessContactCount(): number {
   const row = getSqlite()
-    .query(
-      "SELECT COUNT(*) AS n FROM contacts c WHERE NOT EXISTS (SELECT 1 FROM contact_channels ch WHERE ch.contact_id = c.id)",
-    )
-    .get() as { n: number };
+    .query<
+      { n: number },
+      []
+    >("SELECT COUNT(*) AS n FROM contacts c WHERE NOT EXISTS (SELECT 1 FROM contact_channels ch WHERE ch.contact_id = c.id)")
+    .get()!;
   return row.n;
 }
 

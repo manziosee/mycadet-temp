@@ -15,7 +15,7 @@ import {
   getMessages,
 } from "../persistence/conversation-crud.js";
 import { isLastUserMessageToolResult } from "../persistence/conversation-queries.js";
-import { getDb } from "../persistence/db-connection.js";
+import { getDb, getSqlite } from "../persistence/db-connection.js";
 import { initializeDb } from "../persistence/db-init.js";
 // Initialize db once before all tests
 await initializeDb();
@@ -289,11 +289,7 @@ describe("attachment orphan cleanup", () => {
     deleteLastExchange(conv.id);
 
     // Attachment row should be gone
-    const raw = (
-      getDb() as unknown as {
-        $client: import("bun:sqlite").Database;
-      }
-    ).$client;
+    const raw = getSqlite();
     const remaining = raw
       .query<{ c: number }, []>("SELECT COUNT(*) AS c FROM attachments")
       .get()!;
@@ -314,11 +310,7 @@ describe("attachment orphan cleanup", () => {
     deleteLastExchange(conv.id);
 
     // Attachment should survive because msg1 still links to it
-    const raw = (
-      getDb() as unknown as {
-        $client: import("bun:sqlite").Database;
-      }
-    ).$client;
+    const raw = getSqlite();
     const remaining = raw
       .query<{ c: number }, []>("SELECT COUNT(*) AS c FROM attachments")
       .get()!;
@@ -337,11 +329,7 @@ describe("attachment orphan cleanup", () => {
 
     await clearAll();
 
-    const raw = (
-      getDb() as unknown as {
-        $client: import("bun:sqlite").Database;
-      }
-    ).$client;
+    const raw = getSqlite();
     const attachmentCount = raw
       .query<{ c: number }, []>("SELECT COUNT(*) AS c FROM attachments")
       .get()!;
@@ -370,11 +358,7 @@ describe("attachment orphan cleanup", () => {
 
     deleteLastExchange(conv.id);
 
-    const raw = (
-      getDb() as unknown as {
-        $client: import("bun:sqlite").Database;
-      }
-    ).$client;
+    const raw = getSqlite();
     const remaining = raw
       .query<{ c: number }, []>("SELECT COUNT(*) AS c FROM attachments")
       .get()!;

@@ -8,6 +8,8 @@ import {
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
+import { jsonObjectSchema } from "./helpers/json-object-schema.js";
+
 // ---------------------------------------------------------------------------
 // Mocks — declared before imports that depend on platform/logger
 // ---------------------------------------------------------------------------
@@ -274,10 +276,10 @@ describe("AssistantConfigSchema", () => {
       thinking: { enabled: false, streamThinking: false },
     };
     const result = AssistantConfigSchema.parse(input);
-    expect((result as Record<string, unknown>).maxTokens).toBeUndefined();
-    expect((result as Record<string, unknown>).effort).toBeUndefined();
-    expect((result as Record<string, unknown>).speed).toBeUndefined();
-    expect((result as Record<string, unknown>).thinking).toBeUndefined();
+    expect(jsonObjectSchema.parse(result).maxTokens).toBeUndefined();
+    expect(jsonObjectSchema.parse(result).effort).toBeUndefined();
+    expect(jsonObjectSchema.parse(result).speed).toBeUndefined();
+    expect(jsonObjectSchema.parse(result).thinking).toBeUndefined();
     expect(result.llm.profiles).toEqual({});
     expect(result.llm.callSites).toEqual({});
   });
@@ -915,7 +917,7 @@ describe("AssistantConfigSchema", () => {
         commitMessageLLM: { maxTokens: 200, temperature: 0.5 },
       },
     });
-    const cm = result.workspaceGit.commitMessageLLM as Record<string, unknown>;
+    const cm = jsonObjectSchema.parse(result.workspaceGit.commitMessageLLM);
     expect(cm.maxTokens).toBeUndefined();
     expect(cm.temperature).toBeUndefined();
   });
@@ -1158,9 +1160,7 @@ describe("AssistantConfigSchema", () => {
     const result = AssistantConfigSchema.parse({
       calls: { voice: { language: "es-ES" } },
     });
-    expect(
-      (result.calls.voice as Record<string, unknown>).language,
-    ).toBeUndefined();
+    expect(jsonObjectSchema.parse(result.calls.voice).language).toBeUndefined();
   });
 
   test("rejects calls.voice.utteranceEndMs outside the 1000-5000 range", () => {
@@ -1204,7 +1204,7 @@ describe("AssistantConfigSchema", () => {
       calls: { voice: { transcriptionProvider: "Google" } },
     });
     expect(
-      (result.calls.voice as Record<string, unknown>).transcriptionProvider,
+      jsonObjectSchema.parse(result.calls.voice).transcriptionProvider,
     ).toBeUndefined();
   });
 
@@ -1214,7 +1214,7 @@ describe("AssistantConfigSchema", () => {
     const result = AssistantConfigSchema.parse({
       calls: { model: "claude-haiku-4-5-20251001" },
     });
-    expect((result.calls as Record<string, unknown>).model).toBeUndefined();
+    expect(jsonObjectSchema.parse(result.calls).model).toBeUndefined();
   });
 
   // ── Caller identity config ────────────────────────────────────────
@@ -1250,7 +1250,7 @@ describe("AssistantConfigSchema", () => {
       },
     });
     expect(
-      (result.calls.callerIdentity as Record<string, unknown>).defaultMode,
+      jsonObjectSchema.parse(result.calls.callerIdentity).defaultMode,
     ).toBeUndefined();
     expect(result.calls.callerIdentity.allowPerCallOverride).toBe(true);
   });
@@ -2122,9 +2122,9 @@ describe("032-tts-provider-unification migration", () => {
   }
 
   function readMigConfig(): Record<string, unknown> {
-    return JSON.parse(
-      readFileSync(join(migrationDir, "config.json"), "utf-8"),
-    ) as Record<string, unknown>;
+    return jsonObjectSchema.parse(
+      JSON.parse(readFileSync(join(migrationDir, "config.json"), "utf-8")),
+    );
   }
 
   test("backfills provider from calls.voice.ttsProvider", async () => {
@@ -2135,10 +2135,9 @@ describe("032-tts-provider-unification migration", () => {
       await import("../workspace/migrations/032-tts-provider-unification.js");
     await ttsProviderUnificationMigration.run(migrationDir);
     const result = readMigConfig();
-    const tts = (result.services as Record<string, unknown>).tts as Record<
-      string,
-      unknown
-    >;
+    const tts = jsonObjectSchema.parse(
+      jsonObjectSchema.parse(result.services).tts,
+    );
     expect(tts.provider).toBe("fish-audio");
     expect(tts.mode).toBe("your-own");
   });
@@ -2152,10 +2151,9 @@ describe("032-tts-provider-unification migration", () => {
       await import("../workspace/migrations/032-tts-provider-unification.js");
     await ttsProviderUnificationMigration.run(migrationDir);
     const result = readMigConfig();
-    const tts = (result.services as Record<string, unknown>).tts as Record<
-      string,
-      unknown
-    >;
+    const tts = jsonObjectSchema.parse(
+      jsonObjectSchema.parse(result.services).tts,
+    );
     const providers = tts.providers as Record<string, Record<string, unknown>>;
     expect(providers.elevenlabs.voiceId).toBe("my-voice");
     expect(providers.elevenlabs.speed).toBe(0.8);
@@ -2170,10 +2168,9 @@ describe("032-tts-provider-unification migration", () => {
       await import("../workspace/migrations/032-tts-provider-unification.js");
     await ttsProviderUnificationMigration.run(migrationDir);
     const result = readMigConfig();
-    const tts = (result.services as Record<string, unknown>).tts as Record<
-      string,
-      unknown
-    >;
+    const tts = jsonObjectSchema.parse(
+      jsonObjectSchema.parse(result.services).tts,
+    );
     const providers = tts.providers as Record<string, Record<string, unknown>>;
     expect(providers["fish-audio"].referenceId).toBe("my-ref");
     expect(providers["fish-audio"].format).toBe("wav");
@@ -2190,22 +2187,14 @@ describe("032-tts-provider-unification migration", () => {
     const result = readMigConfig();
     // Legacy keys removed
     expect(
-      (
-        (result.calls as Record<string, unknown>).voice as Record<
-          string,
-          unknown
-        >
-      ).ttsProvider,
+      jsonObjectSchema.parse(jsonObjectSchema.parse(result.calls).voice)
+        .ttsProvider,
     ).toBeUndefined();
     expect(result.elevenlabs).toBeUndefined();
     // Other voice fields preserved
     expect(
-      (
-        (result.calls as Record<string, unknown>).voice as Record<
-          string,
-          unknown
-        >
-      ).language,
+      jsonObjectSchema.parse(jsonObjectSchema.parse(result.calls).voice)
+        .language,
     ).toBe("en-US");
   });
 
@@ -2232,10 +2221,9 @@ describe("032-tts-provider-unification migration", () => {
       await import("../workspace/migrations/032-tts-provider-unification.js");
     await ttsProviderUnificationMigration.run(migrationDir);
     const result = readMigConfig();
-    const tts = (result.services as Record<string, unknown>).tts as Record<
-      string,
-      unknown
-    >;
+    const tts = jsonObjectSchema.parse(
+      jsonObjectSchema.parse(result.services).tts,
+    );
     // Should keep the existing canonical value, not the legacy one
     expect(tts.provider).toBe("elevenlabs");
   });
@@ -2255,10 +2243,9 @@ describe("032-tts-provider-unification migration", () => {
       await import("../workspace/migrations/032-tts-provider-unification.js");
     await ttsProviderUnificationMigration.run(migrationDir);
     const result = readMigConfig();
-    const tts = (result.services as Record<string, unknown>).tts as Record<
-      string,
-      unknown
-    >;
+    const tts = jsonObjectSchema.parse(
+      jsonObjectSchema.parse(result.services).tts,
+    );
     const providers = tts.providers as Record<string, Record<string, unknown>>;
     // Canonical voiceId preserved, legacy speed backfilled
     expect(providers.elevenlabs.voiceId).toBe("canonical-voice");
@@ -2289,7 +2276,7 @@ describe("032-tts-provider-unification migration", () => {
       await import("../workspace/migrations/032-tts-provider-unification.js");
     await ttsProviderUnificationMigration.down(migrationDir);
     const result = readMigConfig();
-    const services = result.services as Record<string, unknown>;
+    const services = jsonObjectSchema.parse(result.services);
     expect(services.tts).toBeUndefined();
     // Other services keys preserved
     expect(services["image-generation"]).toBeDefined();
@@ -2591,16 +2578,14 @@ describe("getConfig with schema validation", () => {
     expect(config.calls.maxDurationSeconds).toBe(3600);
     expect(config.calls.userConsultTimeoutSeconds).toBe(120);
     expect(config.calls.disclosure.enabled).toBe(true);
+    expect(jsonObjectSchema.parse(config.calls.voice).language).toBeUndefined();
     expect(
-      (config.calls.voice as Record<string, unknown>).language,
+      jsonObjectSchema.parse(config.calls.voice).transcriptionProvider,
     ).toBeUndefined();
     expect(
-      (config.calls.voice as Record<string, unknown>).transcriptionProvider,
+      jsonObjectSchema.parse(config.calls.voice).ttsProvider,
     ).toBeUndefined();
-    expect(
-      (config.calls.voice as Record<string, unknown>).ttsProvider,
-    ).toBeUndefined();
-    expect((config.calls as Record<string, unknown>).model).toBeUndefined();
+    expect(jsonObjectSchema.parse(config.calls).model).toBeUndefined();
     expect(config.calls.callerIdentity).toEqual({
       allowPerCallOverride: true,
     });

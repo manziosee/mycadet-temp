@@ -1,3 +1,4 @@
+import type { SQLQueryBindings } from "bun:sqlite";
 import { Database } from "bun:sqlite";
 import { describe, expect, test } from "bun:test";
 
@@ -29,24 +30,36 @@ function createTestDb() {
 
 function parentOf(sqlite: Database, conversationId: string): unknown {
   const row = sqlite
-    .query("SELECT parent_conversation_id FROM conversations WHERE id = ?")
-    .get(conversationId) as { parent_conversation_id: unknown };
+    .query<
+      { parent_conversation_id: unknown },
+      SQLQueryBindings[]
+    >("SELECT parent_conversation_id FROM conversations WHERE id = ?")
+    .get(conversationId)!;
   return row.parent_conversation_id;
 }
 
 function columnInfo(sqlite: Database) {
-  return sqlite.query("PRAGMA table_info(conversations)").all() as Array<{
-    name: string;
-    notnull: number;
-  }>;
+  return sqlite
+    .query<
+      {
+        name: string;
+        notnull: number;
+      },
+      []
+    >("PRAGMA table_info(conversations)")
+    .all();
 }
 
 function indexNames(sqlite: Database): string[] {
-  return (
-    sqlite.query("PRAGMA index_list(conversations)").all() as Array<{
-      name: string;
-    }>
-  ).map((i) => i.name);
+  return sqlite
+    .query<
+      {
+        name: string;
+      },
+      []
+    >("PRAGMA index_list(conversations)")
+    .all()
+    .map((i) => i.name);
 }
 
 describe("migration 342: conversations.parent_conversation_id", () => {

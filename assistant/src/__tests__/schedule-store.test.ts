@@ -10,7 +10,7 @@ import {
   setConversationInferenceProfile,
   setConversationInferenceProfileSession,
 } from "../persistence/conversation-crud.js";
-import { getDb } from "../persistence/db-connection.js";
+import { getDb, getSqlite } from "../persistence/db-connection.js";
 import { initializeDb } from "../persistence/db-init.js";
 import { isPluginDirActivated } from "../plugins/mtime-cache.js";
 import { assistantEventHub } from "../runtime/assistant-event-hub.js";
@@ -47,8 +47,7 @@ await initializeDb();
 
 /** Access the underlying bun:sqlite Database for raw parameterized queries. */
 function getRawDb(): import("bun:sqlite").Database {
-  return (getDb() as unknown as { $client: import("bun:sqlite").Database })
-    .$client;
+  return getSqlite();
 }
 
 async function waitFor(predicate: () => boolean): Promise<void> {

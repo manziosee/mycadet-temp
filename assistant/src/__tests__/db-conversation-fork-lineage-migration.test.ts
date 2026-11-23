@@ -16,11 +16,15 @@ function createTestDb() {
 }
 
 function getColumnNames(raw: Database): string[] {
-  return (
-    raw.query(`PRAGMA table_info(conversations)`).all() as Array<{
-      name: string;
-    }>
-  ).map((column) => column.name);
+  return raw
+    .query<
+      {
+        name: string;
+      },
+      []
+    >(`PRAGMA table_info(conversations)`)
+    .all()
+    .map((column) => column.name);
 }
 
 function hasIndex(raw: Database, indexName: string): boolean {
@@ -82,16 +86,20 @@ describe("conversation fork lineage migration", () => {
       true,
     );
 
-    const forkColumns = (
-      raw.query(`PRAGMA table_info(conversations)`).all() as Array<{
-        name: string;
-        notnull: number;
-      }>
-    ).filter(
-      (column) =>
-        column.name === "fork_parent_conversation_id" ||
-        column.name === "fork_parent_message_id",
-    );
+    const forkColumns = raw
+      .query<
+        {
+          name: string;
+          notnull: number;
+        },
+        []
+      >(`PRAGMA table_info(conversations)`)
+      .all()
+      .filter(
+        (column) =>
+          column.name === "fork_parent_conversation_id" ||
+          column.name === "fork_parent_message_id",
+      );
 
     expect(forkColumns).toHaveLength(2);
     expect(forkColumns.every((column) => column.notnull === 0)).toBe(true);
@@ -134,15 +142,18 @@ describe("conversation fork lineage migration", () => {
     );
 
     const row = raw
-      .query(
+      .query<
+        {
+          id: string;
+          title: string | null;
+          fork_parent_conversation_id: string | null;
+          fork_parent_message_id: string | null;
+        },
+        []
+      >(
         `SELECT id, title, fork_parent_conversation_id, fork_parent_message_id FROM conversations WHERE id = 'conv-upgrade'`,
       )
-      .get() as {
-      id: string;
-      title: string | null;
-      fork_parent_conversation_id: string | null;
-      fork_parent_message_id: string | null;
-    } | null;
+      .get();
 
     expect(row).toEqual({
       id: "conv-upgrade",
@@ -191,13 +202,16 @@ describe("conversation fork lineage migration", () => {
     expect(() => migrateConversationForkLineage(db)).not.toThrow();
 
     const row = raw
-      .query(
+      .query<
+        {
+          fork_parent_conversation_id: string | null;
+          fork_parent_message_id: string | null;
+        },
+        []
+      >(
         `SELECT fork_parent_conversation_id, fork_parent_message_id FROM conversations WHERE id = 'conv-rerun'`,
       )
-      .get() as {
-      fork_parent_conversation_id: string | null;
-      fork_parent_message_id: string | null;
-    } | null;
+      .get();
 
     expect(row).toEqual({
       fork_parent_conversation_id: "conv-parent",

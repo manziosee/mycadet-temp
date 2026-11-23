@@ -1,3 +1,4 @@
+import type { SQLQueryBindings } from "bun:sqlite";
 /**
  * Tests for migration 335: collapsing duplicate pending memory-v2 maintenance
  * jobs (`memory_v2_reembed` / `memory_v3_maintain` duplicates, the full
@@ -42,29 +43,32 @@ function seedJob(
 }
 
 function idsWhere(type: string, status: string): string[] {
-  return (
-    getMemorySqlite()!
-      .query(
-        `SELECT id FROM memory_jobs WHERE type = ? AND status = ? ORDER BY rowid`,
-      )
-      .all(type, status) as Array<{ id: string }>
-  ).map((row) => row.id);
+  return getMemorySqlite()!
+    .query<{ id: string }, SQLQueryBindings[]>(
+      `SELECT id FROM memory_jobs WHERE type = ? AND status = ? ORDER BY rowid`,
+    )
+    .all(type, status)
+    .map((row) => row.id);
 }
 
 function statusOf(id: string): string | undefined {
   const row = getMemorySqlite()!
-    .query(`SELECT status FROM memory_jobs WHERE id = ?`)
-    .get(id) as { status: string } | null;
+    .query<
+      { status: string },
+      SQLQueryBindings[]
+    >(`SELECT status FROM memory_jobs WHERE id = ?`)
+    .get(id);
   return row?.status;
 }
 
 /** Full queue snapshot for idempotency comparisons. */
 function snapshot(): Array<{ type: string; status: string; payload: string }> {
   return getMemorySqlite()!
-    .query(
-      `SELECT type, status, payload FROM memory_jobs ORDER BY type, status, payload`,
-    )
-    .all() as Array<{ type: string; status: string; payload: string }>;
+    .query<
+      { type: string; status: string; payload: string },
+      []
+    >(`SELECT type, status, payload FROM memory_jobs ORDER BY type, status, payload`)
+    .all();
 }
 
 beforeEach(() => {

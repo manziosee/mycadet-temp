@@ -24,21 +24,24 @@ function createTestDb() {
 }
 
 function columnNames(sqlite: Database): string[] {
-  return (
-    sqlite.query("PRAGMA table_info(conversations)").all() as Array<{
-      name: string;
-    }>
-  ).map((c) => c.name);
+  return sqlite
+    .query<
+      {
+        name: string;
+      },
+      []
+    >("PRAGMA table_info(conversations)")
+    .all()
+    .map((c) => c.name);
 }
 
 function indexNames(sqlite: Database): string[] {
-  return (
-    sqlite
-      .query(
-        "SELECT name FROM sqlite_master WHERE type = 'index' AND tbl_name = 'conversations'",
-      )
-      .all() as Array<{ name: string }>
-  ).map((i) => i.name);
+  return sqlite
+    .query<{ name: string }, []>(
+      "SELECT name FROM sqlite_master WHERE type = 'index' AND tbl_name = 'conversations'",
+    )
+    .all()
+    .map((i) => i.name);
 }
 
 describe("migration 280: conversations surfaced_at", () => {
@@ -48,13 +51,17 @@ describe("migration 280: conversations surfaced_at", () => {
 
     migrateConversationsSurfacedAt(db);
 
-    const column = (
-      sqlite.query("PRAGMA table_info(conversations)").all() as Array<{
-        name: string;
-        notnull: number;
-        dflt_value: string | null;
-      }>
-    ).find((c) => c.name === "surfaced_at");
+    const column = sqlite
+      .query<
+        {
+          name: string;
+          notnull: number;
+          dflt_value: string | null;
+        },
+        []
+      >("PRAGMA table_info(conversations)")
+      .all()
+      .find((c) => c.name === "surfaced_at");
     expect(column).toBeDefined();
     expect(column?.notnull).toBe(0);
     expect(indexNames(sqlite)).toContain("idx_conversations_surfaced_at");
@@ -70,8 +77,11 @@ describe("migration 280: conversations surfaced_at", () => {
     migrateConversationsSurfacedAt(db);
 
     const row = sqlite
-      .query("SELECT surfaced_at FROM conversations WHERE id = 'conv-1'")
-      .get() as { surfaced_at: number | null };
+      .query<
+        { surfaced_at: number | null },
+        []
+      >("SELECT surfaced_at FROM conversations WHERE id = 'conv-1'")
+      .get()!;
     expect(row.surfaced_at).toBeNull();
   });
 

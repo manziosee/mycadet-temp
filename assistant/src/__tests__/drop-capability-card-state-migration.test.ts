@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 
 import { drizzle } from "drizzle-orm/bun-sqlite";
 
+import { getSqliteFrom } from "../persistence/db-connection.js";
 import { migrateDropCapabilityCardState } from "../persistence/migrations/176-drop-capability-card-state.js";
 import * as schema from "../persistence/schema/index.js";
 
@@ -16,7 +17,7 @@ function createTestDb() {
 type TestDb = ReturnType<typeof createTestDb>;
 
 function getRawSqlite(db: TestDb): Database {
-  return (db as unknown as { $client: Database }).$client;
+  return getSqliteFrom(db);
 }
 
 function createLegacyCapabilityCardTables(raw: Database) {

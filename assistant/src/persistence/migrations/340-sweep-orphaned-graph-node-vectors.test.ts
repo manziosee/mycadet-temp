@@ -57,36 +57,33 @@ function seedEmbedding(
 }
 
 function embeddingIds(): string[] {
-  return (
-    mainRaw()
-      .query(`SELECT id FROM memory_embeddings ORDER BY id`)
-      .all() as Array<{ id: string }>
-  ).map((row) => row.id);
+  return mainRaw()
+    .query<{ id: string }, []>(`SELECT id FROM memory_embeddings ORDER BY id`)
+    .all()
+    .map((row) => row.id);
 }
 
 /** Distinct targetIds of pending delete_qdrant_vectors jobs, sorted. */
 function qdrantDeletionTargets(): string[] {
-  return (
-    getMemorySqlite()!
-      .query(
-        `SELECT json_extract(payload, '$.targetId') AS t
+  return getMemorySqlite()!
+    .query<{ t: string }, []>(
+      `SELECT json_extract(payload, '$.targetId') AS t
          FROM memory_jobs
          WHERE type = 'delete_qdrant_vectors' AND status = 'pending'
          ORDER BY t`,
-      )
-      .all() as Array<{ t: string }>
-  ).map((row) => row.t);
+    )
+    .all()
+    .map((row) => row.t);
 }
 
 function jobIds(): string[] {
-  return (
-    getMemorySqlite()!
-      .query(
-        `SELECT id FROM memory_jobs
+  return getMemorySqlite()!
+    .query<{ id: string }, []>(
+      `SELECT id FROM memory_jobs
          WHERE type = 'delete_qdrant_vectors' ORDER BY id`,
-      )
-      .all() as Array<{ id: string }>
-  ).map((row) => row.id);
+    )
+    .all()
+    .map((row) => row.id);
 }
 
 beforeEach(() => {

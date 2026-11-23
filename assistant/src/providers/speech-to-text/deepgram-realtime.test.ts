@@ -9,6 +9,13 @@ const TEST_API_KEY = "dg-test-key-for-streaming";
 // Mock WebSocket
 // ---------------------------------------------------------------------------
 
+// The test constructor returns a socket double with only the members the transcriber uses.
+function installMockWebSocket(
+  constructor: new (...args: never[]) => object,
+): void {
+  Object.defineProperty(globalThis, "WebSocket", { value: constructor });
+}
+
 type WsEventType = "open" | "close" | "error" | "message";
 type WsListener = (...args: unknown[]) => void;
 
@@ -169,27 +176,29 @@ function createEventCollector(): {
 
 describe("DeepgramRealtimeTranscriber", () => {
   let mockWs: MockWebSocket;
-  let originalWebSocket: unknown;
+  let originalWebSocket: typeof WebSocket;
 
   beforeEach(() => {
     mockWs = new MockWebSocket();
-    originalWebSocket = (globalThis as Record<string, unknown>).WebSocket;
+    originalWebSocket = globalThis.WebSocket;
 
     // Replace global WebSocket with a factory that returns our mock.
-    (globalThis as Record<string, unknown>).WebSocket = class {
-      constructor(
-        _url: string,
-        _options?: { headers?: Record<string, string> },
-      ) {
-        // Immediately schedule the mock's open event for the next microtask
-        // so start() can attach its handlers first.
-        return mockWs;
-      }
-    };
+    installMockWebSocket(
+      class {
+        constructor(
+          _url: string,
+          _options?: { headers?: Record<string, string> },
+        ) {
+          // Immediately schedule the mock's open event for the next microtask
+          // so start() can attach its handlers first.
+          return mockWs;
+        }
+      },
+    );
   });
 
   afterEach(() => {
-    (globalThis as Record<string, unknown>).WebSocket = originalWebSocket;
+    globalThis.WebSocket = originalWebSocket;
   });
 
   // ── Helper: start a session ────────────────────────────────────────
@@ -508,13 +517,15 @@ describe("DeepgramRealtimeTranscriber", () => {
 
   test("forwards diarize=true to the Deepgram WebSocket URL", async () => {
     let capturedUrl: string | undefined;
-    const origWs = (globalThis as Record<string, unknown>).WebSocket;
-    (globalThis as Record<string, unknown>).WebSocket = class {
-      constructor(url: string) {
-        capturedUrl = url;
-        return mockWs;
-      }
-    };
+    const origWs = globalThis.WebSocket;
+    installMockWebSocket(
+      class {
+        constructor(url: string) {
+          capturedUrl = url;
+          return mockWs;
+        }
+      },
+    );
 
     const transcriber = new DeepgramRealtimeTranscriber(TEST_API_KEY, {
       diarize: true,
@@ -527,18 +538,20 @@ describe("DeepgramRealtimeTranscriber", () => {
     const url = new URL(capturedUrl!);
     expect(url.searchParams.get("diarize")).toBe("true");
 
-    (globalThis as Record<string, unknown>).WebSocket = origWs;
+    globalThis.WebSocket = origWs;
   });
 
   test("omits diarize param when diarization is disabled (default)", async () => {
     let capturedUrl: string | undefined;
-    const origWs = (globalThis as Record<string, unknown>).WebSocket;
-    (globalThis as Record<string, unknown>).WebSocket = class {
-      constructor(url: string) {
-        capturedUrl = url;
-        return mockWs;
-      }
-    };
+    const origWs = globalThis.WebSocket;
+    installMockWebSocket(
+      class {
+        constructor(url: string) {
+          capturedUrl = url;
+          return mockWs;
+        }
+      },
+    );
 
     const transcriber = new DeepgramRealtimeTranscriber(TEST_API_KEY);
     const { onEvent } = createEventCollector();
@@ -549,7 +562,7 @@ describe("DeepgramRealtimeTranscriber", () => {
     const url = new URL(capturedUrl!);
     expect(url.searchParams.get("diarize")).toBeNull();
 
-    (globalThis as Record<string, unknown>).WebSocket = origWs;
+    globalThis.WebSocket = origWs;
   });
 
   // ─────────────────────────────────────────────────────────────────
@@ -1689,14 +1702,19 @@ describe("DeepgramRealtimeTranscriber", () => {
   test("builds correct WebSocket URL with default params", async () => {
     let capturedUrl: string | undefined;
     let capturedOptions: { headers?: Record<string, string> } | undefined;
-    const origWs = (globalThis as Record<string, unknown>).WebSocket;
-    (globalThis as Record<string, unknown>).WebSocket = class {
-      constructor(url: string, options?: { headers?: Record<string, string> }) {
-        capturedUrl = url;
-        capturedOptions = options;
-        return mockWs;
-      }
-    };
+    const origWs = globalThis.WebSocket;
+    installMockWebSocket(
+      class {
+        constructor(
+          url: string,
+          options?: { headers?: Record<string, string> },
+        ) {
+          capturedUrl = url;
+          capturedOptions = options;
+          return mockWs;
+        }
+      },
+    );
 
     const transcriber = new DeepgramRealtimeTranscriber(TEST_API_KEY);
     const { onEvent } = createEventCollector();
@@ -1721,18 +1739,20 @@ describe("DeepgramRealtimeTranscriber", () => {
       `Token ${TEST_API_KEY}`,
     );
 
-    (globalThis as Record<string, unknown>).WebSocket = origWs;
+    globalThis.WebSocket = origWs;
   });
 
   test("includes language param when specified", async () => {
     let capturedUrl: string | undefined;
-    const origWs = (globalThis as Record<string, unknown>).WebSocket;
-    (globalThis as Record<string, unknown>).WebSocket = class {
-      constructor(url: string) {
-        capturedUrl = url;
-        return mockWs;
-      }
-    };
+    const origWs = globalThis.WebSocket;
+    installMockWebSocket(
+      class {
+        constructor(url: string) {
+          capturedUrl = url;
+          return mockWs;
+        }
+      },
+    );
 
     const transcriber = new DeepgramRealtimeTranscriber(TEST_API_KEY, {
       language: "es",
@@ -1745,18 +1765,20 @@ describe("DeepgramRealtimeTranscriber", () => {
     const url = new URL(capturedUrl!);
     expect(url.searchParams.get("language")).toBe("es");
 
-    (globalThis as Record<string, unknown>).WebSocket = origWs;
+    globalThis.WebSocket = origWs;
   });
 
   test("includes utterance_end_ms when specified", async () => {
     let capturedUrl: string | undefined;
-    const origWs = (globalThis as Record<string, unknown>).WebSocket;
-    (globalThis as Record<string, unknown>).WebSocket = class {
-      constructor(url: string) {
-        capturedUrl = url;
-        return mockWs;
-      }
-    };
+    const origWs = globalThis.WebSocket;
+    installMockWebSocket(
+      class {
+        constructor(url: string) {
+          capturedUrl = url;
+          return mockWs;
+        }
+      },
+    );
 
     const transcriber = new DeepgramRealtimeTranscriber(TEST_API_KEY, {
       utteranceEndMs: 1000,
@@ -1769,18 +1791,20 @@ describe("DeepgramRealtimeTranscriber", () => {
     const url = new URL(capturedUrl!);
     expect(url.searchParams.get("utterance_end_ms")).toBe("1000");
 
-    (globalThis as Record<string, unknown>).WebSocket = origWs;
+    globalThis.WebSocket = origWs;
   });
 
   test("uses custom base URL when specified", async () => {
     let capturedUrl: string | undefined;
-    const origWs = (globalThis as Record<string, unknown>).WebSocket;
-    (globalThis as Record<string, unknown>).WebSocket = class {
-      constructor(url: string) {
-        capturedUrl = url;
-        return mockWs;
-      }
-    };
+    const origWs = globalThis.WebSocket;
+    installMockWebSocket(
+      class {
+        constructor(url: string) {
+          capturedUrl = url;
+          return mockWs;
+        }
+      },
+    );
 
     const transcriber = new DeepgramRealtimeTranscriber(TEST_API_KEY, {
       baseUrl: "wss://custom-deepgram.example.com/",
@@ -1794,7 +1818,7 @@ describe("DeepgramRealtimeTranscriber", () => {
       "wss://custom-deepgram.example.com/v1/listen",
     );
 
-    (globalThis as Record<string, unknown>).WebSocket = origWs;
+    globalThis.WebSocket = origWs;
   });
 
   // Top-level `speaker` on the alternative is a separate Deepgram response

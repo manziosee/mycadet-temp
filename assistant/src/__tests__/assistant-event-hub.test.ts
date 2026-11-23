@@ -1,3 +1,4 @@
+import assert from "node:assert/strict";
 import { beforeEach, describe, expect, test } from "bun:test";
 
 import type { AssistantEventEnvelope } from "../api/index.js";
@@ -305,8 +306,8 @@ describe("AssistantEventHub — exception isolation", () => {
     });
 
     const caught = await hub.publish(makeEvent()).catch((e) => e);
-    expect(caught).toBeInstanceOf(AggregateError);
-    const agg = caught as AggregateError;
+    assert(caught instanceof AggregateError, "Expected AggregateError");
+    const agg = caught;
     expect(agg.errors.map((e: Error) => e.message)).toEqual(["err-1", "err-2"]);
   });
 
@@ -328,8 +329,8 @@ describe("AssistantEventHub — exception isolation", () => {
     });
 
     const caught = await hub.publish(makeEvent()).catch((e) => e);
-    expect(caught).toBeInstanceOf(AggregateError);
-    expect((caught as AggregateError).errors[0]).toBeInstanceOf(Error);
+    assert(caught instanceof AggregateError, "Expected AggregateError");
+    expect(caught.errors[0]).toBeInstanceOf(Error);
     expect(syncRan).toBe(true);
   });
 

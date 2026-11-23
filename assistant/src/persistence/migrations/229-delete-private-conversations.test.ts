@@ -775,13 +775,14 @@ function seedSharedAttachment(raw: Database, now: number): void {
 }
 
 function countWhere(raw: Database, table: string, where: string): number {
-  return (
-    raw
-      .query(`SELECT COUNT(*) AS count FROM ${table} WHERE ${where}`)
-      .get() as {
-      count: number;
-    }
-  ).count;
+  return raw
+    .query<
+      {
+        count: number;
+      },
+      []
+    >(`SELECT COUNT(*) AS count FROM ${table} WHERE ${where}`)
+    .get()!.count;
 }
 
 function getVectorCleanupJobs(raw: Database): Array<{
@@ -789,12 +790,12 @@ function getVectorCleanupJobs(raw: Database): Array<{
   payload: string;
 }> {
   return raw
-    .query(
+    .query<{ id: string; payload: string }, []>(
       `SELECT id, payload FROM memory_jobs
        WHERE type = 'delete_qdrant_vectors'
        ORDER BY id`,
     )
-    .all() as Array<{ id: string; payload: string }>;
+    .all();
 }
 
 describe("migrateDeletePrivateConversations", () => {
@@ -849,8 +850,8 @@ describe("migrateDeletePrivateConversations", () => {
     );
 
     const remainingConversations = raw
-      .query(`SELECT id FROM conversations ORDER BY id`)
-      .all() as Array<{ id: string }>;
+      .query<{ id: string }, []>(`SELECT id FROM conversations ORDER BY id`)
+      .all();
     expect(remainingConversations.map((row) => row.id)).toEqual([
       "conv-background",
       "conv-standard",

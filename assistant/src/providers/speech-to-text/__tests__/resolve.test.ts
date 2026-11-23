@@ -1,3 +1,4 @@
+import assert from "node:assert/strict";
 import { beforeEach, describe, expect, mock, test } from "bun:test";
 
 import { setConfig } from "../../../__tests__/helpers/set-config.js";
@@ -1442,9 +1443,9 @@ describe("deepgram-flux batch resolution", () => {
 
     const err = await resolveBatchTranscriber().catch((e: unknown) => e);
 
-    expect(err).toBeInstanceOf(SttError);
-    expect((err as SttError).category).toBe("provider-error");
-    expect((err as SttError).userFacing).toBe(true);
+    assert(err instanceof SttError, "Expected SttError");
+    expect(err.category).toBe("provider-error");
+    expect(err.userFacing).toBe(true);
   });
 
   test("logs the gap so a degrading caller still leaves a daemon-side trace", async () => {

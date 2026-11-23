@@ -1,3 +1,4 @@
+import assert from "node:assert/strict";
 /**
  * Every document write bumps `revision`, read-modify-write paths retry instead
  * of losing a concurrent write, and `POST documents` with `baseRevision`
@@ -314,9 +315,9 @@ describe("POST documents", () => {
       baseRevision: 1,
     }).catch((err: unknown) => err);
 
-    expect(error).toBeInstanceOf(ConflictError);
-    expect((error as ConflictError).statusCode).toBe(409);
-    expect((error as ConflictError).details).toEqual({
+    assert(error instanceof ConflictError, "Expected ConflictError");
+    expect(error.statusCode).toBe(409);
+    expect(error.details).toEqual({
       revision: 2,
       title: "Doc",
       content: "assistant edit",

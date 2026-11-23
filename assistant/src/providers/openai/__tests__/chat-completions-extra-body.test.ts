@@ -1,3 +1,4 @@
+import assert from "node:assert/strict";
 import { describe, expect, test } from "bun:test";
 
 import OpenAI from "openai";
@@ -82,8 +83,8 @@ describe("chat-completions extraBody", () => {
       ]);
       throw new Error("expected ProviderError");
     } catch (error) {
-      expect(error).toBeInstanceOf(ProviderError);
-      const rejected = error as ProviderError;
+      assert(error instanceof ProviderError, "Expected ProviderError");
+      const rejected = error;
       expect(rejected.provider).toBe("cadet");
       expect(rejected.statusCode).toBe(400);
       expect(rejected.rawRequest).toEqual(
@@ -130,8 +131,11 @@ describe("chat-completions extraBody", () => {
       ]);
       throw new Error("expected ContextOverflowError");
     } catch (error) {
-      expect(error).toBeInstanceOf(ContextOverflowError);
-      const rejected = error as ContextOverflowError;
+      assert(
+        error instanceof ContextOverflowError,
+        "Expected ContextOverflowError",
+      );
+      const rejected = error;
       expect(rejected.provider).toBe("cadet");
       expect(rejected.rawRequest).toEqual(
         expect.objectContaining({

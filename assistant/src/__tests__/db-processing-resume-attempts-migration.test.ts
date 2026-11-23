@@ -31,13 +31,17 @@ function bootstrapPreResumeAttemptsConversations(raw: Database): void {
 }
 
 function getResumeAttemptsColumn(raw: Database) {
-  return (
-    raw.query(`PRAGMA table_info(conversations)`).all() as Array<{
-      name: string;
-      notnull: number;
-      dflt_value: string | null;
-    }>
-  ).find((column) => column.name === "processing_resume_attempts");
+  return raw
+    .query<
+      {
+        name: string;
+        notnull: number;
+        dflt_value: string | null;
+      },
+      []
+    >(`PRAGMA table_info(conversations)`)
+    .all()
+    .find((column) => column.name === "processing_resume_attempts");
 }
 
 describe("processing resume attempts migration", () => {
@@ -68,16 +72,19 @@ describe("processing resume attempts migration", () => {
     migrateAddProcessingResumeAttempts(db);
 
     const row = raw
-      .query(
+      .query<
+        {
+          id: string;
+          title: string | null;
+          processing_started_at: number | null;
+          processing_resume_attempts: number;
+        },
+        []
+      >(
         `SELECT id, title, processing_started_at, processing_resume_attempts
          FROM conversations WHERE id = 'conv-existing'`,
       )
-      .get() as {
-      id: string;
-      title: string | null;
-      processing_started_at: number | null;
-      processing_resume_attempts: number;
-    } | null;
+      .get();
 
     expect(row).toEqual({
       id: "conv-existing",
@@ -106,10 +113,11 @@ describe("processing resume attempts migration", () => {
     expect(() => migrateAddProcessingResumeAttempts(db)).not.toThrow();
 
     const row = raw
-      .query(
-        `SELECT processing_resume_attempts FROM conversations WHERE id = 'conv-rerun'`,
-      )
-      .get() as { processing_resume_attempts: number } | null;
+      .query<
+        { processing_resume_attempts: number },
+        []
+      >(`SELECT processing_resume_attempts FROM conversations WHERE id = 'conv-rerun'`)
+      .get();
 
     expect(row).toEqual({ processing_resume_attempts: 2 });
   });

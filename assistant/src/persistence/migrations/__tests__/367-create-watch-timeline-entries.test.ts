@@ -15,17 +15,18 @@ function createTestDb() {
 
 function columnNames(raw: Database): string[] {
   const rows = raw
-    .prepare("PRAGMA table_info(watch_timeline_entries)")
-    .all() as Array<{ name: string }>;
+    .prepare<{ name: string }, []>("PRAGMA table_info(watch_timeline_entries)")
+    .all();
   return rows.map((row) => row.name);
 }
 
 function indexNames(raw: Database): string[] {
   const rows = raw
-    .prepare(
-      `SELECT name FROM sqlite_master WHERE type = 'index' AND tbl_name = 'watch_timeline_entries' AND sql IS NOT NULL ORDER BY name`,
-    )
-    .all() as Array<{ name: string }>;
+    .prepare<
+      { name: string },
+      []
+    >(`SELECT name FROM sqlite_master WHERE type = 'index' AND tbl_name = 'watch_timeline_entries' AND sql IS NOT NULL ORDER BY name`)
+    .all();
   return rows.map((row) => row.name);
 }
 
@@ -81,8 +82,11 @@ describe("migration 367: create watch_timeline_entries", () => {
     expect(() => migrateCreateWatchTimelineEntries(db)).not.toThrow();
 
     const rows = raw
-      .prepare("SELECT id, at_ms FROM watch_timeline_entries")
-      .all() as Array<{ id: string; at_ms: number }>;
+      .prepare<
+        { id: string; at_ms: number },
+        []
+      >("SELECT id, at_ms FROM watch_timeline_entries")
+      .all();
     expect(rows).toEqual([{ id: "entry-1", at_ms: 1000 }]);
   });
 

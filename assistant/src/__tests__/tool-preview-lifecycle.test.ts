@@ -11,6 +11,8 @@
  */
 import { beforeEach, describe, expect, mock, test } from "bun:test";
 
+import pino from "pino";
+
 // ── Mock conversation-crud (used by handleToolResult/handleMessageComplete) ──
 // Reserve returns a role-distinct id so tests can tell the grouped tool-result
 // `user` row apart from the assistant row, and assert it is reserved exactly
@@ -99,13 +101,19 @@ import {
   getCurrentSeq,
   stampAndBuffer,
 } from "../runtime/assistant-stream-state.js";
-import { mockUnownedModeSessions } from "./helpers/mock-conversation.js";
+import {
+  asConversation,
+  mockUnownedModeSessions,
+} from "./helpers/mock-conversation.js";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-function createMockDeps(
-  overrides: Partial<EventHandlerDeps> = {},
-): EventHandlerDeps {
+function createMockDeps({
+  ctx,
+  ...overrides
+}: Omit<Partial<EventHandlerDeps>, "ctx"> & {
+  ctx?: Partial<EventHandlerDeps["ctx"]>;
+} = {}): EventHandlerDeps {
   const emittedEvents: AssistantEvent[] = [];
   const emittedActivityStates: Array<{
     phase: string;
@@ -116,9 +124,14 @@ function createMockDeps(
   }> = [];
 
   return {
-    ctx: {
+    ctx: asConversation({
       conversationId: "test-session-id",
-      provider: { name: "anthropic" },
+      provider: {
+        name: "anthropic",
+        async sendMessage() {
+          throw new Error("Unexpected provider call");
+        },
+      },
       streamThinking: false,
       emitActivityState: (
         phase: string,
@@ -136,26 +149,26 @@ function createMockDeps(
       markWorkspaceTopLevelDirty: () => {},
       currentTurnSurfaces: [],
       modeSessions: mockUnownedModeSessions(),
-    } as unknown as EventHandlerDeps["ctx"],
+      ...ctx,
+    }),
     onEvent: (msg: AssistantEvent) => {
       emittedEvents.push(msg);
     },
     reqId: "test-req-id",
     isFirstMessage: false,
     shouldGenerateTitle: false,
-    rlog: new Proxy({} as Record<string, unknown>, {
-      get: () => () => {},
-    }) as unknown as EventHandlerDeps["rlog"],
+    rlog: pino({ enabled: false }),
+    applyCompaction: async () => {},
     turnChannelContext: {
       userMessageChannel: "cadet",
       assistantMessageChannel: "cadet",
-    } as EventHandlerDeps["turnChannelContext"],
+    },
     turnInterfaceContext: {
       userMessageInterface: "macos",
       assistantMessageInterface: "macos",
-    } as EventHandlerDeps["turnInterfaceContext"],
+    },
     ...overrides,
-  } as EventHandlerDeps;
+  };
 }
 
 /** Collect events by wrapping onEvent. */
@@ -215,7 +228,7 @@ describe("tool preview lifecycle", () => {
         ctx: {
           ...createMockDeps().ctx,
           emitActivityState: collector.emitActivityState,
-        } as unknown as EventHandlerDeps["ctx"],
+        },
       });
 
       handleToolUsePreviewStart(state, deps, {
@@ -239,7 +252,7 @@ describe("tool preview lifecycle", () => {
         ctx: {
           ...createMockDeps().ctx,
           emitActivityState: collector.emitActivityState,
-        } as unknown as EventHandlerDeps["ctx"],
+        },
       });
 
       const before = Date.now();
@@ -268,7 +281,7 @@ describe("tool preview lifecycle", () => {
         ctx: {
           ...createMockDeps().ctx,
           emitActivityState: collector.emitActivityState,
-        } as unknown as EventHandlerDeps["ctx"],
+        },
       });
 
       // GIVEN a preview was recognized first
@@ -305,7 +318,7 @@ describe("tool preview lifecycle", () => {
         ctx: {
           ...createMockDeps().ctx,
           emitActivityState: collector.emitActivityState,
-        } as unknown as EventHandlerDeps["ctx"],
+        },
       });
 
       handleToolUsePreviewStart(state, deps, {
@@ -432,7 +445,7 @@ describe("tool preview lifecycle", () => {
         ctx: {
           ...createMockDeps().ctx,
           emitActivityState: collector.emitActivityState,
-        } as unknown as EventHandlerDeps["ctx"],
+        },
       });
 
       // Pre-register the tool name mapping (normally done by handleToolUse)
@@ -486,7 +499,7 @@ describe("tool preview lifecycle", () => {
           ...createMockDeps().ctx,
           conversationId,
           emitActivityState: collector.emitActivityState,
-        } as unknown as EventHandlerDeps["ctx"],
+        },
       });
 
       // AND prior streamed text deltas have already advanced the global seq
@@ -543,7 +556,7 @@ describe("tool preview lifecycle", () => {
           ...createMockDeps().ctx,
           conversationId,
           ...overrides,
-        } as unknown as EventHandlerDeps["ctx"],
+        },
       });
       return { deps, events };
     }
@@ -708,7 +721,7 @@ describe("tool preview lifecycle", () => {
         ctx: {
           ...createMockDeps().ctx,
           conversationId,
-        } as unknown as EventHandlerDeps["ctx"],
+        },
       });
       return { deps, events };
     }
@@ -897,7 +910,7 @@ describe("tool preview lifecycle", () => {
         ctx: {
           ...createMockDeps().ctx,
           emitActivityState: collector.emitActivityState,
-        } as unknown as EventHandlerDeps["ctx"],
+        },
       });
       return { deps, events: collector.events };
     }
@@ -997,7 +1010,7 @@ describe("tool preview lifecycle", () => {
         ctx: {
           ...createMockDeps().ctx,
           emitActivityState: collector.emitActivityState,
-        } as unknown as EventHandlerDeps["ctx"],
+        },
       });
 
       const toolUseId = "toolu_ordering_test";
@@ -1048,7 +1061,7 @@ describe("tool preview lifecycle", () => {
         ctx: {
           ...createMockDeps().ctx,
           emitActivityState: collector.emitActivityState,
-        } as unknown as EventHandlerDeps["ctx"],
+        },
       });
 
       const toolUseId = "toolu_non_app_delta";
@@ -1072,7 +1085,7 @@ describe("tool preview lifecycle", () => {
         ctx: {
           ...createMockDeps().ctx,
           emitActivityState: collector.emitActivityState,
-        } as unknown as EventHandlerDeps["ctx"],
+        },
       });
 
       const toolUseId = "toolu_full_lifecycle";

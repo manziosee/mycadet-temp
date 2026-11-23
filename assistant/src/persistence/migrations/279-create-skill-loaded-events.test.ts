@@ -12,19 +12,27 @@ function createTestDb() {
 }
 
 function columnNames(sqlite: Database): string[] {
-  return (
-    sqlite.query("PRAGMA table_info(skill_loaded_events)").all() as Array<{
-      name: string;
-    }>
-  ).map((c) => c.name);
+  return sqlite
+    .query<
+      {
+        name: string;
+      },
+      []
+    >("PRAGMA table_info(skill_loaded_events)")
+    .all()
+    .map((c) => c.name);
 }
 
 function indexNames(sqlite: Database): string[] {
-  return (
-    sqlite.query("PRAGMA index_list(skill_loaded_events)").all() as Array<{
-      name: string;
-    }>
-  ).map((i) => i.name);
+  return sqlite
+    .query<
+      {
+        name: string;
+      },
+      []
+    >("PRAGMA index_list(skill_loaded_events)")
+    .all()
+    .map((i) => i.name);
 }
 
 describe("migration 279: skill_loaded_events table", () => {
@@ -54,11 +62,12 @@ describe("migration 279: skill_loaded_events table", () => {
     expect(indexNames(sqlite)).toContain(
       "idx_skill_loaded_events_created_at_id",
     );
-    const columns = (
-      sqlite
-        .query("PRAGMA index_info(idx_skill_loaded_events_created_at_id)")
-        .all() as Array<{ name: string }>
-    ).map((c) => c.name);
+    const columns = sqlite
+      .query<{ name: string }, []>(
+        "PRAGMA index_info(idx_skill_loaded_events_created_at_id)",
+      )
+      .all()
+      .map((c) => c.name);
     expect(columns).toEqual(["created_at", "id"]);
   });
 

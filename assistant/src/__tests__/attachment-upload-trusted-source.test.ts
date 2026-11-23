@@ -1,3 +1,4 @@
+import assert from "node:assert/strict";
 /**
  * Tests the trustedSource flag plumbing through the attachment upload route.
  * The flag is forwarded by the gateway when a channel actor resolves to
@@ -119,8 +120,8 @@ describe("attachment upload — trustedSource flag", () => {
       );
       throw new Error("Expected handler to throw");
     } catch (err) {
-      expect(err).toBeInstanceOf(RouteError);
-      const routeErr = err as RouteError;
+      assert(err instanceof RouteError, "Expected RouteError");
+      const routeErr = err;
       expect(routeErr.statusCode).toBe(415);
       expect(routeErr.message).toContain("Unsupported MIME type");
     }
@@ -140,8 +141,8 @@ describe("attachment upload — trustedSource flag", () => {
       );
       throw new Error("Expected handler to throw");
     } catch (err) {
-      expect(err).toBeInstanceOf(RouteError);
-      const routeErr = err as RouteError;
+      assert(err instanceof RouteError, "Expected RouteError");
+      const routeErr = err;
       expect(routeErr.statusCode).toBe(415);
       expect(routeErr.message).toContain("Dangerous file type");
     }

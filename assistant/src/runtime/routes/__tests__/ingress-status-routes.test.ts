@@ -4,11 +4,11 @@
  * The workspace config reads and the probe are both mocked, so the six
  * states are exercised without a config file or network access.
  */
-
 import { beforeEach, describe, expect, mock, test } from "bun:test";
 
 import type { TunnelRecord } from "@mycadet/service-contracts/ingress";
 
+import { jsonObjectSchema } from "../../../__tests__/helpers/json-object-schema.js";
 import type { TunnelProbeResult } from "../../../inbound/tunnel-probe.js";
 import { ACTOR_PRINCIPALS } from "../../auth/route-policy.js";
 
@@ -152,7 +152,7 @@ describe("integrations_ingress_status route", () => {
       publicBaseUrl: TUNNEL_URL,
     };
 
-    const result = (await route.handler({})) as Record<string, unknown>;
+    const result = jsonObjectSchema.parse(await route.handler({}));
 
     expect(result.state).toBe("healthy");
     expect(probeTunnelMock).toHaveBeenCalledWith({
@@ -164,7 +164,7 @@ describe("integrations_ingress_status route", () => {
     ingressConfig = { ...ingressConfig, publicBaseUrl: TUNNEL_URL };
     recordedAssistantId = "assistant-1";
 
-    const result = (await route.handler({})) as Record<string, unknown>;
+    const result = jsonObjectSchema.parse(await route.handler({}));
 
     expect(result.state).toBe("healthy");
     expect(result.publicBaseUrl).toBe(TUNNEL_URL);
@@ -189,7 +189,7 @@ describe("integrations_ingress_status route", () => {
     ingressConfig = { ...ingressConfig, publicBaseUrl: TUNNEL_URL };
     probeResult = { kind: "unreachable", detail: "HTTP 502" };
 
-    const result = (await route.handler({})) as Record<string, unknown>;
+    const result = jsonObjectSchema.parse(await route.handler({}));
 
     expect(result.state).toBe("unreachable");
     expect(result.detail).toBe("HTTP 502");
@@ -201,7 +201,7 @@ describe("integrations_ingress_status route", () => {
     ingressConfig = { ...ingressConfig, publicBaseUrl: TUNNEL_URL };
     probeResult = { kind: "unpairable", detail: "HTTP 404" };
 
-    const result = (await route.handler({})) as Record<string, unknown>;
+    const result = jsonObjectSchema.parse(await route.handler({}));
 
     expect(result.state).toBe("unpairable");
     expect(result.detail).toBe("HTTP 404");
@@ -213,7 +213,7 @@ describe("integrations_ingress_status route", () => {
     ingressConfig = { ...ingressConfig, publicBaseUrl: TUNNEL_URL };
     probeResult = { kind: "unpairable" };
 
-    const result = (await route.handler({})) as Record<string, unknown>;
+    const result = jsonObjectSchema.parse(await route.handler({}));
 
     expect(result.state).toBe("unpairable");
     expect(result).not.toHaveProperty("detail");
@@ -226,7 +226,7 @@ describe("integrations_ingress_status route", () => {
     lastTunnel = { provider: "tailscale", publicBaseUrl: TUNNEL_URL };
     probeResult = { kind: "unpairable", detail: "HTTP 404" };
 
-    const result = (await route.handler({})) as Record<string, unknown>;
+    const result = jsonObjectSchema.parse(await route.handler({}));
 
     expect(result.state).toBe("unpairable");
     expect(result.lastTunnel).toEqual({
@@ -244,7 +244,7 @@ describe("integrations_ingress_status route", () => {
       assistantName: "Other Assistant",
     };
 
-    const result = (await route.handler({})) as Record<string, unknown>;
+    const result = jsonObjectSchema.parse(await route.handler({}));
 
     expect(result.state).toBe("foreign");
     expect(result.servingAssistantName).toBe("Other Assistant");
@@ -255,7 +255,7 @@ describe("integrations_ingress_status route", () => {
     ingressConfig = { ...ingressConfig, publicBaseUrl: TUNNEL_URL };
     probeResult = { kind: "foreign", assistantId: "assistant-2" };
 
-    const result = (await route.handler({})) as Record<string, unknown>;
+    const result = jsonObjectSchema.parse(await route.handler({}));
 
     expect(result.state).toBe("foreign");
     expect(result).not.toHaveProperty("servingAssistantName");
@@ -266,7 +266,7 @@ describe("integrations_ingress_status route", () => {
     lastTunnel = { provider: "ngrok", publicBaseUrl: TUNNEL_URL };
     probeResult = { kind: "unreachable", detail: "HTTP 502" };
 
-    const result = (await route.handler({})) as Record<string, unknown>;
+    const result = jsonObjectSchema.parse(await route.handler({}));
 
     expect(result.state).toBe("unreachable");
     expect(result.lastTunnel).toEqual({
@@ -280,7 +280,7 @@ describe("integrations_ingress_status route", () => {
     lastTunnel = { provider: "ngrok", publicBaseUrl: TUNNEL_URL };
     probeResult = { kind: "foreign", assistantId: "assistant-2" };
 
-    const result = (await route.handler({})) as Record<string, unknown>;
+    const result = jsonObjectSchema.parse(await route.handler({}));
 
     expect(result.state).toBe("foreign");
     expect(result.lastTunnel).toEqual({
@@ -294,7 +294,7 @@ describe("integrations_ingress_status route", () => {
     lastTunnel = { provider: "ngrok", publicBaseUrl: TUNNEL_URL };
     probeResult = { kind: "unreachable", detail: "HTTP 502" };
 
-    const result = (await route.handler({})) as Record<string, unknown>;
+    const result = jsonObjectSchema.parse(await route.handler({}));
 
     expect(result.lastTunnel).toEqual({
       provider: "ngrok",
@@ -310,7 +310,7 @@ describe("integrations_ingress_status route", () => {
     lastTunnel = { provider: "ngrok", publicBaseUrl: "https://old.ngrok.app" };
     probeResult = { kind: "unreachable", detail: "HTTP 502" };
 
-    const result = (await route.handler({})) as Record<string, unknown>;
+    const result = jsonObjectSchema.parse(await route.handler({}));
 
     expect(result.state).toBe("unreachable");
     expect(result).not.toHaveProperty("lastTunnel");
@@ -321,7 +321,7 @@ describe("integrations_ingress_status route", () => {
     lastTunnel = { provider: "ngrok", publicBaseUrl: "https://old.ngrok.app" };
     probeResult = { kind: "foreign", assistantId: "assistant-2" };
 
-    const result = (await route.handler({})) as Record<string, unknown>;
+    const result = jsonObjectSchema.parse(await route.handler({}));
 
     expect(result.state).toBe("foreign");
     expect(result).not.toHaveProperty("lastTunnel");
@@ -354,7 +354,7 @@ describe("integrations_ingress_status route", () => {
     ingressConfig = { ...ingressConfig, publicBaseUrl: TUNNEL_URL };
     lastTunnel = { provider: "ngrok", publicBaseUrl: TUNNEL_URL };
 
-    const result = (await route.handler({})) as Record<string, unknown>;
+    const result = jsonObjectSchema.parse(await route.handler({}));
 
     expect(result.state).toBe("healthy");
     expect(result).not.toHaveProperty("lastTunnel");
@@ -375,7 +375,7 @@ describe("integrations_ingress_status route", () => {
     };
     recordedAssistantId = "assistant-1";
 
-    const result = (await route.handler({})) as Record<string, unknown>;
+    const result = jsonObjectSchema.parse(await route.handler({}));
 
     expect(result.state).toBe("healthy");
     expect(result.publicBaseUrl).toBe(PAIRING_URL);
@@ -397,7 +397,7 @@ describe("integrations_ingress_status route", () => {
     };
     probeResult = { kind: "unreachable", detail: "HTTP 502" };
 
-    const result = (await route.handler({})) as Record<string, unknown>;
+    const result = jsonObjectSchema.parse(await route.handler({}));
 
     expect(result.state).toBe("unreachable");
     expect(result.publicBaseUrl).toBe(PAIRING_URL);
@@ -419,7 +419,7 @@ describe("integrations_ingress_status route", () => {
     };
     pairingTunnel = { provider: "tailscale", publicBaseUrl: PAIRING_URL };
 
-    const result = (await route.handler({})) as Record<string, unknown>;
+    const result = jsonObjectSchema.parse(await route.handler({}));
 
     expect(result.state).toBe("healthy");
     expect(result.publicBaseUrl).toBe(PAIRING_URL);
@@ -432,7 +432,7 @@ describe("integrations_ingress_status route", () => {
     ingressConfig = { ...ingressConfig, publicBaseUrl: "" };
     pairingTunnel = { provider: "tailscale", publicBaseUrl: PAIRING_URL };
 
-    const result = (await route.handler({})) as Record<string, unknown>;
+    const result = jsonObjectSchema.parse(await route.handler({}));
 
     expect(result.state).toBe("healthy");
     expect(result.publicBaseUrl).toBe(PAIRING_URL);
@@ -446,7 +446,7 @@ describe("integrations_ingress_status route", () => {
     ingressConfig = { ...ingressConfig, publicBaseUrl: TUNNEL_URL };
     pairingTunnel = { provider: "tailscale", publicBaseUrl: PAIRING_URL };
 
-    const result = (await route.handler({})) as Record<string, unknown>;
+    const result = jsonObjectSchema.parse(await route.handler({}));
 
     expect(result.publicBaseUrl).toBe(PAIRING_URL);
     expect(probeTunnelMock).toHaveBeenCalledWith({
@@ -462,7 +462,7 @@ describe("integrations_ingress_status route", () => {
     pairingTunnel = { provider: "tailscale", publicBaseUrl: PAIRING_URL };
     recordedAssistantId = "assistant-1";
 
-    const result = (await route.handler({})) as Record<string, unknown>;
+    const result = jsonObjectSchema.parse(await route.handler({}));
 
     expect(result.state).toBe("healthy");
     expect(result.publicBaseUrl).toBe(PAIRING_URL);
@@ -481,7 +481,7 @@ describe("integrations_ingress_status route", () => {
     pairingTunnel = { provider: "tailscale", publicBaseUrl: PAIRING_URL };
     probeResult = { kind: "unreachable", detail: "HTTP 502" };
 
-    const result = (await route.handler({})) as Record<string, unknown>;
+    const result = jsonObjectSchema.parse(await route.handler({}));
 
     expect(result.state).toBe("unreachable");
     expect(result.lastTunnel).toEqual({
@@ -494,7 +494,7 @@ describe("integrations_ingress_status route", () => {
     ingressConfig = { ...ingressConfig, publicBaseUrl: TUNNEL_URL };
     lastTunnel = { provider: "ngrok", publicBaseUrl: TUNNEL_URL };
 
-    const result = (await route.handler({})) as Record<string, unknown>;
+    const result = jsonObjectSchema.parse(await route.handler({}));
 
     expect(result.state).toBe("healthy");
     expect(result.publicBaseUrl).toBe(TUNNEL_URL);

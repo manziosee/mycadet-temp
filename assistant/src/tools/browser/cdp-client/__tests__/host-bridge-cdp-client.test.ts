@@ -1,3 +1,4 @@
+import assert from "node:assert/strict";
 import { describe, expect, mock, test } from "bun:test";
 
 import type { HostBrowserProxy } from "../../../../daemon/host-browser-proxy.js";
@@ -81,9 +82,9 @@ describe("HostBridgeCdpClient", () => {
       await client.send("Page.captureScreenshot", {});
       expect(true).toBe(false); // should not reach
     } catch (err) {
-      expect(err).toBeInstanceOf(CdpError);
-      expect((err as CdpError).code).toBe("transport_error");
-      expect((err as CdpError).message).toContain("HTTP 404");
+      assert(err instanceof CdpError, "Expected CdpError");
+      expect(err.code).toBe("transport_error");
+      expect(err.message).toContain("HTTP 404");
     }
   });
 

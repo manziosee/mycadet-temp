@@ -1,3 +1,4 @@
+import assert from "node:assert/strict";
 /**
  * Dispatcher gate test — proves that `resolveConfiguredProvider` routes
  * through `resolveProviderFromConnection` for every dispatch when a profile
@@ -22,7 +23,6 @@
  *      returns null (soft credential failure; satellite caller decides
  *      what to do).
  */
-
 import { beforeEach, describe, expect, mock, test } from "bun:test";
 
 import { setConfig } from "../../__tests__/helpers/set-config.js";
@@ -241,11 +241,12 @@ describe("dispatch routes through provider_connection (Phase 1: connection-only)
       caught = err;
     }
 
-    expect(caught).toBeInstanceOf(ConnectionResolutionError);
-    expect((caught as ConnectionResolutionError).reason).toBe("not_found");
-    expect((caught as ConnectionResolutionError).connectionName).toBe(
-      "does-not-exist",
+    assert(
+      caught instanceof ConnectionResolutionError,
+      "Expected ConnectionResolutionError",
     );
+    expect(caught.reason).toBe("not_found");
+    expect(caught.connectionName).toBe("does-not-exist");
     // Resolver was NOT called (lookup failed before reaching it).
     expect(resolveProviderCalls.length).toBe(0);
   });

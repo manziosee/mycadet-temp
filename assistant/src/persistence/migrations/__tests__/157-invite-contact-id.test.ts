@@ -16,11 +16,14 @@ function createTestDb() {
 
 function columnNotNull(raw: Database, name: string): boolean {
   const cols = raw
-    .query(`PRAGMA table_info(assistant_ingress_invites)`)
-    .all() as Array<{
-    name: string;
-    notnull: number;
-  }>;
+    .query<
+      {
+        name: string;
+        notnull: number;
+      },
+      []
+    >(`PRAGMA table_info(assistant_ingress_invites)`)
+    .all();
   return cols.some((c) => c.name === name && c.notnull === 1);
 }
 
@@ -81,8 +84,11 @@ describe("migrateInviteContactId", () => {
       tableHasColumn(db, "assistant_ingress_invites", "created_by_session_id"),
     ).toBe(true);
     const rows = raw
-      .query(`SELECT id, contact_id FROM assistant_ingress_invites ORDER BY id`)
-      .all() as Array<{ id: string; contact_id: string }>;
+      .query<
+        { id: string; contact_id: string },
+        []
+      >(`SELECT id, contact_id FROM assistant_ingress_invites ORDER BY id`)
+      .all();
     expect(rows).toEqual([{ id: "inv-keep", contact_id: "contact-keep" }]);
   });
 
@@ -133,10 +139,11 @@ describe("migrateInviteContactId", () => {
       tableHasColumn(db, "assistant_ingress_invites", "created_by_session_id"),
     ).toBe(false);
     const row = raw
-      .query(
-        `SELECT source_conversation_id, contact_id FROM assistant_ingress_invites WHERE id = 'inv-1'`,
-      )
-      .get() as { source_conversation_id: string; contact_id: string };
+      .query<
+        { source_conversation_id: string; contact_id: string },
+        []
+      >(`SELECT source_conversation_id, contact_id FROM assistant_ingress_invites WHERE id = 'inv-1'`)
+      .get()!;
     expect(row).toEqual({
       source_conversation_id: "conv-9",
       contact_id: "contact-1",

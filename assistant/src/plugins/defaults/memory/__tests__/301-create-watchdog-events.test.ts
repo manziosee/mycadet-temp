@@ -41,19 +41,27 @@ function openTelemetryRaw(): Database {
 }
 
 function columnNames(raw: Database): string[] {
-  return (
-    raw.query("PRAGMA table_info(watchdog_events)").all() as Array<{
-      name: string;
-    }>
-  ).map((c) => c.name);
+  return raw
+    .query<
+      {
+        name: string;
+      },
+      []
+    >("PRAGMA table_info(watchdog_events)")
+    .all()
+    .map((c) => c.name);
 }
 
 function indexNames(raw: Database): string[] {
-  return (
-    raw.query("PRAGMA index_list(watchdog_events)").all() as Array<{
-      name: string;
-    }>
-  ).map((i) => i.name);
+  return raw
+    .query<
+      {
+        name: string;
+      },
+      []
+    >("PRAGMA index_list(watchdog_events)")
+    .all()
+    .map((i) => i.name);
 }
 
 describe("migration 300: watchdog_events table on telemetry DB", () => {
@@ -79,11 +87,12 @@ describe("migration 300: watchdog_events table on telemetry DB", () => {
     createWatchdogEventsTable(db);
 
     expect(indexNames(raw)).toContain("idx_watchdog_events_created_at_id");
-    const columns = (
-      raw
-        .query("PRAGMA index_info(idx_watchdog_events_created_at_id)")
-        .all() as Array<{ name: string }>
-    ).map((c) => c.name);
+    const columns = raw
+      .query<{ name: string }, []>(
+        "PRAGMA index_info(idx_watchdog_events_created_at_id)",
+      )
+      .all()
+      .map((c) => c.name);
     expect(columns).toEqual(["created_at", "id"]);
   });
 

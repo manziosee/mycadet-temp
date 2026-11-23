@@ -27,11 +27,15 @@ function createTestDb() {
 }
 
 function columnNames(sqlite: Database): string[] {
-  return (
-    sqlite.query("PRAGMA table_info(tool_invocations)").all() as Array<{
-      name: string;
-    }>
-  ).map((c) => c.name);
+  return sqlite
+    .query<
+      {
+        name: string;
+      },
+      []
+    >("PRAGMA table_info(tool_invocations)")
+    .all()
+    .map((c) => c.name);
 }
 
 describe("migration 275: tool_invocations skill_id", () => {
@@ -41,12 +45,16 @@ describe("migration 275: tool_invocations skill_id", () => {
 
     migrateToolInvocationsSkillId(db);
 
-    const column = (
-      sqlite.query("PRAGMA table_info(tool_invocations)").all() as Array<{
-        name: string;
-        notnull: number;
-      }>
-    ).find((c) => c.name === "skill_id");
+    const column = sqlite
+      .query<
+        {
+          name: string;
+          notnull: number;
+        },
+        []
+      >("PRAGMA table_info(tool_invocations)")
+      .all()
+      .find((c) => c.name === "skill_id");
     expect(column).toBeDefined();
     expect(column?.notnull).toBe(0);
   });
@@ -63,8 +71,11 @@ describe("migration 275: tool_invocations skill_id", () => {
     migrateToolInvocationsSkillId(db);
 
     const row = sqlite
-      .query("SELECT skill_id FROM tool_invocations WHERE id = 'ti-1'")
-      .get() as { skill_id: string | null };
+      .query<
+        { skill_id: string | null },
+        []
+      >("SELECT skill_id FROM tool_invocations WHERE id = 'ti-1'")
+      .get()!;
     expect(row.skill_id).toBeNull();
   });
 

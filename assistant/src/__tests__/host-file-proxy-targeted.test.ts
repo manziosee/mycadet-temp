@@ -10,13 +10,17 @@
  */
 import { afterEach, describe, expect, jest, mock, test } from "bun:test";
 
+import { z } from "zod";
+
 import {
+  type BroadcastOverride,
   setBroadcastOverrideForTesting,
   setHubClientsForTesting,
 } from "../runtime/assistant-event-hub.js";
 
-const sentMessages: unknown[] = [];
-const sentMessageOptions: unknown[] = [];
+const messageIdSchema = z.string();
+const sentMessages: Record<string, unknown>[] = [];
+const sentMessageOptions: Parameters<BroadcastOverride>[2][] = [];
 const resolvedInteractionIds: string[] = [];
 let mockHasClient = false;
 type MockClient = {
@@ -31,12 +35,10 @@ let mockClientRegistry: Map<string, MockClient> = new Map();
 // check added in PR 3 is exercised separately in `host-file-proxy.test.ts`.
 const TEST_PRINCIPAL = "test-user";
 
-setBroadcastOverrideForTesting(
-  (msg: unknown, _conversationId?: string, options?: unknown) => {
-    sentMessages.push(msg);
-    sentMessageOptions.push(options);
-  },
-);
+setBroadcastOverrideForTesting((msg, _conversationId, options) => {
+  sentMessages.push(msg);
+  sentMessageOptions.push(options);
+});
 setHubClientsForTesting({
   getClientById: (clientId: string) => mockClientRegistry.get(clientId),
   getActorPrincipalIdForClient: (clientId: string) =>
@@ -79,7 +81,7 @@ describe("HostFileProxy — targetClientId (Phase 2)", () => {
     mockHasClient = false;
     mockCapableClients = [];
     mockClientRegistry = new Map();
-    proxy = new (HostFileProxy as any)();
+    proxy = new HostFileProxy();
   }
 
   function setupSingleClient(clientId = "client-1") {
@@ -132,14 +134,14 @@ describe("HostFileProxy — targetClientId (Phase 2)", () => {
       );
 
       expect(sentMessages).toHaveLength(1);
-      const sent = sentMessages[0] as Record<string, unknown>;
+      const sent = sentMessages[0];
       expect(sent.type).toBe("host_file_request");
       expect(sent.targetClientId).toBe("client-mac");
 
-      const opts = sentMessageOptions[0] as Record<string, unknown> | undefined;
+      const opts = sentMessageOptions[0];
       expect(opts?.targetClientId).toBe("client-mac");
 
-      const requestId = sent.requestId as string;
+      const requestId = messageIdSchema.parse(sent.requestId);
       proxy.resolve(requestId, { content: "file contents", isError: false });
 
       const result = await resultPromise;
@@ -233,13 +235,13 @@ describe("HostFileProxy — targetClientId (Phase 2)", () => {
       );
 
       expect(sentMessages).toHaveLength(1);
-      const sent = sentMessages[0] as Record<string, unknown>;
+      const sent = sentMessages[0];
       expect(sent.targetClientId).toBe("client-solo");
 
-      const opts = sentMessageOptions[0] as Record<string, unknown> | undefined;
+      const opts = sentMessageOptions[0];
       expect(opts?.targetClientId).toBe("client-solo");
 
-      const requestId = sent.requestId as string;
+      const requestId = messageIdSchema.parse(sent.requestId);
       proxy.resolve(requestId, { content: "ok", isError: false });
 
       const result = await resultPromise;
@@ -260,14 +262,14 @@ describe("HostFileProxy — targetClientId (Phase 2)", () => {
       );
 
       expect(sentMessages).toHaveLength(1);
-      const sent = sentMessages[0] as Record<string, unknown>;
+      const sent = sentMessages[0];
       expect(sent.type).toBe("host_file_request");
       expect(sent.targetClientId).toBeUndefined();
 
-      const opts = sentMessageOptions[0] as Record<string, unknown> | undefined;
+      const opts = sentMessageOptions[0];
       expect(opts?.targetClientId).toBeUndefined();
 
-      const requestId = sent.requestId as string;
+      const requestId = messageIdSchema.parse(sent.requestId);
       proxy.resolve(requestId, { content: "ok", isError: false });
 
       const result = await resultPromise;
@@ -287,14 +289,17 @@ describe("HostFileProxy — targetClientId (Phase 2)", () => {
       TEST_PRINCIPAL,
     );
 
-    const sent = sentMessages[0] as Record<string, unknown>;
+    const sent = sentMessages[0];
     expect(sent.targetClientId).toBe("client-1");
     const options = sentMessageOptions[0] as
       | Record<string, unknown>
       | undefined;
     expect(options?.targetClientId).toBe("client-1");
 
-    proxy.resolve(sent.requestId as string, { content: "ok", isError: false });
+    proxy.resolve(messageIdSchema.parse(sent.requestId), {
+      content: "ok",
+      isError: false,
+    });
     expect((await resultPromise).isError).toBe(false);
   });
 
@@ -314,8 +319,8 @@ describe("HostFileProxy — targetClientId (Phase 2)", () => {
         TEST_PRINCIPAL,
       );
 
-      const sent = sentMessages[0] as Record<string, unknown>;
-      const requestId = sent.requestId as string;
+      const sent = sentMessages[0];
+      const requestId = messageIdSchema.parse(sent.requestId);
       expect(sent.targetClientId).toBe("client-abc");
 
       controller.abort();
@@ -323,7 +328,7 @@ describe("HostFileProxy — targetClientId (Phase 2)", () => {
 
       // Second message is the cancel
       expect(sentMessages).toHaveLength(2);
-      const cancelMsg = sentMessages[1] as Record<string, unknown>;
+      const cancelMsg = sentMessages[1];
       expect(cancelMsg.type).toBe("host_file_cancel");
       expect(cancelMsg.requestId).toBe(requestId);
       expect(cancelMsg.targetClientId).toBe("client-abc");
@@ -351,17 +356,15 @@ describe("HostFileProxy — targetClientId (Phase 2)", () => {
       );
       p.catch(() => {}); // expected rejection on dispose
 
-      const sent = sentMessages[0] as Record<string, unknown>;
+      const sent = sentMessages[0];
       expect(sent.targetClientId).toBe("client-xyz");
-      const requestId = sent.requestId as string;
+      const requestId = messageIdSchema.parse(sent.requestId);
 
       proxy.dispose();
 
       const cancelMessages = sentMessages
         .slice(1)
-        .filter(
-          (m) => (m as Record<string, unknown>).type === "host_file_cancel",
-        ) as Array<Record<string, unknown>>;
+        .filter((m) => m.type === "host_file_cancel");
       expect(cancelMessages).toHaveLength(1);
       expect(cancelMessages[0].requestId).toBe(requestId);
       expect(cancelMessages[0].targetClientId).toBe("client-xyz");
@@ -385,7 +388,7 @@ describe("HostFileProxy — targetClientId (Phase 2)", () => {
           TEST_PRINCIPAL,
         );
 
-        const sent = sentMessages[0] as Record<string, unknown>;
+        const sent = sentMessages[0];
         expect(sent.targetClientId).toBe("client-mac");
 
         // Advance past the 30s internal timeout

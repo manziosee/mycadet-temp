@@ -1,3 +1,4 @@
+import assert from "node:assert/strict";
 import { describe, expect, test } from "bun:test";
 
 import type { AnthropicProvider } from "../providers/anthropic/client.js";
@@ -241,8 +242,8 @@ describe("VercelAIGatewayProvider", () => {
         caught = error;
       }
 
-      expect(caught).toBeInstanceOf(ProviderError);
-      const err = caught as ProviderError;
+      assert(caught instanceof ProviderError, "Expected ProviderError");
+      const err = caught;
       expect(err.provider).toBe("vercel-ai-gateway");
       expect(err.message).toBe("rate limited");
       expect(err.statusCode).toBe(429);
@@ -271,8 +272,11 @@ describe("VercelAIGatewayProvider", () => {
         caught = error;
       }
 
-      expect(caught).toBeInstanceOf(ContextOverflowError);
-      const err = caught as ContextOverflowError;
+      assert(
+        caught instanceof ContextOverflowError,
+        "Expected ContextOverflowError",
+      );
+      const err = caught;
       expect(err.provider).toBe("vercel-ai-gateway");
       expect(err.actualTokens).toBe(250_000);
       expect(err.maxTokens).toBe(200_000);

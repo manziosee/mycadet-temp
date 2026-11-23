@@ -25,11 +25,15 @@ function createTestDb() {
 }
 
 function columnNames(sqlite: Database): string[] {
-  return (
-    sqlite.query("PRAGMA table_info(cron_jobs)").all() as Array<{
-      name: string;
-    }>
-  ).map((c) => c.name);
+  return sqlite
+    .query<
+      {
+        name: string;
+      },
+      []
+    >("PRAGMA table_info(cron_jobs)")
+    .all()
+    .map((c) => c.name);
 }
 
 describe("migration 282: cron_jobs inference_profile", () => {
@@ -39,12 +43,16 @@ describe("migration 282: cron_jobs inference_profile", () => {
 
     migrateScheduleInferenceProfile(db);
 
-    const column = (
-      sqlite.query("PRAGMA table_info(cron_jobs)").all() as Array<{
-        name: string;
-        notnull: number;
-      }>
-    ).find((c) => c.name === "inference_profile");
+    const column = sqlite
+      .query<
+        {
+          name: string;
+          notnull: number;
+        },
+        []
+      >("PRAGMA table_info(cron_jobs)")
+      .all()
+      .find((c) => c.name === "inference_profile");
     expect(column).toBeDefined();
     expect(column?.notnull).toBe(0);
   });
@@ -59,8 +67,11 @@ describe("migration 282: cron_jobs inference_profile", () => {
     migrateScheduleInferenceProfile(db);
 
     const row = sqlite
-      .query("SELECT inference_profile FROM cron_jobs WHERE id = 'job-1'")
-      .get() as { inference_profile: string | null };
+      .query<
+        { inference_profile: string | null },
+        []
+      >("SELECT inference_profile FROM cron_jobs WHERE id = 'job-1'")
+      .get()!;
     expect(row.inference_profile).toBeNull();
   });
 

@@ -1,3 +1,4 @@
+import type { SQLQueryBindings } from "bun:sqlite";
 /**
  * Tests for migration 222 — stripping placeholder-sentinel text blocks from
  * persisted assistant messages.
@@ -47,11 +48,12 @@ function insert(role: string, content: string): { id: string; rowid: number } {
       `INSERT INTO messages (id, conversation_id, role, content, created_at) VALUES (?, ?, ?, ?, ?)`,
     )
     .run(id, CONV, role, content, Date.now());
-  const rowid = (
-    getSqlite()
-      .query(`SELECT rowid AS r FROM messages WHERE id = ?`)
-      .get(id) as { r: number }
-  ).r;
+  const rowid = getSqlite()
+    .query<
+      { r: number },
+      SQLQueryBindings[]
+    >(`SELECT rowid AS r FROM messages WHERE id = ?`)
+    .get(id)!.r;
   return { id, rowid };
 }
 
@@ -72,11 +74,14 @@ function insertAt(
 }
 
 function content(id: string): string {
-  return (
-    getSqlite().query(`SELECT content FROM messages WHERE id = ?`).get(id) as {
-      content: string;
-    }
-  ).content;
+  return getSqlite()
+    .query<
+      {
+        content: string;
+      },
+      SQLQueryBindings[]
+    >(`SELECT content FROM messages WHERE id = ?`)
+    .get(id)!.content;
 }
 
 function blocks(id: string): Array<Record<string, unknown>> {
@@ -216,11 +221,14 @@ describe("migration 222 — strip placeholder sentinels from assistant messages"
 
   test("sweeps a rowid span wider than one window across multiple windows", async () => {
     const base =
-      (
-        getSqlite().query(`SELECT MAX(rowid) AS m FROM messages`).get() as {
-          m: number | null;
-        }
-      ).m ?? 0;
+      getSqlite()
+        .query<
+          {
+            m: number | null;
+          },
+          []
+        >(`SELECT MAX(rowid) AS m FROM messages`)
+        .get()!.m ?? 0;
     const first = insertAt(
       base + ROWID_WINDOW,
       "assistant",
