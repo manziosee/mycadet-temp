@@ -30,8 +30,8 @@ describe("hatchAssistant — the coalesced hatch", () => {
     respondWith([{ ok: true, assistantId: "a-1" }]);
 
     const [first, second] = await Promise.all([
-      operations.hatchAssistant("local"),
-      operations.hatchAssistant("local"),
+      operations.hatchAssistant({ remote: "local" }),
+      operations.hatchAssistant({ remote: "local" }),
     ]);
 
     expect(fetchCalls).toBe(1);
@@ -46,9 +46,10 @@ describe("hatchAssistant — the coalesced hatch", () => {
       return Response.json({ ok: true, assistantId: "a-1" });
     }) as typeof fetch;
     const provider = { provider: "fireworks", precollectedApiKey: "fw_test" };
-    await operations.hatchAssistant("local", provider);
-    await operations.hatchAssistant("local", provider);
-    await operations.hatchAssistant("local", {
+    await operations.hatchAssistant({ remote: "local", ...provider });
+    await operations.hatchAssistant({ remote: "local", ...provider });
+    await operations.hatchAssistant({
+      remote: "local",
       ...provider,
       precollectedApiKey: "fw_changed",
     });
@@ -64,8 +65,8 @@ describe("hatchAssistant — the coalesced hatch", () => {
       { ok: true, assistantId: "cloud-1" },
     ]);
 
-    await operations.hatchAssistant("local");
-    const switched = await operations.hatchAssistant("cloud");
+    await operations.hatchAssistant({ remote: "local" });
+    const switched = await operations.hatchAssistant({ remote: "cloud" });
 
     expect(fetchCalls).toBe(2);
     expect(switched).toEqual({ ok: true, assistantId: "cloud-1" });
@@ -77,10 +78,10 @@ describe("hatchAssistant — the coalesced hatch", () => {
       { ok: true, assistantId: "a-2" },
     ]);
 
-    const failed = await operations.hatchAssistant("local");
+    const failed = await operations.hatchAssistant({ remote: "local" });
     expect(failed.ok).toBe(false);
 
-    const retried = await operations.hatchAssistant("local");
+    const retried = await operations.hatchAssistant({ remote: "local" });
     expect(fetchCalls).toBe(2);
     expect(retried).toEqual({ ok: true, assistantId: "a-2" });
   });
@@ -91,9 +92,9 @@ describe("hatchAssistant — the coalesced hatch", () => {
       { ok: true, assistantId: "a-2" },
     ]);
 
-    await operations.hatchAssistant("local");
+    await operations.hatchAssistant({ remote: "local" });
     operations.releaseHatchGuard();
-    await operations.hatchAssistant("local");
+    await operations.hatchAssistant({ remote: "local" });
 
     expect(fetchCalls).toBe(2);
   });

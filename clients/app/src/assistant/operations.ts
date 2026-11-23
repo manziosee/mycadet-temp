@@ -164,23 +164,22 @@ type HatchAssistantResult = {
   error?: string;
 };
 
-export interface HatchProviderOptions {
+export interface HatchOptions {
+  remote?: string;
   provider?: string;
   precollectedApiKey?: string;
-  configValues?: Record<string, string>;
 }
 
 export async function hatchAssistant(
-  remote?: string,
-  providerOptions?: HatchProviderOptions,
+  options: HatchOptions = {},
 ): Promise<HatchAssistantResult> {
-  const input = JSON.stringify({ remote, ...providerOptions });
+  const input = JSON.stringify(options);
   if (hatchPromise && hatchInput !== input) {
     releaseHatchGuard();
   }
   if (!hatchPromise) {
     hatchInput = input;
-    hatchPromise = requestHatch(remote, providerOptions).then((result) => {
+    hatchPromise = requestHatch(options).then((result) => {
       if (!result.ok) {
         releaseHatchGuard();
       }
@@ -191,14 +190,13 @@ export async function hatchAssistant(
 }
 
 async function requestHatch(
-  remote?: string,
-  providerOptions?: HatchProviderOptions,
+  options: HatchOptions = {},
 ): Promise<HatchAssistantResult> {
   try {
     const res = await fetch("/v1/assistants/hatch", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ remote, ...providerOptions }),
+      body: JSON.stringify(options),
     });
     const parsed = (await res.json().catch(() => null)) as {
       ok?: boolean;

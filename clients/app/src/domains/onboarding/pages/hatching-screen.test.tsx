@@ -27,9 +27,11 @@ const navigateMock = mock((_to: string, _opts?: unknown) => {});
 let searchParams = new URLSearchParams();
 
 const hatchAssistantMock = mock(
-  async (
-    _remote?: string,
-  ): Promise<
+  async (_options?: {
+    remote?: string;
+    provider?: string;
+    precollectedApiKey?: string;
+  }): Promise<
     { ok: true; assistantId: string } | { ok: false; error: string }
   > => ({
     ok: true as const,
@@ -175,12 +177,10 @@ describe("hatching screen", () => {
     await waitFor(() => expect(navigateMock).toHaveBeenCalled(), {
       timeout: 5000,
     });
-    expect(hatchAssistantMock).toHaveBeenCalledWith("local", {
+    expect(hatchAssistantMock).toHaveBeenCalledWith({
+      remote: "local",
       provider: "fireworks",
       precollectedApiKey: "fw_test",
-      configValues: {
-        "llm.default.model": "accounts/fireworks/models/minimax-m3",
-      },
     });
     expect(sessionStorage.getItem("onboarding.providerKey")).toBeNull();
   });
@@ -205,7 +205,11 @@ describe("hatching screen", () => {
     await waitFor(() => expect(navigateMock).toHaveBeenCalled(), {
       timeout: 5000,
     });
-    expect(hatchAssistantMock).toHaveBeenCalledWith("local", undefined);
+    expect(hatchAssistantMock).toHaveBeenCalledWith({
+      remote: "local",
+      provider: undefined,
+      precollectedApiKey: undefined,
+    });
     expect(writeSelectionMock).toHaveBeenCalledWith("local-1");
     // The resolution answered notReady once, so the wait loop polled again.
     expect(resolutionCallCount).toBe(2);
@@ -227,7 +231,11 @@ describe("hatching screen", () => {
     render(<HatchingScreen />);
 
     await waitFor(() => expect(screen.getByRole("alert")).toBeDefined());
-    expect(hatchAssistantMock).toHaveBeenCalledWith("local", undefined);
+    expect(hatchAssistantMock).toHaveBeenCalledWith({
+      remote: "local",
+      provider: undefined,
+      precollectedApiKey: undefined,
+    });
     // The 401 is fatal: one query, no polling, no handoff.
     expect(resolutionCallCount).toBe(1);
     expect(navigateMock).not.toHaveBeenCalled();
@@ -240,7 +248,11 @@ describe("hatching screen", () => {
     await waitFor(() => expect(navigateMock).toHaveBeenCalled(), {
       timeout: 5000,
     });
-    expect(hatchAssistantMock).toHaveBeenCalledWith("docker", undefined);
+    expect(hatchAssistantMock).toHaveBeenCalledWith({
+      remote: "docker",
+      provider: undefined,
+      precollectedApiKey: undefined,
+    });
     expect(navigateMock).toHaveBeenCalledWith(routes.assistant, {
       replace: true,
       state: { assistantSelection: { id: "local-1" } },
@@ -254,7 +266,11 @@ describe("hatching screen", () => {
     await waitFor(() => expect(navigateMock).toHaveBeenCalled(), {
       timeout: 5000,
     });
-    expect(hatchAssistantMock).toHaveBeenCalledWith("cloud", undefined);
+    expect(hatchAssistantMock).toHaveBeenCalledWith({
+      remote: "cloud",
+      provider: undefined,
+      precollectedApiKey: undefined,
+    });
     expect(writeSelectionMock).toHaveBeenCalledWith("local-1");
     // The hatch avatar re-home: the freshly hatched assistant's id seeds the
     // random traits on the scoped surface (fire-and-forget, never awaited).

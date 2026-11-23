@@ -2,7 +2,7 @@ import { isActiveAssistant, readLockfile } from "../lockfile";
 import { pairingCancel, pairingPoll, pairingStart } from "../pair";
 import { runDevicesList, runDevicesRevoke } from "../devices";
 import { readLockfileAssistantAvatar } from "../avatar";
-import { hatchAssistant } from "./hatch";
+import { hatchAssistant, HatchAssistantParamsSchema } from "./hatch";
 import { upgradeAssistant } from "./upgrade";
 import { consoleLifecycleReporter } from "../lifecycle-reporter";
 import { ownVersion } from "../environment";
@@ -273,13 +273,14 @@ async function readJsonBody(
 }
 
 /** The hatch row's body: the requested remote override; junk degrades to a plain hatch. */
-const HatchBodySchema = z
-  .object({
-    provider: z.string().optional(),
-    precollectedApiKey: z.string().optional(),
-    configValues: z.record(z.string(), z.string()).optional(),
-    remote: z
-      .string()
+const HatchBodySchema = HatchAssistantParamsSchema.pick({
+  remote: true,
+  provider: true,
+  precollectedApiKey: true,
+  configValues: true,
+})
+  .extend({
+    remote: HatchAssistantParamsSchema.shape.remote
       .nullish()
       .catch(undefined)
       .transform((remote) => remote ?? "local"),

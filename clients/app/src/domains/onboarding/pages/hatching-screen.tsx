@@ -199,20 +199,11 @@ export function HatchingScreen() {
         // screen never branches on the mode.
         const remote = hosting ?? "local";
         const pendingProvider = peekPendingProviderKey();
-        const result = await hatchAssistant(
+        const result = await hatchAssistant({
           remote,
-          pendingProvider
-            ? {
-                provider: pendingProvider.provider,
-                precollectedApiKey: pendingProvider.key,
-                configValues: pendingProvider.model
-                  ? {
-                      "llm.default.model": pendingProvider.model,
-                    }
-                  : undefined,
-              }
-            : undefined,
-        );
+          provider: pendingProvider?.provider,
+          precollectedApiKey: pendingProvider?.key,
+        });
         if (cancelled) {
           return;
         }

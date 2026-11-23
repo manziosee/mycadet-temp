@@ -1,3 +1,4 @@
+import { z } from "zod";
 import type { LifecycleReporter } from "../lifecycle-reporter";
 import { ensureLockfile } from "../lockfile";
 import { notifyGatewayOfPublicUrl } from "../ingress-url";
@@ -30,30 +31,39 @@ import { HatchAssistantResult } from "./types";
  * lease. The cloud arm is the platform hatch call with the caller's stored
  * token. The baseten arm builds, pushes, and creates the sandbox.
  */
-export interface HatchAssistantParams {
-  remote: string;
-  name?: string | null;
-  watch?: boolean;
+export const HatchAssistantParamsSchema = z.object({
+  remote: z.string(),
+  name: z.string().nullable().optional(),
+  watch: z.boolean().optional(),
   /** The merged hatch config (the CLI folds its provider choice in). */
-  configValues?: Record<string, string>;
+  configValues: z.record(z.string(), z.string()).optional(),
   /** Show the arms' per-service startup logs (the local leg). */
-  verbose?: boolean;
-  /** The caller's release version — the docker/baseten image stamp, the local daemon env. */
-  version?: string;
+  verbose: z.boolean().optional(),
+  /** The caller's release version. */
+  version: z.string().optional(),
   /** docker arm: build images from a source tree instead of pulling. */
-  sourcePath?: string | null;
-  /** docker arm: join an existing container's network namespace. */
-  netnsContainer?: string;
-  /** docker arm: explicit host gateway port (required with netnsContainer). */
-  gatewayPort?: number;
-  /** docker arm: PEM CA bundle bind-mounted into the assistant container. */
-  assistantCaCertPath?: string;
-  /** The caller's provider choice; undefined = skip provider credential setup. */
-  provider?: string | null;
-  precollectedApiKey?: string;
-  /** The narration sink (defaults to the console reporter). */
-  reporter?: LifecycleReporter;
-}
+  sourcePath: z.string().nullable().optional(),
+  netnsContainer: z.string().optional(),
+  gatewayPort: z.number().optional(),
+  assistantCaCertPath: z.string().optional(),
+  /** Undefined skips provider credential setup. */
+  provider: z.string().nullable().optional(),
+  precollectedApiKey: z.string().optional(),
+  /** In-process narration sink; never accepted from HTTP callers. */
+  reporter: z
+    .custom<LifecycleReporter>(
+      (value) =>
+        value !== null &&
+        typeof value === "object" &&
+        ["progress", "log", "warn", "error"].every(
+          (key) =>
+            key in value && typeof Reflect.get(value, key) === "function",
+        ),
+    )
+    .optional(),
+});
+
+export type HatchAssistantParams = z.infer<typeof HatchAssistantParamsSchema>;
 
 export async function hatchAssistant(
   params: HatchAssistantParams,
