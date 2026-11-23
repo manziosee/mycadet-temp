@@ -896,11 +896,7 @@ describe("Conversation message queue", () => {
     // capture and before the loop opens. persistUserMessage is awaited there.
     const originalPersist = conversation.persistUserMessage.bind(conversation);
     let slotMoved = false;
-    (
-      conversation as unknown as {
-        persistUserMessage: typeof conversation.persistUserMessage;
-      }
-    ).persistUserMessage = async (opts) => {
+    conversation.persistUserMessage = async (opts) => {
       const result = await originalPersist(opts);
       conversation.setTrustContext({
         trustClass: "guardian",
@@ -2492,11 +2488,7 @@ describe("Batched drain", () => {
     await conversation.loadFromDb();
 
     const budget = 4000;
-    (
-      conversation as unknown as {
-        queue: MessageQueue;
-      }
-    ).queue = new MessageQueue(budget);
+    Object.assign(conversation, { queue: new MessageQueue(budget) });
 
     // Start in-flight so subsequent enqueues are queued (not processed).
     const p1 = conversation.processMessage({
@@ -2799,10 +2791,7 @@ describe("Batched drain correctness fixes", () => {
     // The agent loop should have been invoked with the tail's userMessageId
     // (last SUCCESSFUL persist), not the mid's. We check via currentRequestId
     // on the conversation which drainBatch assigns after the loop.
-    expect(
-      (conversation as unknown as { currentRequestId?: string })
-        .currentRequestId,
-    ).toBe("req-tail");
+    expect(conversation.currentRequestId).toBe("req-tail");
 
     // Cleanup: resolve the batched run.
     await resolveRun(1);

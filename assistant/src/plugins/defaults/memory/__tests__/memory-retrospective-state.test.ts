@@ -365,8 +365,11 @@ describe("memory-retrospective-state cursor timestamp", () => {
     expect(ensureRetrospectiveCursorColumn("test")).toBe(true);
 
     const columns = raw
-      .query("PRAGMA table_info(memory_retrospective_state)")
-      .all() as Array<{ name: string }>;
+      .query<
+        { name: string },
+        []
+      >("PRAGMA table_info(memory_retrospective_state)")
+      .all();
     expect(
       columns.filter((c) => c.name === "last_processed_created_at"),
     ).toHaveLength(1);
@@ -387,8 +390,11 @@ describe("memory-retrospective-state cursor timestamp", () => {
     expect(getRetrospectiveState("conv-none")).toBeNull();
     expect(ensureRetrospectiveCursorColumn("test")).toBe(true);
     const columns = reopened
-      .query("PRAGMA table_info(memory_retrospective_state)")
-      .all() as Array<{ name: string }>;
+      .query<
+        { name: string },
+        []
+      >("PRAGMA table_info(memory_retrospective_state)")
+      .all();
     expect(columns.some((c) => c.name === "last_processed_created_at")).toBe(
       true,
     );

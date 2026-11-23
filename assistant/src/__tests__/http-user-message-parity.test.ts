@@ -547,9 +547,7 @@ describe("HTTP POST /v1/messages client metadata headers", () => {
     expect(persistUserMessage).toHaveBeenCalledTimes(1);
     const persistCall = persistUserMessage.mock.calls[0];
     expect(persistCall).toBeDefined();
-    const [persistOptions] = persistCall as unknown as [
-      { metadata?: Record<string, unknown> },
-    ];
+    const [persistOptions] = persistCall;
     expect(persistOptions.metadata).toEqual({
       client: {
         browser_family: "safari",
@@ -585,9 +583,7 @@ describe("HTTP POST /v1/messages client metadata headers", () => {
     expect(enqueueMessage).toHaveBeenCalledTimes(1);
     const enqueueCall = enqueueMessage.mock.calls[0];
     expect(enqueueCall).toBeDefined();
-    const [enqueueOptions] = enqueueCall as unknown as [
-      { metadata?: Record<string, unknown> },
-    ];
+    const [enqueueOptions] = enqueueCall;
     expect(enqueueOptions.metadata).toMatchObject({
       client: {
         browser_family: "safari",
@@ -623,9 +619,7 @@ describe("HTTP POST /v1/messages client metadata headers", () => {
     );
 
     expect(res.status).toBe(202);
-    const [persistOptions] = persistUserMessage.mock.calls[0] as unknown as [
-      { metadata?: Record<string, unknown> },
-    ];
+    const [persistOptions] = persistUserMessage.mock.calls[0];
     expect(persistOptions.metadata).toEqual({
       client: { browser_family: "safari" },
     });
@@ -644,9 +638,7 @@ describe("HTTP POST /v1/messages client metadata headers", () => {
     const res = await sendMessage("hello", conversation);
 
     expect(res.status).toBe(202);
-    const [persistOptions] = persistUserMessage.mock.calls[0] as unknown as [
-      { metadata?: Record<string, unknown> },
-    ];
+    const [persistOptions] = persistUserMessage.mock.calls[0];
     expect(persistOptions.metadata).toBeUndefined();
   });
 
@@ -669,9 +661,7 @@ describe("HTTP POST /v1/messages client metadata headers", () => {
     });
 
     expect(res.status).toBe(202);
-    const [persistOptions] = persistUserMessage.mock.calls[0] as unknown as [
-      { requestClientOs?: string },
-    ];
+    const [persistOptions] = persistUserMessage.mock.calls[0];
     expect(persistOptions.requestClientOs).toBe("macos");
   });
 
@@ -688,9 +678,7 @@ describe("HTTP POST /v1/messages client metadata headers", () => {
     const res = await sendMessage("hello", conversation);
 
     expect(res.status).toBe(202);
-    const [persistOptions] = persistUserMessage.mock.calls[0] as unknown as [
-      { requestClientOs?: string },
-    ];
+    const [persistOptions] = persistUserMessage.mock.calls[0];
     expect(persistOptions.requestClientOs).toBeUndefined();
   });
 });

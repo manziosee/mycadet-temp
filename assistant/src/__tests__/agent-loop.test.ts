@@ -1016,7 +1016,7 @@ describe("AgentLoop", () => {
 
     const usageEvents = events.filter((e) => e.type === "usage");
     expect(usageEvents).toHaveLength(1);
-    const usage = usageEvents[0] as Extract<AgentEvent, { type: "usage" }>;
+    const usage = usageEvents[0];
     expect(usage.type).toBe("usage");
     expect(usage.inputTokens).toBe(10);
     expect(usage.outputTokens).toBe(5);
@@ -1083,18 +1083,9 @@ describe("AgentLoop", () => {
 
     const toolResultEvents = events.filter((e) => e.type === "tool_result");
     expect(toolResultEvents).toHaveLength(1);
-    expect(
-      (toolResultEvents[0] as Extract<AgentEvent, { type: "tool_result" }>)
-        .toolUseId,
-    ).toBe("t1");
-    expect(
-      (toolResultEvents[0] as Extract<AgentEvent, { type: "tool_result" }>)
-        .content,
-    ).toBe("file data");
-    expect(
-      (toolResultEvents[0] as Extract<AgentEvent, { type: "tool_result" }>)
-        .isError,
-    ).toBe(false);
+    expect(toolResultEvents[0].toolUseId).toBe("t1");
+    expect(toolResultEvents[0].content).toBe("file data");
+    expect(toolResultEvents[0].isError).toBe(false);
   });
 
   // 9. Tool executor error results are forwarded correctly
@@ -1168,14 +1159,8 @@ describe("AgentLoop", () => {
 
     const chunkEvents = events.filter((e) => e.type === "tool_output_chunk");
     expect(chunkEvents).toHaveLength(2);
-    expect(
-      (chunkEvents[0] as Extract<AgentEvent, { type: "tool_output_chunk" }>)
-        .chunk,
-    ).toBe("chunk1");
-    expect(
-      (chunkEvents[1] as Extract<AgentEvent, { type: "tool_output_chunk" }>)
-        .chunk,
-    ).toBe("chunk2");
+    expect(chunkEvents[0].chunk).toBe("chunk1");
+    expect(chunkEvents[1].chunk).toBe("chunk2");
   });
 
   // 11. System prompt and tools are passed to provider

@@ -26,7 +26,7 @@ mock.module("../runtime/background-job-runner.js", () => ({
     prompt: string;
     onConversationCreated?: (conversationId: string) => void;
   }) => {
-    runnerCalls.push(opts as unknown as Record<string, unknown>);
+    runnerCalls.push(opts);
     const conversationId = `mock-conv-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     opts.onConversationCreated?.(conversationId);
     try {
@@ -130,8 +130,7 @@ await initializeDb();
 
 /** Access the underlying bun:sqlite Database for raw parameterized queries. */
 function getRawDb(): import("bun:sqlite").Database {
-  return (getDb() as unknown as { $client: import("bun:sqlite").Database })
-    .$client;
+  return getDb().$client;
 }
 
 /** Force a schedule to be due by setting next_run_at in the past. */

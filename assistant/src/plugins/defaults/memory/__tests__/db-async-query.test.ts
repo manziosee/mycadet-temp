@@ -49,9 +49,9 @@ function inflateAndDelete(byteTarget: number): void {
   sqlite.exec(
     "CREATE TABLE IF NOT EXISTS async_bloat (id INTEGER PRIMARY KEY, payload BLOB)",
   );
-  const pageSize = (
-    sqlite.query("PRAGMA page_size").get() as { page_size: number }
-  ).page_size;
+  const pageSize = sqlite
+    .query<{ page_size: number }, []>("PRAGMA page_size")
+    .get()!.page_size;
   const rowsTarget = Math.max(1, Math.ceil(byteTarget / pageSize));
   const payload = new Uint8Array(Math.max(1, pageSize - 64));
   const insert = sqlite.prepare("INSERT INTO async_bloat (payload) VALUES (?)");
@@ -260,11 +260,14 @@ describe("runAsyncSqlite attach mode", () => {
 
       // The row is durable in the attached file.
       const verify = new Database(targetPath);
-      const count = (
-        verify.query("SELECT count(*) AS c FROM attach_probe").get() as {
-          c: number;
-        }
-      ).c;
+      const count = verify
+        .query<
+          {
+            c: number;
+          },
+          []
+        >("SELECT count(*) AS c FROM attach_probe")
+        .get()!.c;
       verify.close();
       expect(count).toBe(1);
     } finally {

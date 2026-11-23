@@ -1,3 +1,4 @@
+import type { SQLQueryBindings } from "bun:sqlite";
 import { beforeEach, describe, expect, mock, test } from "bun:test";
 
 mock.module("../runtime/agent-wake.js", () => ({
@@ -118,13 +119,16 @@ describe("scheduler disk pressure gate", () => {
     expect(mockEmitNotificationSignal).not.toHaveBeenCalled();
 
     const row = rawDb()
-      .query("SELECT status, next_run_at FROM cron_jobs WHERE id = ?")
-      .get(schedule.id) as { status: string; next_run_at: number } | null;
+      .query<
+        { status: string; next_run_at: number },
+        SQLQueryBindings[]
+      >("SELECT status, next_run_at FROM cron_jobs WHERE id = ?")
+      .get(schedule.id);
     expect(row).toEqual({ status: "active", next_run_at: dueAt });
 
     const runCount = rawDb()
-      .query("SELECT COUNT(*) AS count FROM cron_runs")
-      .get() as { count: number };
+      .query<{ count: number }, []>("SELECT COUNT(*) AS count FROM cron_runs")
+      .get()!;
     expect(runCount.count).toBe(0);
   });
 });

@@ -279,7 +279,7 @@ describe("Verification control messages are deterministic (guard)", () => {
       const response = await handleChannelInbound({
         body: JSON.parse(await req.text()),
       });
-      const body = response as Record<string, unknown>;
+      const body = response;
 
       // Bootstrap should have been handled deterministically
       expect(body.verificationOutcome).toBe("bootstrap_bound");
@@ -356,7 +356,7 @@ describe("Verification control messages are deterministic (guard)", () => {
     const response = await handleChannelInbound({
       body: JSON.parse(await req.text()),
     });
-    const body = response as Record<string, unknown>;
+    const body = response;
 
     expect(body.accepted).toBe(true);
     expect(body.denied).toBe(true);

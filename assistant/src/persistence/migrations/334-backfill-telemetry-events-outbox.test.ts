@@ -1,3 +1,4 @@
+import type { SQLQueryBindings } from "bun:sqlite";
 /**
  * Tests for migration 334: backfilling unshipped rows from the six legacy
  * per-type telemetry tables into the generic `telemetry_events` outbox,
@@ -118,30 +119,30 @@ function outboxRows(name: string): Array<{
   conversation_id: string | null;
   payload: Record<string, unknown>;
 }> {
-  return (
-    telemetry()
-      .query(
-        `SELECT id, created_at, conversation_id, payload FROM telemetry_events
+  return telemetry()
+    .query<
+      {
+        id: string;
+        created_at: number;
+        conversation_id: string | null;
+        payload: string;
+      },
+      SQLQueryBindings[]
+    >(
+      `SELECT id, created_at, conversation_id, payload FROM telemetry_events
          WHERE name = ? ORDER BY created_at, id`,
-      )
-      .all(name) as Array<{
-      id: string;
-      created_at: number;
-      conversation_id: string | null;
-      payload: string;
-    }>
-  ).map((row) => ({ ...row, payload: JSON.parse(row.payload) }));
+    )
+    .all(name)
+    .map((row) => ({ ...row, payload: JSON.parse(row.payload) }));
 }
 
 function watermarkKeyCount(): number {
-  return (
-    telemetry()
-      .query(
-        `SELECT COUNT(*) AS n FROM flush_checkpoints
+  return telemetry()
+    .query<{ n: number }, SQLQueryBindings[]>(
+      `SELECT COUNT(*) AS n FROM flush_checkpoints
          WHERE key IN (${WATERMARK_KEYS.map(() => "?").join(", ")})`,
-      )
-      .get(...WATERMARK_KEYS) as { n: number }
-  ).n;
+    )
+    .get(...WATERMARK_KEYS)!.n;
 }
 
 describe("migration 334: backfill telemetry_events from the legacy tables", () => {

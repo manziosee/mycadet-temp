@@ -30,7 +30,6 @@ import {
   getMessageById,
 } from "../persistence/conversation-crud.js";
 import { initializeDb } from "../persistence/db-init.js";
-import type { ContentBlock } from "../providers/types.js";
 import { mockUnownedModeSessions } from "./helpers/mock-conversation.js";
 beforeAll(async () => {
   await initializeDb();
@@ -66,11 +65,11 @@ function makeDeps(): EventHandlerDeps {
     turnChannelContext: {
       userMessageChannel: "cadet",
       assistantMessageChannel: "cadet",
-    } as unknown as EventHandlerDeps["turnChannelContext"],
+    } as EventHandlerDeps["turnChannelContext"],
     turnInterfaceContext: {
       userMessageInterface: "web",
       assistantMessageInterface: "web",
-    } as unknown as EventHandlerDeps["turnInterfaceContext"],
+    } as EventHandlerDeps["turnInterfaceContext"],
     applyCompaction: async () => {},
   };
 }
@@ -111,7 +110,7 @@ function persistedToolUse(toolUseId: string): Record<string, unknown> {
   if (!row) {
     throw new Error(`row ${currentRowId} not found`);
   }
-  const block = (row.content as unknown as ContentBlock[]).find(
+  const block = row.content.find(
     (b) =>
       b.type === "tool_use" &&
       (b as unknown as Record<string, unknown>).id === toolUseId,

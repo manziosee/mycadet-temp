@@ -296,7 +296,7 @@ describe("cloud-managed config defaults", () => {
 
     // The on-disk file is NOT modified by the fill pass — disk reflects only
     // what was already there. Existing-file branch never re-writes config.json.
-    const onDisk = readConfig() as Record<string, unknown>;
+    const onDisk = readConfig();
     expect(onDisk["services"]).toBeUndefined();
   });
 
@@ -322,12 +322,7 @@ describe("cloud-managed config defaults", () => {
 
     const config = getConfig();
 
-    const imageGen = (
-      config.services as unknown as Record<
-        string,
-        { mode?: string; provider?: string }
-      >
-    )["image-generation"]!;
+    const imageGen = config.services["image-generation"]!;
     expect(imageGen.provider).toBe("openai");
     expect(imageGen).not.toHaveProperty("mode");
   });

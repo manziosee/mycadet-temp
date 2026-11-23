@@ -35,7 +35,7 @@ describe("mcp-auth route body validation", () => {
   test("internal_mcp_auth_revoke rejects a non-string serverId", async () => {
     await expect(
       routeFor("internal_mcp_auth_revoke").handler({
-        body: { serverId: 42 } as unknown as Record<string, unknown>,
+        body: { serverId: 42 },
       }),
     ).rejects.toThrow(BadRequestError);
   });
@@ -43,7 +43,7 @@ describe("mcp-auth route body validation", () => {
   test("internal_mcp_update rejects a non-string name", async () => {
     await expect(
       routeFor("internal_mcp_update").handler({
-        body: { name: 42 } as unknown as Record<string, unknown>,
+        body: { name: 42 },
       }),
     ).rejects.toThrow(BadRequestError);
   });

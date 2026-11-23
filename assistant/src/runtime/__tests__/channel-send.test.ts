@@ -34,11 +34,9 @@ function fakeTransport(
     async deliver(ctx, payload) {
       deliverCalls.push({
         ctx: { callbackUrl: ctx.callbackUrl, params: { ...ctx.params } },
-        payload: payload as unknown as Record<string, unknown>,
+        payload: payload,
       });
-      return deliverResult as unknown as Awaited<
-        ReturnType<ChannelTransport["deliver"]>
-      >;
+      return deliverResult as Awaited<ReturnType<ChannelTransport["deliver"]>>;
     },
   };
   if (opts.addressable !== false) {

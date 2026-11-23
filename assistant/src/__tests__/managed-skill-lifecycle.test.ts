@@ -100,9 +100,9 @@ Run the custom lifecycle verification procedure.
       makeContext(),
     );
     expect(loadResult.isError).not.toBe(true);
-    expect(loadResult.content as string).toContain("Skill: E2E Custom Skill");
-    expect(loadResult.content as string).toContain("ID: e2e-custom-skill");
-    expect(loadResult.content as string).toContain(
+    expect(loadResult.content).toContain("Skill: E2E Custom Skill");
+    expect(loadResult.content).toContain("ID: e2e-custom-skill");
+    expect(loadResult.content).toContain(
       "Run the custom lifecycle verification procedure.",
     );
 
@@ -136,7 +136,7 @@ Run the custom lifecycle verification procedure.
     );
 
     expect(scaffoldResult.isError).not.toBe(true);
-    const scaffoldData = JSON.parse(scaffoldResult.content as string);
+    const scaffoldData = JSON.parse(scaffoldResult.content);
     expect(scaffoldData.created).toBe(true);
     expect(scaffoldData).not.toHaveProperty("index_updated");
 
@@ -166,7 +166,7 @@ Run the custom lifecycle verification procedure.
     );
 
     expect(deleteResult.isError).not.toBe(true);
-    const deleteData = JSON.parse(deleteResult.content as string);
+    const deleteData = JSON.parse(deleteResult.content);
     expect(deleteData.deleted).toBe(true);
     expect(deleteData).not.toHaveProperty("index_updated");
 
@@ -253,7 +253,7 @@ Run the custom lifecycle verification procedure.
     );
 
     expect(scaffoldResult.isError).not.toBe(true);
-    const scaffoldData = JSON.parse(scaffoldResult.content as string);
+    const scaffoldData = JSON.parse(scaffoldResult.content);
     expect(scaffoldData.created).toBe(true);
 
     // Step 2: Call skill_load tool to load the created skill
@@ -262,7 +262,7 @@ Run the custom lifecycle verification procedure.
       ctx,
     );
     expect(loadResult.isError).not.toBe(true);
-    const loadContent = loadResult.content as string;
+    const loadContent = loadResult.content;
     expect(loadContent).toContain("Skill: Chain Test");
     expect(loadContent).toContain("ID: chain-test");
     expect(loadContent).toContain("Description: Created from scaffold.");

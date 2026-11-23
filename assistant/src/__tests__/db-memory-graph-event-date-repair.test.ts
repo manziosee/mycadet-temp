@@ -1,3 +1,4 @@
+import type { SQLQueryBindings } from "bun:sqlite";
 import { Database } from "bun:sqlite";
 import { describe, expect, test } from "bun:test";
 
@@ -43,15 +44,21 @@ function bootstrapTables(raw: Database): void {
 
 function eventDateFor(raw: Database, nodeId: string): number | null {
   const row = raw
-    .query(`SELECT event_date FROM memory_graph_nodes WHERE id = ?`)
-    .get(nodeId) as { event_date: number | null } | null;
+    .query<
+      { event_date: number | null },
+      SQLQueryBindings[]
+    >(`SELECT event_date FROM memory_graph_nodes WHERE id = ?`)
+    .get(nodeId);
   return row?.event_date ?? null;
 }
 
 function triggerEventDateFor(raw: Database, triggerId: string): number | null {
   const row = raw
-    .query(`SELECT event_date FROM memory_graph_triggers WHERE id = ?`)
-    .get(triggerId) as { event_date: number | null } | null;
+    .query<
+      { event_date: number | null },
+      SQLQueryBindings[]
+    >(`SELECT event_date FROM memory_graph_triggers WHERE id = ?`)
+    .get(triggerId);
   return row?.event_date ?? null;
 }
 

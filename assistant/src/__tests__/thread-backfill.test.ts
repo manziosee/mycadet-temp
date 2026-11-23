@@ -1736,8 +1736,8 @@ describe("triggerSlackThreadBackfillIfNeeded — gap detection and persistence",
 
     backfillThreadMock.mockImplementation(async (_channel, threadTs) => [
       makeBackfillMessage({
-        id: threadTs as string,
-        text: `parent of ${threadTs as string}`,
+        id: threadTs,
+        text: `parent of ${threadTs}`,
       }),
     ]);
 

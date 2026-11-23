@@ -1,3 +1,4 @@
+import type { SQLQueryBindings } from "bun:sqlite";
 import { beforeEach, describe, expect, test } from "bun:test";
 
 import { getDb, getSqlite } from "../persistence/db-connection.js";
@@ -259,8 +260,11 @@ describe("recordUsageEvent", () => {
     expect(event.cronRunId).toBe("cron-run-1");
 
     const row = getSqlite()
-      .query("SELECT cron_run_id FROM llm_usage_events WHERE id = ?")
-      .get(event.id) as { cron_run_id: string | null } | null;
+      .query<
+        { cron_run_id: string | null },
+        SQLQueryBindings[]
+      >("SELECT cron_run_id FROM llm_usage_events WHERE id = ?")
+      .get(event.id);
     expect(row?.cron_run_id).toBe("cron-run-1");
 
     // listUsageEvents routes through rowToUsageEvent; cronRunId must survive it.
@@ -273,8 +277,11 @@ describe("recordUsageEvent", () => {
     expect(event.cronRunId ?? null).toBeNull();
 
     const row = getSqlite()
-      .query("SELECT cron_run_id FROM llm_usage_events WHERE id = ?")
-      .get(event.id) as { cron_run_id: string | null } | null;
+      .query<
+        { cron_run_id: string | null },
+        SQLQueryBindings[]
+      >("SELECT cron_run_id FROM llm_usage_events WHERE id = ?")
+      .get(event.id);
     expect(row?.cron_run_id).toBeNull();
   });
 });

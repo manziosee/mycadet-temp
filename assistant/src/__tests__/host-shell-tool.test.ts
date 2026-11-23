@@ -10,7 +10,7 @@ const originalSpawn = realChildProcess.spawn;
 // Capture spawn calls to verify the host tool spawns 'bash' directly
 const spawnCalls: { command: string; args: string[] }[] = [];
 const spawnSpy = mock((...args: Parameters<typeof realChildProcess.spawn>) => {
-  spawnCalls.push({ command: args[0] as string, args: args[1] as string[] });
+  spawnCalls.push({ command: args[0], args: args[1] as string[] });
   return (originalSpawn as (...a: unknown[]) => unknown)(...args);
 });
 
@@ -240,8 +240,10 @@ describe("host_bash — baseline: no sandbox isolation", () => {
 
 describe("host_bash — regression: no proxied-mode additions", () => {
   const definition = hostShellTool;
-  const schemaProps = (definition.input_schema as Record<string, unknown>)
-    .properties as Record<string, unknown>;
+  const schemaProps = definition.input_schema.properties as Record<
+    string,
+    unknown
+  >;
 
   test("schema does not include network_mode property", () => {
     expect(schemaProps).not.toHaveProperty("network_mode");
@@ -315,9 +317,7 @@ describe("host_bash — regression: no proxied-mode additions", () => {
   });
 
   test("required fields contains command and activity", () => {
-    expect(
-      (definition.input_schema as Record<string, unknown>).required,
-    ).toEqual(["command", "activity"]);
+    expect(definition.input_schema.required).toEqual(["command", "activity"]);
   });
 });
 

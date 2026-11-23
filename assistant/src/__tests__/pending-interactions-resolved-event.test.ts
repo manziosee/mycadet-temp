@@ -179,7 +179,7 @@ describe("removeByConversation emits interaction_resolved per entry", () => {
 
     const events = publishedMessages.filter(
       (m) => m.type === "interaction_resolved",
-    ) as Extract<AssistantEvent, { type: "interaction_resolved" }>[];
+    );
     expect(events).toHaveLength(2);
     expect(events.every((e) => e.state === "superseded")).toBe(true);
     const requestIds = new Set(events.map((e) => e.requestId));
@@ -204,10 +204,7 @@ describe("removeByConversation emits interaction_resolved per entry", () => {
       (m) => m.type === "interaction_resolved",
     );
     expect(events).toHaveLength(1);
-    expect(
-      (events[0] as Extract<AssistantEvent, { type: "interaction_resolved" }>)
-        .state,
-    ).toBe("cancelled");
+    expect(events[0].state).toBe("cancelled");
   });
 
   test("settles a swept secret prompt's resolver with a superseded result", () => {

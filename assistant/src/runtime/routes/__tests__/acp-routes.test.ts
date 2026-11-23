@@ -14,12 +14,14 @@
  * `bun add --global` outcomes. It also threads the optional `model` through to
  * the session manager and relays the warning a refused model comes back with.
  */
-
 import { afterAll, beforeEach, describe, expect, mock, test } from "bun:test";
+
+import { z } from "zod";
 
 import { installAcpConfigStub } from "../../../acp/__tests__/helpers/acp-config-stub.js";
 import { installExecFileStub } from "../../../acp/__tests__/helpers/exec-file-stub.js";
 import { installWhichStub } from "../../../acp/__tests__/helpers/which-stub.js";
+import { sessionEntrySchema } from "../acp-routes.js";
 
 const {
   execScripts,
@@ -186,29 +188,9 @@ function getSessionsHandler() {
   return route.handler;
 }
 
-interface ResponseShape {
-  sessions: Array<{
-    id: string;
-    agentId: string;
-    acpSessionId: string;
-    parentConversationId?: string;
-    status: string;
-    startedAt: number;
-    completedAt?: number | null;
-    stopReason?: string | null;
-    error?: string | null;
-    usedTokens?: number;
-    contextSize?: number;
-    inputTokens?: number;
-    outputTokens?: number;
-    eventLog?: unknown[];
-    authErrorCode?: string;
-    model?: string;
-    availableModels?: Array<{ value: string; label: string }>;
-    modelRevisionEpoch?: string;
-    modelRevision?: number;
-  }>;
-}
+const sessionsResponseSchema = z.looseObject({
+  sessions: z.array(sessionEntrySchema.loose()),
+});
 
 beforeEach(() => {
   fakeInMemorySessions = [];
@@ -230,7 +212,7 @@ beforeEach(() => {
 describe("GET /v1/acp/sessions — merged in-memory + history", () => {
   test("returns an empty array when no sessions exist", async () => {
     const handler = getSessionsHandler();
-    const body = (await handler({})) as ResponseShape;
+    const body = sessionsResponseSchema.parse(await handler({}));
     expect(body.sessions).toEqual([]);
   });
 
@@ -247,7 +229,7 @@ describe("GET /v1/acp/sessions — merged in-memory + history", () => {
     ];
 
     const handler = getSessionsHandler();
-    const body = (await handler({})) as ResponseShape;
+    const body = sessionsResponseSchema.parse(await handler({}));
     expect(body.sessions).toHaveLength(1);
     expect(body.sessions[0]).toMatchObject({
       id: "live-1",
@@ -282,7 +264,7 @@ describe("GET /v1/acp/sessions — merged in-memory + history", () => {
     });
 
     const handler = getSessionsHandler();
-    const body = (await handler({})) as ResponseShape;
+    const body = sessionsResponseSchema.parse(await handler({}));
     expect(body.sessions).toHaveLength(1);
     const s = body.sessions[0];
     expect(s.id).toBe("hist-1");
@@ -310,7 +292,7 @@ describe("GET /v1/acp/sessions — merged in-memory + history", () => {
     });
 
     const handler = getSessionsHandler();
-    const body = (await handler({})) as ResponseShape;
+    const body = sessionsResponseSchema.parse(await handler({}));
     const session = body.sessions.find((entry) => entry.id === "hist-private");
 
     expect(session).toBeDefined();
@@ -351,7 +333,7 @@ describe("GET /v1/acp/sessions — merged in-memory + history", () => {
     });
 
     const handler = getSessionsHandler();
-    const body = (await handler({})) as ResponseShape;
+    const body = sessionsResponseSchema.parse(await handler({}));
     const live = body.sessions.find((s) => s.id === "live-tokens");
     const hist = body.sessions.find((s) => s.id === "hist-tokens");
     expect(live).toMatchObject({ inputTokens: 5000, outputTokens: 800 });
@@ -366,7 +348,7 @@ describe("GET /v1/acp/sessions — merged in-memory + history", () => {
     });
 
     const handler = getSessionsHandler();
-    const body = (await handler({})) as ResponseShape;
+    const body = sessionsResponseSchema.parse(await handler({}));
     const s = body.sessions.find((row) => row.id === "hist-no-tokens");
     expect(s).toBeDefined();
     expect(s!.inputTokens).toBeUndefined();
@@ -401,7 +383,7 @@ describe("GET /v1/acp/sessions — merged in-memory + history", () => {
     });
 
     const handler = getSessionsHandler();
-    const body = (await handler({})) as ResponseShape;
+    const body = sessionsResponseSchema.parse(await handler({}));
     const live = body.sessions.find((s) => s.id === "live-model");
     const hist = body.sessions.find((s) => s.id === "hist-model");
     expect(live).toMatchObject({
@@ -422,7 +404,7 @@ describe("GET /v1/acp/sessions — merged in-memory + history", () => {
     insertHistoryRow({ id: "hist-no-model", status: "completed" });
 
     const handler = getSessionsHandler();
-    const body = (await handler({})) as ResponseShape;
+    const body = sessionsResponseSchema.parse(await handler({}));
     const s = body.sessions.find((row) => row.id === "hist-no-model");
     expect(s?.model).toBeUndefined();
   });
@@ -453,7 +435,7 @@ describe("GET /v1/acp/sessions — merged in-memory + history", () => {
     });
 
     const handler = getSessionsHandler();
-    const body = (await handler({})) as ResponseShape;
+    const body = sessionsResponseSchema.parse(await handler({}));
     expect(body.sessions).toHaveLength(1);
     expect(body.sessions[0].agentId).toBe("agent-live");
     expect(body.sessions[0].status).toBe("running");
@@ -482,7 +464,7 @@ describe("GET /v1/acp/sessions — merged in-memory + history", () => {
     });
 
     const handler = getSessionsHandler();
-    const body = (await handler({})) as ResponseShape;
+    const body = sessionsResponseSchema.parse(await handler({}));
     expect(body.sessions).toHaveLength(2);
     // Sorted newest-first by startedAt.
     expect(body.sessions[0].id).toBe("live-1");
@@ -535,9 +517,11 @@ describe("GET /v1/acp/sessions — merged in-memory + history", () => {
     });
 
     const handler = getSessionsHandler();
-    const body = (await handler({
-      queryParams: { limit: "2" },
-    })) as ResponseShape;
+    const body = sessionsResponseSchema.parse(
+      await handler({
+        queryParams: { limit: "2" },
+      }),
+    );
     expect(body.sessions).toHaveLength(2);
     expect(body.sessions.map((s) => s.id)).toEqual(["live-newest", "hist-mid"]);
   });
@@ -579,9 +563,11 @@ describe("GET /v1/acp/sessions — merged in-memory + history", () => {
     });
 
     const handler = getSessionsHandler();
-    const body = (await handler({
-      queryParams: { conversationId: "conv-target" },
-    })) as ResponseShape;
+    const body = sessionsResponseSchema.parse(
+      await handler({
+        queryParams: { conversationId: "conv-target" },
+      }),
+    );
     expect(body.sessions.map((s) => s.id)).toEqual([
       "live-match",
       "hist-match",
@@ -617,9 +603,11 @@ describe("GET /v1/acp/sessions — merged in-memory + history", () => {
     });
 
     const handler = getSessionsHandler();
-    const body = (await handler({
-      queryParams: { limit: "9999" },
-    })) as ResponseShape;
+    const body = sessionsResponseSchema.parse(
+      await handler({
+        queryParams: { limit: "9999" },
+      }),
+    );
     expect(body.sessions).toHaveLength(3);
   });
 });
@@ -683,7 +671,7 @@ describe("POST /v1/acp/spawn: sandboxed bun auto-install on missing binary", () 
     });
     expect(spawnMock).toHaveBeenCalledTimes(1);
     // The real adapter binary is spawned, not a `bun x` wrapper.
-    const agentConfigArg = (spawnMock.mock.calls[0] as unknown[])[1] as {
+    const agentConfigArg = spawnMock.mock.calls[0][1] as {
       command: string;
     };
     expect(agentConfigArg.command).toBe("claude-agent-acp");
@@ -796,7 +784,7 @@ describe("POST /v1/acp/spawn: model selection", () => {
       model: "opus",
     });
     expect(spawnMock).toHaveBeenCalledTimes(1);
-    expect((spawnMock.mock.calls[0] as unknown[])[6]).toEqual({
+    expect(spawnMock.mock.calls[0][6]).toEqual({
       model: "opus",
     });
 
@@ -810,7 +798,7 @@ describe("POST /v1/acp/spawn: model selection", () => {
       body: { ...SPAWN_BODY, model: "  opus  " },
     })) as Record<string, unknown>;
 
-    expect((spawnMock.mock.calls[0] as unknown[])[6]).toEqual({
+    expect(spawnMock.mock.calls[0][6]).toEqual({
       model: "  opus  ",
     });
     expect(body.requestedModel).toBe("opus");
@@ -820,7 +808,7 @@ describe("POST /v1/acp/spawn: model selection", () => {
     const handler = getSpawnHandler();
     await handler({ body: SPAWN_BODY });
 
-    const options = (spawnMock.mock.calls[0] as unknown[])[6] as {
+    const options = spawnMock.mock.calls[0][6] as {
       model?: string;
     };
     const approvalInput = confirmationRequests[0]?.input as Record<
@@ -1091,9 +1079,11 @@ describe("GET /v1/acp/sessions: a marker answers for itself", () => {
     fakeStoredCredential = REFUSED;
 
     const handler = getSessionsHandler();
-    const body = (await handler({
-      queryParams: { conversationId: "conv-auth" },
-    })) as ResponseShape;
+    const body = sessionsResponseSchema.parse(
+      await handler({
+        queryParams: { conversationId: "conv-auth" },
+      }),
+    );
 
     expect(body.sessions[0].authErrorCode).toBe("acp_claude_auth_required");
   });
@@ -1105,9 +1095,11 @@ describe("GET /v1/acp/sessions: a marker answers for itself", () => {
     fakeStoredCredential = REPLACEMENT;
 
     const handler = getSessionsHandler();
-    const body = (await handler({
-      queryParams: { conversationId: "conv-auth" },
-    })) as ResponseShape;
+    const body = sessionsResponseSchema.parse(
+      await handler({
+        queryParams: { conversationId: "conv-auth" },
+      }),
+    );
 
     expect(body.sessions[0].authErrorCode).toBeUndefined();
   });
@@ -1119,12 +1111,16 @@ describe("GET /v1/acp/sessions: a marker answers for itself", () => {
     fakeStoredCredential = REPLACEMENT;
 
     const handler = getSessionsHandler();
-    const first = (await handler({
-      queryParams: { conversationId: "conv-auth" },
-    })) as ResponseShape;
-    const second = (await handler({
-      queryParams: { conversationId: "conv-auth" },
-    })) as ResponseShape;
+    const first = sessionsResponseSchema.parse(
+      await handler({
+        queryParams: { conversationId: "conv-auth" },
+      }),
+    );
+    const second = sessionsResponseSchema.parse(
+      await handler({
+        queryParams: { conversationId: "conv-auth" },
+      }),
+    );
 
     expect(first.sessions[0].authErrorCode).toBeUndefined();
     expect(second.sessions[0].authErrorCode).toBeUndefined();
@@ -1137,9 +1133,11 @@ describe("GET /v1/acp/sessions: a marker answers for itself", () => {
     fakeStoredCredential = REPLACEMENT;
 
     const handler = getSessionsHandler();
-    const body = (await handler({
-      queryParams: { conversationId: "conv-auth" },
-    })) as ResponseShape;
+    const body = sessionsResponseSchema.parse(
+      await handler({
+        queryParams: { conversationId: "conv-auth" },
+      }),
+    );
 
     expect(body.sessions[0].authErrorCode).toBe("acp_claude_auth_required");
   });
@@ -1149,9 +1147,11 @@ describe("GET /v1/acp/sessions: a marker answers for itself", () => {
     fakeStoredCredential = undefined;
 
     const handler = getSessionsHandler();
-    const body = (await handler({
-      queryParams: { conversationId: "conv-auth" },
-    })) as ResponseShape;
+    const body = sessionsResponseSchema.parse(
+      await handler({
+        queryParams: { conversationId: "conv-auth" },
+      }),
+    );
 
     expect(body.sessions[0].authErrorCode).toBe("acp_claude_auth_required");
   });
@@ -1195,9 +1195,11 @@ describe("GET /v1/acp/sessions: markers resolve against configured tokens too", 
     });
 
     const handler = getSessionsHandler();
-    const body = (await handler({
-      queryParams: { conversationId: "conv-cfg" },
-    })) as ResponseShape;
+    const body = sessionsResponseSchema.parse(
+      await handler({
+        queryParams: { conversationId: "conv-cfg" },
+      }),
+    );
 
     expect(body.sessions[0].authErrorCode).toBeUndefined();
   });
@@ -1216,9 +1218,11 @@ describe("GET /v1/acp/sessions: markers resolve against configured tokens too", 
     });
 
     const handler = getSessionsHandler();
-    const body = (await handler({
-      queryParams: { conversationId: "conv-cfg" },
-    })) as ResponseShape;
+    const body = sessionsResponseSchema.parse(
+      await handler({
+        queryParams: { conversationId: "conv-cfg" },
+      }),
+    );
 
     expect(body.sessions[0].authErrorCode).toBe("acp_claude_auth_required");
   });
@@ -1228,9 +1232,11 @@ describe("GET /v1/acp/sessions: markers resolve against configured tokens too", 
     fakeStoredCredential = REFUSED;
 
     const handler = getSessionsHandler();
-    const body = (await handler({
-      queryParams: { conversationId: "conv-cfg" },
-    })) as ResponseShape;
+    const body = sessionsResponseSchema.parse(
+      await handler({
+        queryParams: { conversationId: "conv-cfg" },
+      }),
+    );
 
     expect(body.sessions[0]).not.toHaveProperty("authErrorCredential");
   });
@@ -1276,9 +1282,11 @@ describe("GET /v1/acp/sessions: retired markers do not accumulate past the page"
     fakeStoredCredential = REPLACEMENT;
 
     const handler = getSessionsHandler();
-    const body = (await handler({
-      queryParams: { conversationId: "conv-many", limit: "3" },
-    })) as ResponseShape;
+    const body = sessionsResponseSchema.parse(
+      await handler({
+        queryParams: { conversationId: "conv-many", limit: "3" },
+      }),
+    );
 
     expect(body.sessions).toHaveLength(3);
     expect(body.sessions.map((s) => s.id)).toEqual([
@@ -1316,9 +1324,11 @@ describe("GET /v1/acp/sessions: retired markers do not accumulate past the page"
     fakeStoredCredential = REFUSED;
 
     const handler = getSessionsHandler();
-    const body = (await handler({
-      queryParams: { conversationId: "conv-many", limit: "3" },
-    })) as ResponseShape;
+    const body = sessionsResponseSchema.parse(
+      await handler({
+        queryParams: { conversationId: "conv-many", limit: "3" },
+      }),
+    );
 
     expect(body.sessions).toHaveLength(4);
     expect(body.sessions.map((s) => s.id)).toContain("hist-live-marker");
@@ -1363,9 +1373,11 @@ describe("GET /v1/acp/sessions: current markers are bounded too", () => {
     fakeStoredCredential = REFUSED;
 
     const handler = getSessionsHandler();
-    const body = (await handler({
-      queryParams: { conversationId: "conv-repeat", limit: "2" },
-    })) as ResponseShape;
+    const body = sessionsResponseSchema.parse(
+      await handler({
+        queryParams: { conversationId: "conv-repeat", limit: "2" },
+      }),
+    );
 
     // The page, plus exactly one escaped marker: the newest of the five.
     expect(body.sessions).toHaveLength(3);
@@ -1392,9 +1404,11 @@ describe("GET /v1/acp/sessions: current markers are bounded too", () => {
     fakeStoredCredential = REFUSED;
 
     const handler = getSessionsHandler();
-    const body = (await handler({
-      queryParams: { conversationId: "conv-inpage", limit: "10" },
-    })) as ResponseShape;
+    const body = sessionsResponseSchema.parse(
+      await handler({
+        queryParams: { conversationId: "conv-inpage", limit: "10" },
+      }),
+    );
 
     expect(body.sessions).toHaveLength(3);
     expect(
@@ -1446,9 +1460,11 @@ describe("GET /v1/acp/sessions: the marker past the page is looked up, not filte
     fakeStoredCredential = CURRENT;
 
     const handler = getSessionsHandler();
-    const body = (await handler({
-      queryParams: { conversationId: "conv-mixed", limit: "1" },
-    })) as ResponseShape;
+    const body = sessionsResponseSchema.parse(
+      await handler({
+        queryParams: { conversationId: "conv-mixed", limit: "1" },
+      }),
+    );
 
     expect(body.sessions.map((s) => s.id)).toEqual([
       "hist-recent",
@@ -1484,9 +1500,11 @@ describe("GET /v1/acp/sessions: the marker past the page is looked up, not filte
     fakeStoredCredential = CURRENT;
 
     const handler = getSessionsHandler();
-    const body = (await handler({
-      queryParams: { conversationId: "conv-all-stale", limit: "1" },
-    })) as ResponseShape;
+    const body = sessionsResponseSchema.parse(
+      await handler({
+        queryParams: { conversationId: "conv-all-stale", limit: "1" },
+      }),
+    );
 
     expect(body.sessions.map((s) => s.id)).toEqual(["hist-newer"]);
   });
@@ -1534,9 +1552,11 @@ describe("GET /v1/acp/sessions: a marker in the merged overflow", () => {
     fakeStoredCredential = REFUSED;
 
     const handler = getSessionsHandler();
-    const body = (await handler({
-      queryParams: { conversationId: "conv-overflow", limit: "2" },
-    })) as ResponseShape;
+    const body = sessionsResponseSchema.parse(
+      await handler({
+        queryParams: { conversationId: "conv-overflow", limit: "2" },
+      }),
+    );
 
     expect(body.sessions).toHaveLength(3);
     expect(body.sessions[2].id).toBe("hist-marked");
@@ -1570,9 +1590,11 @@ describe("GET /v1/acp/sessions: a marker in the merged overflow", () => {
     fakeStoredCredential = realMarkerStore.claudeTokenDigest("sk-ant-oat-new");
 
     const handler = getSessionsHandler();
-    const body = (await handler({
-      queryParams: { conversationId: "conv-overflow-stale", limit: "1" },
-    })) as ResponseShape;
+    const body = sessionsResponseSchema.parse(
+      await handler({
+        queryParams: { conversationId: "conv-overflow-stale", limit: "1" },
+      }),
+    );
 
     expect(body.sessions).toHaveLength(1);
     expect(body.sessions[0].id).toBe("live-c");

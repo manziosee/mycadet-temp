@@ -28,11 +28,15 @@ function createTestDb() {
 }
 
 function indexNames(sqlite: Database): string[] {
-  return (
-    sqlite.query("PRAGMA index_list(tool_invocations)").all() as Array<{
-      name: string;
-    }>
-  ).map((i) => i.name);
+  return sqlite
+    .query<
+      {
+        name: string;
+      },
+      []
+    >("PRAGMA index_list(tool_invocations)")
+    .all()
+    .map((i) => i.name);
 }
 
 describe("migration 276: tool_invocations (created_at, id) index", () => {
@@ -45,11 +49,12 @@ describe("migration 276: tool_invocations (created_at, id) index", () => {
     migrateToolInvocationsCreatedAtIdIndex(db);
 
     expect(indexNames(sqlite)).toContain("idx_tool_invocations_created_at_id");
-    const columns = (
-      sqlite
-        .query("PRAGMA index_info(idx_tool_invocations_created_at_id)")
-        .all() as Array<{ name: string }>
-    ).map((c) => c.name);
+    const columns = sqlite
+      .query<{ name: string }, []>(
+        "PRAGMA index_info(idx_tool_invocations_created_at_id)",
+      )
+      .all()
+      .map((c) => c.name);
     expect(columns).toEqual(["created_at", "id"]);
   });
 

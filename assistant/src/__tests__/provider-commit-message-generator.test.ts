@@ -229,7 +229,7 @@ describe("ProviderCommitMessageGenerator", () => {
     // Verify the callSite was passed so the provider's RetryProvider routes
     // through `resolveCallSiteConfig` for model/max_tokens/temperature.
     const callArgs = mockSendMessage.mock.calls[0];
-    const options = callArgs[1] as SendMessageOptions | undefined;
+    const options = callArgs[1];
     expect(options?.config?.callSite).toBe("commitMessage");
   });
 
@@ -329,7 +329,7 @@ describe("ProviderCommitMessageGenerator", () => {
     expect(result.source).toBe("llm");
     expect(result.message).toBe(commitMsg);
     const callArgs = mockSendMessage.mock.calls[0];
-    const options = callArgs[1] as SendMessageOptions | undefined;
+    const options = callArgs[1];
     expect(options?.config?.callSite).toBe("commitMessage");
   });
 

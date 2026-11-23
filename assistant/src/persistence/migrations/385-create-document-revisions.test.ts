@@ -47,8 +47,8 @@ describe("migration 385: document_revisions", () => {
     sqlite.run("DELETE FROM documents WHERE surface_id = 'doc-1'");
 
     const row = sqlite
-      .query("SELECT COUNT(*) AS n FROM document_revisions")
-      .get() as { n: number };
+      .query<{ n: number }, []>("SELECT COUNT(*) AS n FROM document_revisions")
+      .get()!;
     expect(row.n).toBe(0);
   });
 
@@ -60,8 +60,8 @@ describe("migration 385: document_revisions", () => {
     expect(() => migrateCreateDocumentRevisions(db)).not.toThrow();
 
     const row = sqlite
-      .query("SELECT COUNT(*) AS n FROM document_revisions")
-      .get() as { n: number };
+      .query<{ n: number }, []>("SELECT COUNT(*) AS n FROM document_revisions")
+      .get()!;
     expect(row.n).toBe(1);
   });
 });

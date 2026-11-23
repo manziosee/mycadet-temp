@@ -111,15 +111,21 @@ describe("migration 245 — memory_retrospective_state", () => {
     );
 
     const before = raw
-      .query(`SELECT COUNT(*) AS c FROM memory_retrospective_state`)
-      .get() as { c: number };
+      .query<
+        { c: number },
+        []
+      >(`SELECT COUNT(*) AS c FROM memory_retrospective_state`)
+      .get()!;
     expect(before.c).toBe(1);
 
     raw.exec(`DELETE FROM conversations WHERE id = 'c1'`);
 
     const after = raw
-      .query(`SELECT COUNT(*) AS c FROM memory_retrospective_state`)
-      .get() as { c: number };
+      .query<
+        { c: number },
+        []
+      >(`SELECT COUNT(*) AS c FROM memory_retrospective_state`)
+      .get()!;
     expect(after.c).toBe(0);
   });
 });

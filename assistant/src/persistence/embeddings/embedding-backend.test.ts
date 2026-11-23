@@ -141,8 +141,7 @@ describe("isEmbeddingDimensionAvailable", () => {
       throw new Error("expected a backend to be selected");
     }
     const embedMock = mock(async () => [new Array(dim).fill(0)]);
-    (backend as { embed: typeof backend.embed }).embed =
-      embedMock as unknown as typeof backend.embed;
+    (backend as { embed: typeof backend.embed }).embed = embedMock;
     return embedMock;
   }
 
@@ -167,9 +166,9 @@ describe("isEmbeddingDimensionAvailable", () => {
     if (!backend) {
       throw new Error("expected a backend to be selected");
     }
-    (backend as { embed: typeof backend.embed }).embed = (async () => {
+    (backend as { embed: typeof backend.embed }).embed = async () => {
       throw new Error("backend unreachable");
-    }) as unknown as typeof backend.embed;
+    };
 
     expect(await isEmbeddingDimensionAvailable(config)).toBe(false);
   });
@@ -225,7 +224,7 @@ describe("isEmbeddingDimensionAvailable", () => {
     }
     (primary as { embed: typeof primary.embed }).embed = mock(async () => [
       new Array(384).fill(0),
-    ]) as unknown as typeof primary.embed;
+    ]);
 
     // Warm + stub the OpenAI fallback instance (cached by provider:model, so the
     // chain probe inside isEmbeddingDimensionAvailable reuses this stub) → 3072.
@@ -243,7 +242,7 @@ describe("isEmbeddingDimensionAvailable", () => {
     }
     (openai as { embed: typeof openai.embed }).embed = mock(async () => [
       new Array(3072).fill(0),
-    ]) as unknown as typeof openai.embed;
+    ]);
 
     expect(await isEmbeddingDimensionAvailable(config)).toBe(true);
   });
@@ -484,10 +483,10 @@ describe("custom OpenAI-compatible embedding backend selection", () => {
     }
     (first as { embed: typeof first.embed }).embed = mock(async () => [
       new Array(1536).fill(0),
-    ]) as unknown as typeof first.embed;
+    ]);
     (second as { embed: typeof second.embed }).embed = mock(async () => [
       new Array(1024).fill(0),
-    ]) as unknown as typeof second.embed;
+    ]);
 
     expect(await resolveBackendDimension(first)).toBe(1536);
     expect(await resolveBackendDimension(second)).toBe(1024);

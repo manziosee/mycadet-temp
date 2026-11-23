@@ -106,7 +106,7 @@ async function pin(
   return (await pinHandler({
     pathParams: { id: appId },
     body,
-  } as unknown as RouteHandlerArgs)) as {
+  })) as {
     success: boolean;
     appId: string;
     pinSortPosition: number | null;
@@ -359,7 +359,7 @@ describe("apps_delete", () => {
 
     await deleteHandler({
       pathParams: { id: appId },
-    } as unknown as RouteHandlerArgs);
+    });
 
     expect(listAppPins()).toEqual([]);
   });
@@ -375,7 +375,7 @@ describe("apps_delete", () => {
 
     await deleteHandler({
       pathParams: { id: first },
-    } as unknown as RouteHandlerArgs);
+    });
 
     expect(listAppPins().map((entry) => entry.appId)).toEqual([second]);
     expect(listAppPins()[0]?.sortPosition).toBe(survivorPosition!);

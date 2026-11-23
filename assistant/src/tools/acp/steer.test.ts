@@ -77,7 +77,7 @@ describe("executeAcpSteer", () => {
     expect(typeof steerOrResumeCalls[0]!.send).toBe("function");
     expect(steerCalls).toEqual([]);
 
-    const parsed = JSON.parse(result.content as string);
+    const parsed = JSON.parse(result.content);
     expect(parsed).toEqual({
       acpSessionId: "acp-123",
       status: "steered",
@@ -148,7 +148,7 @@ describe("executeAcpSteer", () => {
     expect(result.isError).toBe(false);
     expect(steerOrResumeCalls).toHaveLength(1);
 
-    const parsed = JSON.parse(result.content as string);
+    const parsed = JSON.parse(result.content);
     expect(parsed).toEqual({
       acpSessionId: "acp-gone",
       status: "steered",

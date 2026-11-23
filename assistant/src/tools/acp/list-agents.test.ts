@@ -39,7 +39,7 @@ describe("executeAcpListAgents", () => {
     const result = await executeAcpListAgents({}, makeContext());
 
     expect(result.isError).toBe(false);
-    const parsed = JSON.parse(result.content as string);
+    const parsed = JSON.parse(result.content);
     expect(parsed.agents.map((a: { id: string }) => a.id)).toEqual([
       "claude",
       "codex",
@@ -66,7 +66,7 @@ describe("executeAcpListAgents", () => {
     const result = await executeAcpListAgents({}, makeContext());
 
     expect(result.isError).toBe(false);
-    const parsed = JSON.parse(result.content as string);
+    const parsed = JSON.parse(result.content);
 
     const claude = parsed.agents.find((a: { id: string }) => a.id === "claude");
     expect(claude.source).toBe("config");
@@ -85,7 +85,7 @@ describe("executeAcpListAgents", () => {
     const result = await executeAcpListAgents({}, makeContext());
 
     expect(result.isError).toBe(false);
-    const parsed = JSON.parse(result.content as string);
+    const parsed = JSON.parse(result.content);
 
     const codex = parsed.agents.find((a: { id: string }) => a.id === "codex");
     expect(codex.available).toBe(false);

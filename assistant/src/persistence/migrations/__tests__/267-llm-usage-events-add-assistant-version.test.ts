@@ -91,8 +91,11 @@ describe("migration 267 — llm_usage_events add assistant_version", () => {
     migrateLlmUsageEventsAddAssistantVersion(db);
 
     const usage = raw
-      .query(`SELECT id, assistant_version FROM llm_usage_events`)
-      .all() as Array<{ id: string; assistant_version: string | null }>;
+      .query<
+        { id: string; assistant_version: string | null },
+        []
+      >(`SELECT id, assistant_version FROM llm_usage_events`)
+      .all();
     expect(usage).toEqual([{ id: "u1", assistant_version: null }]);
   });
 
@@ -110,8 +113,11 @@ describe("migration 267 — llm_usage_events add assistant_version", () => {
         ('u2', 4, 'anthropic', 'claude-sonnet-4', 10, 20, '0.8.4')
     `);
     const row = raw
-      .query(`SELECT assistant_version FROM llm_usage_events WHERE id = 'u2'`)
-      .get() as { assistant_version: string };
+      .query<
+        { assistant_version: string },
+        []
+      >(`SELECT assistant_version FROM llm_usage_events WHERE id = 'u2'`)
+      .get()!;
     expect(row.assistant_version).toBe("0.8.4");
   });
 });

@@ -7,7 +7,6 @@
  * explicitly disabled in config.json. Migration 075 already shipped
  * un-gated, so this follow-up runs with the gating we want now.
  */
-
 import {
   existsSync,
   mkdirSync,
@@ -17,6 +16,7 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
+import type { SQLQueryBindings } from "bun:sqlite";
 import { Database } from "bun:sqlite";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
@@ -74,10 +74,11 @@ function countReembedJobs(): number {
   const db = new Database(dbPath);
   try {
     const row = db
-      .query(
-        `SELECT COUNT(*) AS n FROM memory_jobs WHERE type='memory_v2_reembed'`,
-      )
-      .get() as { n: number };
+      .query<
+        { n: number },
+        []
+      >(`SELECT COUNT(*) AS n FROM memory_jobs WHERE type='memory_v2_reembed'`)
+      .get()!;
     return row.n;
   } finally {
     db.close();
@@ -102,10 +103,11 @@ function jobIdsByStatus(status: string): string[] {
   const db = new Database(dbPath);
   try {
     const rows = db
-      .query(
-        `SELECT id FROM memory_jobs WHERE type='memory_v2_reembed' AND status=? ORDER BY id`,
-      )
-      .all(status) as { id: string }[];
+      .query<
+        { id: string },
+        SQLQueryBindings[]
+      >(`SELECT id FROM memory_jobs WHERE type='memory_v2_reembed' AND status=? ORDER BY id`)
+      .all(status);
     return rows.map((r) => r.id);
   } finally {
     db.close();

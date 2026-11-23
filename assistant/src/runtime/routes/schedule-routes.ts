@@ -182,7 +182,7 @@ function deriveDisarmReason(
   return "declaration_disabled";
 }
 
-const scheduleSchema = z.object({
+export const scheduleSchema = z.object({
   id: z.string(),
   name: z.string(),
   enabled: z.boolean(),
@@ -239,7 +239,7 @@ const scheduleSchema = z.object({
   isDeferred: z.boolean(),
 });
 
-const scheduleRunSchema = z.object({
+export const scheduleRunSchema = z.object({
   id: z.string(),
   jobId: z.string(),
   status: z.string(),
@@ -269,7 +269,7 @@ const scheduleRunSchema = z.object({
   createdAt: z.number(),
 });
 
-const scheduleUsageSummarySchema = z.object({
+export const scheduleUsageSummarySchema = z.object({
   scheduleId: z.string(),
   runCount: z.number(),
   totalEstimatedCostUsd: z.number(),

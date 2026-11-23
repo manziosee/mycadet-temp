@@ -222,7 +222,7 @@ describe("terminal provider ordering error", () => {
     await conversation.processMessage({
       content: "Hello",
       attachments: [],
-      onEvent: (msg) => events.push(msg as unknown as Record<string, unknown>),
+      onEvent: (msg) => events.push(msg),
     });
 
     // THEN the wrapper invokes the loop exactly once — ordering recovery is
@@ -249,7 +249,7 @@ describe("terminal provider ordering error", () => {
     await conversation.processMessage({
       content: "Hello",
       attachments: [],
-      onEvent: (msg) => events.push(msg as unknown as Record<string, unknown>),
+      onEvent: (msg) => events.push(msg),
     });
 
     // THEN the loop ran once and the assistant response was persisted

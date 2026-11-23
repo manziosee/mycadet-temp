@@ -106,7 +106,7 @@ mock.module("@qdrant/js-client-rest", () => ({
 const embedWithBackendMock = mock(async (_config, texts: string[]) => ({
   provider: "local",
   model: "test-model",
-  vectors: texts.map(() => [0.1, 0.2, 0.3]) as number[][],
+  vectors: texts.map(() => [0.1, 0.2, 0.3]),
 }));
 const generateSparseEmbeddingMock = mock((_text: string) => ({
   indices: [1, 2, 3],
@@ -262,7 +262,7 @@ function makeConfig(
       v2: { enabled: v2Enabled, router: { enabled: false } },
       v3: { live: v3Live },
     },
-  }) as AssistantConfig;
+  });
 }
 
 function makeMessages(
@@ -516,7 +516,7 @@ describe("ConversationGraphMemory.prepareMemory — v2 routing (per-turn path)",
     // path makes the exact same embed call somewhere during this turn.
     const expectedCombined = `${assistantText}\n\n${userText}`;
     const matchingCall = embedWithBackendMock.mock.calls.find((call) => {
-      const texts = call[1] as string[];
+      const texts = call[1];
       return texts.length === 1 && texts[0] === expectedCombined;
     });
     expect(matchingCall).toBeDefined();
@@ -525,7 +525,7 @@ describe("ConversationGraphMemory.prepareMemory — v2 routing (per-turn path)",
     expect(generateSparseEmbeddingMock.mock.calls).toContainEqual([userText]);
     expect(
       generateSparseEmbeddingMock.mock.calls.some((call) =>
-        (call[0] as string).includes(assistantText),
+        call[0].includes(assistantText),
       ),
     ).toBe(false);
   });

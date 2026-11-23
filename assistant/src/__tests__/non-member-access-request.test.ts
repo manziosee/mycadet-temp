@@ -220,9 +220,9 @@ describe("non-member access request notification", () => {
     // Rejection reply was delivered — always-notify behavior means the reply
     // indicates the guardian will be notified, even without a same-channel binding.
     expect(deliverReplyCalls.length).toBe(1);
-    expect(
-      (deliverReplyCalls[0].payload as Record<string, unknown>).text,
-    ).toContain("know you tried talking to me");
+    expect(deliverReplyCalls[0].payload.text).toContain(
+      "know you tried talking to me",
+    );
   });
 
   test("guardian is notified when a non-member messages and a guardian binding exists", async () => {
@@ -417,9 +417,9 @@ describe("non-member access request notification", () => {
 
     // Rejection reply indicates guardian was notified
     expect(deliverReplyCalls.length).toBe(1);
-    expect(
-      (deliverReplyCalls[0].payload as Record<string, unknown>).text,
-    ).toContain("know you tried talking to me");
+    expect(deliverReplyCalls[0].payload.text).toContain(
+      "know you tried talking to me",
+    );
 
     // Notification signal was emitted
     expect(emitSignalCalls.length).toBe(1);

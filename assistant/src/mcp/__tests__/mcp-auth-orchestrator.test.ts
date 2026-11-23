@@ -175,7 +175,7 @@ describe("orchestrateMcpOAuthConnect", () => {
     expect(mockSetMcpAuthPending.mock.calls[0]).toEqual([
       "test-server",
       "https://auth.example.com/oauth",
-      expect.any(String) as unknown as string, // attemptId UUID
+      expect.any(String), // attemptId UUID
       "mcp:test-server:tokens",
     ]);
     // Sanity-check the attemptId looks UUID-shaped
@@ -204,7 +204,7 @@ describe("orchestrateMcpOAuthConnect", () => {
     expect(mockConnectCallCount).toBe(1);
     expect(mockSetMcpAuthComplete).toHaveBeenCalledWith(
       "test-server",
-      expect.any(String) as unknown as string,
+      expect.any(String),
       "mcp:test-server:tokens",
     );
     // Daemon-side reload should be triggered after a successful completion.
@@ -228,7 +228,7 @@ describe("orchestrateMcpOAuthConnect", () => {
     expect(mockSetMcpAuthError).toHaveBeenCalledWith(
       "test-server",
       "exchange failed",
-      expect.any(String) as unknown as string,
+      expect.any(String),
       "mcp:test-server:tokens",
     );
     expect(mockSetMcpAuthComplete).not.toHaveBeenCalled();
@@ -247,7 +247,7 @@ describe("orchestrateMcpOAuthConnect", () => {
     expect(mockSetMcpAuthError).toHaveBeenCalledWith(
       "test-server",
       "MCP OAuth callback timed out",
-      expect.any(String) as unknown as string,
+      expect.any(String),
       "mcp:test-server:tokens",
     );
     expect(mockSetMcpAuthComplete).not.toHaveBeenCalled();

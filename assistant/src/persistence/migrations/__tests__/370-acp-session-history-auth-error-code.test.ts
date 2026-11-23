@@ -24,8 +24,8 @@ function createTestDb() {
 
 function columnNames(db: ReturnType<typeof createTestDb>): string[] {
   const rows = getSqliteFrom(db)
-    .prepare("PRAGMA table_info(acp_session_history)")
-    .all() as { name: string }[];
+    .prepare<{ name: string }, []>("PRAGMA table_info(acp_session_history)")
+    .all();
   return rows.map((row) => row.name);
 }
 
@@ -56,10 +56,11 @@ describe("migrateAcpSessionHistoryAuthErrorCode", () => {
     migrateAcpSessionHistoryAuthErrorCode(db);
 
     const row = getSqliteFrom(db)
-      .prepare(
-        "SELECT auth_error_code FROM acp_session_history WHERE id = 'run-1'",
-      )
-      .get() as { auth_error_code: string | null };
+      .prepare<
+        { auth_error_code: string | null },
+        []
+      >("SELECT auth_error_code FROM acp_session_history WHERE id = 'run-1'")
+      .get()!;
     expect(row.auth_error_code).toBeNull();
   });
 });

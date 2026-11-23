@@ -141,7 +141,7 @@ function makeProjectionCtx(
     skillProjectionCache: {} as SkillProjectionCache,
     toolsDisabledDepth: 0,
     ...overrides,
-  }) as unknown as Conversation;
+  });
 }
 
 function makeSetupCtx(overrides: Partial<Conversation> = {}): Conversation {
@@ -181,7 +181,7 @@ function makeCapturingExecutor() {
       return { content: "ok", isError: false };
     },
   };
-  return { executor: executor as unknown as ToolExecutor, calls };
+  return { executor: executor as ToolExecutor, calls };
 }
 
 const noopPrompter = {
@@ -637,7 +637,7 @@ describe("subagentDenySideEffects — read-only continuation", () => {
       description: name,
       input_schema: { type: "object" },
       execute: async () => ({ content: "ok", isError: false }),
-    } as unknown as Parameters<typeof registerTool>[0]);
+    });
   }
 
   beforeEach(() => {
@@ -780,7 +780,7 @@ describe("advisor consult tool surface", () => {
       description: name,
       input_schema: { type: "object" },
       execute: async () => ({ content: "ok", isError: false }),
-    } as unknown as Parameters<typeof registerTool>[0]);
+    });
   }
 
   /** Register a workspace tool that claims a built-in's name. */
@@ -817,9 +817,7 @@ describe("advisor consult tool surface", () => {
     });
 
     const tools = createResolveToolsCallback(toolDefs, ctx)!(EMPTY_HISTORY);
-    expect(tools.map((t) => t.name).sort()).toEqual(
-      [...advisorAllowed].sort() as string[],
-    );
+    expect(tools.map((t) => t.name).sort()).toEqual([...advisorAllowed].sort());
   });
 
   test("a workspace tool shadowing an allowlisted name is kept off the wire", () => {
@@ -1125,7 +1123,7 @@ describe("createResolveToolsCallback — read-only hides dynamic MCP tools", () 
       description: "file_read",
       input_schema: { type: "object" },
       execute: async () => ({ content: "ok", isError: false }),
-    } as unknown as Parameters<typeof registerTool>[0]);
+    });
     const ctx = makeProjectionCtx({ subagentDenySideEffects: true });
     const resolve = createResolveToolsCallback(
       [makeToolDef("file_read")],

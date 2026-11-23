@@ -1,3 +1,4 @@
+import type { SQLQueryBindings } from "bun:sqlite";
 import { Database } from "bun:sqlite";
 import { describe, expect, test } from "bun:test";
 
@@ -22,16 +23,24 @@ function createTestDb() {
 }
 
 function columnInfo(sqlite: Database) {
-  return sqlite.query("PRAGMA table_info(subagents)").all() as Array<{
-    name: string;
-    notnull: number;
-  }>;
+  return sqlite
+    .query<
+      {
+        name: string;
+        notnull: number;
+      },
+      []
+    >("PRAGMA table_info(subagents)")
+    .all();
 }
 
 function toolUseIdOf(sqlite: Database, id: string): unknown {
   const row = sqlite
-    .query("SELECT parent_tool_use_id FROM subagents WHERE id = ?")
-    .get(id) as { parent_tool_use_id: unknown };
+    .query<
+      { parent_tool_use_id: unknown },
+      SQLQueryBindings[]
+    >("SELECT parent_tool_use_id FROM subagents WHERE id = ?")
+    .get(id)!;
   return row.parent_tool_use_id;
 }
 

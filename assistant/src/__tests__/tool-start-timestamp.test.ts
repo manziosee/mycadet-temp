@@ -73,11 +73,11 @@ function makeDeps(onEvent: (event: AssistantEvent) => void): EventHandlerDeps {
     turnChannelContext: {
       userMessageChannel: "cadet",
       assistantMessageChannel: "cadet",
-    } as unknown as EventHandlerDeps["turnChannelContext"],
+    } as EventHandlerDeps["turnChannelContext"],
     turnInterfaceContext: {
       userMessageInterface: "web",
       assistantMessageInterface: "web",
-    } as unknown as EventHandlerDeps["turnInterfaceContext"],
+    } as EventHandlerDeps["turnInterfaceContext"],
     applyCompaction: async () => {},
   };
 }

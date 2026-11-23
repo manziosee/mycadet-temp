@@ -66,7 +66,7 @@ const MAX_SESSION_LIMIT = 500;
 const acpModelOptionsSchema =
   AcpSessionModelUpdateEventSchema.shape.availableModels;
 
-const sessionEntrySchema = z.object({
+export const sessionEntrySchema = z.object({
   id: z.string(),
   agentId: z.string(),
   acpSessionId: z.string(),

@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import type { SQLQueryBindings } from "bun:sqlite";
 import { describe, expect, test } from "bun:test";
 
 import {
@@ -44,7 +45,7 @@ function captureSql<T>(run: () => T): { result: T; statements: string[] } {
   const sqlite = getSqlite();
   const statements: string[] = [];
   const original = sqlite.prepare.bind(sqlite);
-  const patched = sqlite as unknown as { prepare: typeof original };
+  const patched = sqlite;
   patched.prepare = ((sql: string, ...rest: unknown[]) => {
     statements.push(sql);
     return (original as (...args: unknown[]) => unknown)(sql, ...rest);
@@ -201,9 +202,7 @@ describe("watch timeline", () => {
       null,
       SCREENSHOT_BYTES.length,
     ]);
-    expect(rendered.screenshotEntryIds).toEqual([
-      rendered.entries[2]?.id as string,
-    ]);
+    expect(rendered.screenshotEntryIds).toEqual([rendered.entries[2]?.id]);
     expect(rendered.text).toContain(
       "a screenshot of this moment was captured.",
     );
@@ -220,7 +219,7 @@ describe("watch timeline", () => {
 
     const [entryId] = renderWatchTimeline(sessionId).screenshotEntryIds;
 
-    const frame = readWatchScreenshot(entryId as string);
+    const frame = readWatchScreenshot(entryId);
     expect(frame?.mimeType).toBe(WATCH_SCREENSHOT_MIME);
     expect(Buffer.from(frame?.bytes as Buffer)).toEqual(SCREENSHOT_BYTES);
   });
@@ -231,7 +230,7 @@ describe("watch timeline", () => {
 
     const [entry] = renderWatchTimeline(sessionId).entries;
 
-    expect(readWatchScreenshot(entry?.id as string)).toBeNull();
+    expect(readWatchScreenshot(entry?.id)).toBeNull();
     expect(readWatchScreenshot("no-such-entry")).toBeNull();
   });
 
@@ -497,12 +496,12 @@ describe("watch timeline", () => {
     });
 
     const [entryId] = renderWatchTimeline(sessionId).screenshotEntryIds;
-    expect(readWatchScreenshot(entryId as string)).not.toBeNull();
+    expect(readWatchScreenshot(entryId)).not.toBeNull();
 
     expect(purgeWatchTimelineForConversation(conversationId)).toBe(2);
 
     expect(renderWatchTimeline(sessionId).totalEntries).toBe(0);
-    expect(readWatchScreenshot(entryId as string)).toBeNull();
+    expect(readWatchScreenshot(entryId)).toBeNull();
     expect(renderWatchTimeline(other.sessionId).totalEntries).toBe(1);
   });
 
@@ -523,7 +522,7 @@ describe("watch timeline", () => {
       (session) => renderWatchTimeline(session.sessionId).screenshotEntryIds[0],
     );
     for (const id of entryIds) {
-      expect(readWatchScreenshot(id as string)).not.toBeNull();
+      expect(readWatchScreenshot(id)).not.toBeNull();
     }
 
     expect(purgeAllWatchTimelines()).toBeGreaterThanOrEqual(2);
@@ -531,7 +530,7 @@ describe("watch timeline", () => {
     expect(renderWatchTimeline(first.sessionId).totalEntries).toBe(0);
     expect(renderWatchTimeline(second.sessionId).totalEntries).toBe(0);
     for (const id of entryIds) {
-      expect(readWatchScreenshot(id as string)).toBeNull();
+      expect(readWatchScreenshot(id)).toBeNull();
     }
   });
 });
@@ -577,20 +576,22 @@ describe("watch timeline orphan sweep", () => {
     expect(sweepOrphanedWatchTimelineEntries()).toBe(PAGE);
     expect(
       sqlite
-        .query(
-          "SELECT count(*) AS n FROM watch_timeline_entries WHERE conversation_id = ?",
-        )
-        .get(conversationId) as { n: number },
+        .query<
+          { n: number },
+          SQLQueryBindings[]
+        >("SELECT count(*) AS n FROM watch_timeline_entries WHERE conversation_id = ?")
+        .get(conversationId)!,
     ).toEqual({ n: TOTAL - PAGE });
 
     // The drain finishes the job, which takes two more pages.
     expect(await drainOrphanedWatchTimelineEntries()).toBe(TOTAL - PAGE);
     expect(
       sqlite
-        .query(
-          "SELECT count(*) AS n FROM watch_timeline_entries WHERE conversation_id = ?",
-        )
-        .get(conversationId) as { n: number },
+        .query<
+          { n: number },
+          SQLQueryBindings[]
+        >("SELECT count(*) AS n FROM watch_timeline_entries WHERE conversation_id = ?")
+        .get(conversationId)!,
     ).toEqual({ n: 0 });
   });
 
@@ -612,13 +613,13 @@ describe("watch timeline orphan sweep", () => {
       text: "filing it here",
     });
     const [entryId] = renderWatchTimeline(sessionId).screenshotEntryIds;
-    expect(readWatchScreenshot(entryId as string)).not.toBeNull();
+    expect(readWatchScreenshot(entryId)).not.toBeNull();
 
     orphanConversation(conversationId);
 
     expect(sweepOrphanedWatchTimelineEntries()).toBe(2);
     expect(renderWatchTimeline(sessionId).totalEntries).toBe(0);
-    expect(readWatchScreenshot(entryId as string)).toBeNull();
+    expect(readWatchScreenshot(entryId)).toBeNull();
   });
 
   test("leaves entries whose conversation still exists", () => {

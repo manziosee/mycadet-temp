@@ -79,7 +79,7 @@ function queuedFetch(responses: Response[]): {
       throw new Error("fetch called more times than the test queued responses");
     }
     return next;
-  }) as unknown as typeof fetch;
+  }) as typeof fetch;
   return { fetchImpl, calls };
 }
 
@@ -333,7 +333,7 @@ describe("completeDeviceAuth", () => {
         controller.abort();
       }
       return next;
-    }) as unknown as typeof fetch;
+    }) as typeof fetch;
 
     const originalFetch = globalThis.fetch;
     globalThis.fetch = fetchImpl;

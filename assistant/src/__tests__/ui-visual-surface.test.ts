@@ -550,7 +550,7 @@ describe("ui_show data double-encoded as a JSON string", () => {
     });
 
     expect(result.isError).toBe(true);
-    const content = result.content as string;
+    const content = result.content;
     expect(content).toContain(
       "`data` arrived as a JSON-encoded string that could not be parsed",
     );
@@ -590,7 +590,7 @@ describe("ui_show data double-encoded as a JSON string", () => {
     });
 
     expect(result.isError).toBe(true);
-    const content = result.content as string;
+    const content = result.content;
     expect(content).toContain(
       "`data` arrived as a JSON-encoded string that could not be parsed",
     );

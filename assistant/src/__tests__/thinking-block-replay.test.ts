@@ -33,7 +33,7 @@ describe.skipIf(!apiKey)(
 
       const thinkingBlock = initialResponse.content.find(
         (b) => b.type === "thinking",
-      ) as Anthropic.ThinkingBlock | undefined;
+      );
 
       expect(thinkingBlock).toBeDefined();
       expect(thinkingBlock!.signature).toBeTruthy();
@@ -84,7 +84,7 @@ describe.skipIf(!apiKey)(
 
       const thinkingBlock = initialResponse.content.find(
         (b) => b.type === "thinking",
-      ) as Anthropic.ThinkingBlock | undefined;
+      );
 
       expect(thinkingBlock).toBeDefined();
 

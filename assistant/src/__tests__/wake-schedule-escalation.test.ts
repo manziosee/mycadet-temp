@@ -121,7 +121,7 @@ function forceWakeTarget(scheduleId: string, conversationId: string): void {
 
 function trustOfLastWake(): unknown {
   const call = mockWakeAgentForOpportunity.mock.calls.at(-1);
-  return (call?.[0] as Record<string, unknown> | undefined)?.trustContext;
+  return call?.[0]?.trustContext;
 }
 
 function resetAll(): void {
@@ -228,7 +228,7 @@ describe("a non-owner cannot retarget a schedule onto a guardian conversation", 
 
     expect(
       mockWakeAgentForOpportunity.mock.calls.filter(
-        (c) => (c[0] as Record<string, unknown>).conversationId === TARGET,
+        (c) => c[0].conversationId === TARGET,
       ),
     ).toHaveLength(0);
   });

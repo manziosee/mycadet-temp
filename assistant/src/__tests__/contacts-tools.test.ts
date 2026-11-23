@@ -149,7 +149,7 @@ afterAll(() => {
 });
 
 function getRawDb(): Database {
-  return (getDb() as unknown as { $client: Database }).$client;
+  return getDb().$client;
 }
 
 const ctx: ToolContext = {
@@ -307,7 +307,7 @@ describe("search_contacts route", () => {
     )!;
     const contacts = (await searchRoute.handler({
       body: { channelAddress: seededAddress },
-    })) as unknown as Array<{
+    })) as Array<{
       channels: Array<{ address: string; externalUserId?: string }>;
     }>;
 
@@ -352,8 +352,8 @@ describe("contact_merge tool", () => {
 
     // Verify donor is deleted
     const count = getRawDb()
-      .query("SELECT COUNT(*) as c FROM contacts")
-      .get() as { c: number };
+      .query<{ c: number }, []>("SELECT COUNT(*) as c FROM contacts")
+      .get()!;
     expect(count.c).toBe(1);
   });
 
@@ -416,8 +416,8 @@ describe("contact_merge tool", () => {
 
     // The donor survives: nothing was merged.
     const count = getRawDb()
-      .query("SELECT COUNT(*) as c FROM contacts")
-      .get() as { c: number };
+      .query<{ c: number }, []>("SELECT COUNT(*) as c FROM contacts")
+      .get()!;
     expect(count.c).toBe(2);
   });
 

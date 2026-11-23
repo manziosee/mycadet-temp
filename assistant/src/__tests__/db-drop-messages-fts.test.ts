@@ -45,10 +45,11 @@ function bootstrapMessagesTables(raw: Database): void {
  */
 function ftsSchemaObjects(raw: Database): string[] {
   const rows = raw
-    .query(
-      `SELECT name FROM sqlite_schema WHERE name LIKE 'messages\\_fts%' ESCAPE '\\' ORDER BY name`,
-    )
-    .all() as Array<{ name: string }>;
+    .query<
+      { name: string },
+      []
+    >(`SELECT name FROM sqlite_schema WHERE name LIKE 'messages\\_fts%' ESCAPE '\\' ORDER BY name`)
+    .all();
   return rows.map((row) => row.name);
 }
 
@@ -92,8 +93,11 @@ describe("migrateDropMessagesFts", () => {
     raw.query(`DELETE FROM messages WHERE id = ?`).run("m-1");
 
     const rows = raw
-      .query(`SELECT id, content FROM messages ORDER BY id`)
-      .all() as Array<{ id: string; content: string }>;
+      .query<
+        { id: string; content: string },
+        []
+      >(`SELECT id, content FROM messages ORDER BY id`)
+      .all();
     expect(rows).toEqual([{ id: "m-2", content: "updated after the drop" }]);
   });
 

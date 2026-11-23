@@ -433,7 +433,7 @@ describe("Slack channel config handler", () => {
         );
       }
       throw new Error(`Unexpected auth header: ${auth}`);
-    }) as unknown as typeof globalThis.fetch;
+    }) as typeof globalThis.fetch;
 
     const result = await setSlackChannelConfig("xoxb-workspace-b");
 
@@ -492,7 +492,7 @@ describe("Slack channel config handler", () => {
         );
       }
       throw new Error(`Unexpected auth header: ${auth}`);
-    }) as unknown as typeof globalThis.fetch;
+    }) as typeof globalThis.fetch;
 
     const result = await setSlackChannelConfig("xoxb-workspace-a");
 
@@ -539,7 +539,7 @@ describe("Slack channel config handler", () => {
         );
       }
       throw new Error(`Unexpected auth header: ${auth}`);
-    }) as unknown as typeof globalThis.fetch;
+    }) as typeof globalThis.fetch;
 
     const result = await setSlackChannelConfig("xoxb-workspace-a");
 
@@ -585,7 +585,7 @@ describe("Slack channel config handler", () => {
         throw new Error("network down");
       }
       throw new Error(`Unexpected auth header: ${auth}`);
-    }) as unknown as typeof globalThis.fetch;
+    }) as typeof globalThis.fetch;
 
     const result = await setSlackChannelConfig("xoxb-workspace-a");
 
@@ -640,7 +640,7 @@ describe("Slack channel config handler", () => {
         });
       }
       throw new Error(`Unexpected auth header: ${auth}`);
-    }) as unknown as typeof globalThis.fetch;
+    }) as typeof globalThis.fetch;
 
     // Force the user_token delete to fail. Other callers (e.g. bot_token
     // store during setSecureKeyAsync flow) are not delete calls so they are

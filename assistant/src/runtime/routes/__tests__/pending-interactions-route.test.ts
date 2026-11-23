@@ -18,7 +18,7 @@ import { afterEach, describe, expect, mock, test } from "bun:test";
 
 import type { QuestionEntry } from "../../../api/events/question-request.js";
 import * as pendingInteractions from "../../pending-interactions.js";
-import type { RouteDefinition, RouteHandlerArgs } from "../types.js";
+import type { RouteDefinition } from "../types.js";
 
 // The conversation-key lookup is the only path into the unresolvable-conversation
 // early return, and it reads SQLite. Stub it so this stays a unit test of the
@@ -56,7 +56,7 @@ async function listForConversation(
 ): Promise<ScopedResponse> {
   const result = await handler({
     queryParams: { conversationId },
-  } as unknown as RouteHandlerArgs);
+  });
   return result as ScopedResponse;
 }
 
@@ -127,7 +127,7 @@ describe("pending-interactions, conversation-scoped", () => {
     // GIVEN a conversationKey that maps to no conversation
     const result = (await handler({
       queryParams: { conversationKey: "no-such-key" },
-    } as unknown as RouteHandlerArgs)) as ScopedResponse;
+    })) as ScopedResponse;
 
     // THEN the early return still states all three kinds, so this path is not
     // mistaken for an assistant that predates the field
@@ -169,7 +169,7 @@ describe("pending-interactions, conversation-scoped", () => {
     // WHEN the route is called with no conversation filter
     const result = (await handler({
       queryParams: {},
-    } as unknown as RouteHandlerArgs)) as {
+    })) as {
       interactions: Array<{ requestId: string; kind: string }>;
     };
 
