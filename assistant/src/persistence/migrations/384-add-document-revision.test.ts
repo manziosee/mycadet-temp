@@ -36,13 +36,17 @@ function createTestDb() {
 }
 
 function revisionColumn(sqlite: Database) {
-  return (
-    sqlite.query("PRAGMA table_info(documents)").all() as Array<{
-      name: string;
-      notnull: number;
-      dflt_value: string | null;
-    }>
-  ).find((c) => c.name === "revision");
+  return sqlite
+    .query<
+      {
+        name: string;
+        notnull: number;
+        dflt_value: string | null;
+      },
+      []
+    >("PRAGMA table_info(documents)")
+    .all()
+    .find((c) => c.name === "revision");
 }
 
 describe("migration 384: documents.revision", () => {
@@ -63,8 +67,11 @@ describe("migration 384: documents.revision", () => {
     migrateAddDocumentRevision(db);
 
     const row = sqlite
-      .query("SELECT revision FROM documents WHERE surface_id = 'doc-1'")
-      .get() as { revision: number };
+      .query<
+        { revision: number },
+        []
+      >("SELECT revision FROM documents WHERE surface_id = 'doc-1'")
+      .get()!;
     expect(row.revision).toBe(0);
   });
 
@@ -76,8 +83,11 @@ describe("migration 384: documents.revision", () => {
     expect(() => migrateAddDocumentRevision(db)).not.toThrow();
 
     const row = sqlite
-      .query("SELECT revision FROM documents WHERE surface_id = 'doc-1'")
-      .get() as { revision: number };
+      .query<
+        { revision: number },
+        []
+      >("SELECT revision FROM documents WHERE surface_id = 'doc-1'")
+      .get()!;
     expect(row.revision).toBe(3);
   });
 });

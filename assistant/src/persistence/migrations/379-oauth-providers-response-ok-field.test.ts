@@ -23,11 +23,15 @@ function createTestDb(options: { withTable?: boolean } = {}) {
 }
 
 function columnNames(sqlite: Database): string[] {
-  return (
-    sqlite.query("PRAGMA table_info(oauth_providers)").all() as Array<{
-      name: string;
-    }>
-  ).map((c) => c.name);
+  return sqlite
+    .query<
+      {
+        name: string;
+      },
+      []
+    >("PRAGMA table_info(oauth_providers)")
+    .all()
+    .map((c) => c.name);
 }
 
 describe("migration 379: oauth_providers.response_ok_field", () => {
@@ -37,12 +41,16 @@ describe("migration 379: oauth_providers.response_ok_field", () => {
 
     migrateOAuthProvidersResponseOkField(db);
 
-    const column = (
-      sqlite.query("PRAGMA table_info(oauth_providers)").all() as Array<{
-        name: string;
-        notnull: number;
-      }>
-    ).find((c) => c.name === "response_ok_field");
+    const column = sqlite
+      .query<
+        {
+          name: string;
+          notnull: number;
+        },
+        []
+      >("PRAGMA table_info(oauth_providers)")
+      .all()
+      .find((c) => c.name === "response_ok_field");
     expect(column).toBeDefined();
     expect(column?.notnull).toBe(0);
     expect(columnNames(sqlite)).toContain("identity_ok_field");
@@ -60,10 +68,11 @@ describe("migration 379: oauth_providers.response_ok_field", () => {
     migrateOAuthProvidersResponseOkField(db);
 
     const row = sqlite
-      .query(
-        "SELECT response_ok_field FROM oauth_providers WHERE provider_key = 'slack'",
-      )
-      .get() as { response_ok_field: unknown };
+      .query<
+        { response_ok_field: unknown },
+        []
+      >("SELECT response_ok_field FROM oauth_providers WHERE provider_key = 'slack'")
+      .get()!;
     expect(row.response_ok_field).toBeNull();
   });
 

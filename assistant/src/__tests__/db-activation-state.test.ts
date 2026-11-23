@@ -1,3 +1,4 @@
+import type { SQLQueryBindings } from "bun:sqlite";
 import { Database } from "bun:sqlite";
 import { describe, expect, test } from "bun:test";
 
@@ -102,7 +103,17 @@ describe("activation_state migration", () => {
       .run("conv-abc", "msg-xyz", stateJson, everInjectedJson, 5, 1000);
 
     const row = raw
-      .query(
+      .query<
+        {
+          conversation_id: string;
+          message_id: string;
+          state_json: string;
+          ever_injected_json: string;
+          current_turn: number;
+          updated_at: number;
+        },
+        SQLQueryBindings[]
+      >(
         /*sql*/ `
         SELECT
           conversation_id,
@@ -115,14 +126,7 @@ describe("activation_state migration", () => {
         WHERE conversation_id = ?
       `,
       )
-      .get("conv-abc") as {
-      conversation_id: string;
-      message_id: string;
-      state_json: string;
-      ever_injected_json: string;
-      current_turn: number;
-      updated_at: number;
-    } | null;
+      .get("conv-abc");
 
     expect(row).toEqual({
       conversation_id: "conv-abc",
@@ -155,17 +159,20 @@ describe("activation_state migration", () => {
       .run("conv-defaults", "msg-1", "{}", 2000);
 
     const row = raw
-      .query(
+      .query<
+        {
+          ever_injected_json: string;
+          current_turn: number;
+        },
+        SQLQueryBindings[]
+      >(
         /*sql*/ `
         SELECT ever_injected_json, current_turn
         FROM activation_state
         WHERE conversation_id = ?
       `,
       )
-      .get("conv-defaults") as {
-      ever_injected_json: string;
-      current_turn: number;
-    } | null;
+      .get("conv-defaults");
 
     expect(row).toEqual({
       ever_injected_json: "[]",
@@ -196,10 +203,11 @@ describe("activation_state migration", () => {
     expect(() => migrateActivationState(db)).not.toThrow();
 
     const row = raw
-      .query(
-        `SELECT conversation_id FROM activation_state WHERE conversation_id = 'conv-rerun'`,
-      )
-      .get() as { conversation_id: string } | null;
+      .query<
+        { conversation_id: string },
+        []
+      >(`SELECT conversation_id FROM activation_state WHERE conversation_id = 'conv-rerun'`)
+      .get();
     expect(row?.conversation_id).toBe("conv-rerun");
   });
 

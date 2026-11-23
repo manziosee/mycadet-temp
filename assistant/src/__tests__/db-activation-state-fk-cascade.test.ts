@@ -50,10 +50,11 @@ describe("activation_state FK cascade migration", () => {
     migrateActivationStateFkCascade(db);
 
     const ddl = raw
-      .query(
-        `SELECT sql FROM sqlite_master WHERE type='table' AND name='activation_state'`,
-      )
-      .get() as { sql: string } | null;
+      .query<
+        { sql: string },
+        []
+      >(`SELECT sql FROM sqlite_master WHERE type='table' AND name='activation_state'`)
+      .get();
     expect(ddl?.sql).toContain("REFERENCES conversations(id)");
     expect(ddl?.sql).toContain("ON DELETE CASCADE");
   });
@@ -72,8 +73,8 @@ describe("activation_state FK cascade migration", () => {
     raw.query(`DELETE FROM conversations WHERE id = ?`).run("conv-1");
 
     const remaining = raw
-      .query(`SELECT COUNT(*) AS n FROM activation_state`)
-      .get() as { n: number };
+      .query<{ n: number }, []>(`SELECT COUNT(*) AS n FROM activation_state`)
+      .get()!;
     expect(remaining.n).toBe(0);
   });
 
@@ -91,10 +92,11 @@ describe("activation_state FK cascade migration", () => {
     migrateActivationStateFkCascade(db);
 
     const rows = raw
-      .query(
-        `SELECT conversation_id FROM activation_state ORDER BY conversation_id`,
-      )
-      .all() as Array<{ conversation_id: string }>;
+      .query<
+        { conversation_id: string },
+        []
+      >(`SELECT conversation_id FROM activation_state ORDER BY conversation_id`)
+      .all();
     expect(rows.map((r) => r.conversation_id)).toEqual(["conv-live"]);
   });
 
@@ -108,10 +110,11 @@ describe("activation_state FK cascade migration", () => {
     expect(() => migrateActivationStateFkCascade(db)).not.toThrow();
 
     const ddl = raw
-      .query(
-        `SELECT sql FROM sqlite_master WHERE type='table' AND name='activation_state'`,
-      )
-      .get() as { sql: string } | null;
+      .query<
+        { sql: string },
+        []
+      >(`SELECT sql FROM sqlite_master WHERE type='table' AND name='activation_state'`)
+      .get();
     expect(ddl?.sql).toContain("ON DELETE CASCADE");
   });
 

@@ -50,8 +50,8 @@ function rowsFor(hash: string): CacheRow[] {
 
 function rowCount(): number {
   const row = inspector
-    .query(`SELECT COUNT(*) AS n FROM image_captions`)
-    .get() as { n: number };
+    .query<{ n: number }, []>(`SELECT COUNT(*) AS n FROM image_captions`)
+    .get()!;
   return row.n;
 }
 
@@ -86,8 +86,11 @@ describe("caption store init", () => {
     initCaptionStore(STORAGE_DIR);
 
     const columns = inspector
-      .query(`PRAGMA table_info(image_captions)`)
-      .all() as Array<{ name: string; notnull: number; pk: number }>;
+      .query<
+        { name: string; notnull: number; pk: number },
+        []
+      >(`PRAGMA table_info(image_captions)`)
+      .all();
     const byName = new Map(columns.map((c) => [c.name, c]));
     expect(byName.get("image_hash")?.pk).toBe(1);
     expect(byName.get("conversation_id")?.pk).toBe(2);
@@ -96,8 +99,8 @@ describe("caption store init", () => {
     expect(byName.get("last_used_at")?.notnull).toBe(1);
 
     const indexes = inspector
-      .query(`PRAGMA index_list(image_captions)`)
-      .all() as Array<{ name: string }>;
+      .query<{ name: string }, []>(`PRAGMA index_list(image_captions)`)
+      .all();
     const names = indexes.map((i) => i.name);
     expect(names).toContain("idx_image_captions_last_used");
     expect(names).toContain("idx_image_captions_conversation");

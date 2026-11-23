@@ -4,6 +4,7 @@ import { describe, expect, test } from "bun:test";
 import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/bun-sqlite";
 
+import { getSqliteFrom } from "../persistence/db-connection.js";
 import { migrateScheduleDescription } from "../persistence/migrations/270-schedule-description.js";
 import { migrateScheduleSourceConversation } from "../persistence/migrations/270-schedule-source-conversation.js";
 import * as schema from "../persistence/schema/index.js";
@@ -17,7 +18,7 @@ function createTestDb() {
 }
 
 function getRawSqlite(db: ReturnType<typeof drizzle<typeof schema>>): Database {
-  return (db as unknown as { $client: Database }).$client;
+  return getSqliteFrom(db);
 }
 
 describe("schedule_syntax column migration", () => {

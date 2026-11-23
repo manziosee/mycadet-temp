@@ -74,10 +74,11 @@ describe("runMigrationSteps — checkpointing", () => {
 
     // THEN its completion is recorded under the step: namespace in memory_checkpoints
     const row = getSqliteFrom(db)
-      .query(
-        `SELECT value FROM memory_checkpoints WHERE key = 'step:dummyMigrationA'`,
-      )
-      .get() as { value: string } | null;
+      .query<
+        { value: string },
+        []
+      >(`SELECT value FROM memory_checkpoints WHERE key = 'step:dummyMigrationA'`)
+      .get();
     expect(row?.value).toBe("1");
   });
 
@@ -168,10 +169,11 @@ describe("runMigrationSteps — checkpointing", () => {
       { name: "flakyStep", error: "transient failure" },
     ]);
     const failedRow = getSqliteFrom(db)
-      .query(
-        `SELECT value FROM memory_checkpoints WHERE key = 'step:flakyStep'`,
-      )
-      .get() as { value: string } | null;
+      .query<
+        { value: string },
+        []
+      >(`SELECT value FROM memory_checkpoints WHERE key = 'step:flakyStep'`)
+      .get();
     expect(failedRow?.value).toBe("failed:transient failure");
 
     // WHEN the step runs again on the next boot
@@ -271,10 +273,11 @@ describe("runMigrationSteps — checkpointing", () => {
     // THEN the rejection is reported and the step is checkpointed as failed
     expect(first.failed).toEqual(["flakyAsyncStep"]);
     const failedRow = getSqliteFrom(db)
-      .query(
-        `SELECT value FROM memory_checkpoints WHERE key = 'step:flakyAsyncStep'`,
-      )
-      .get() as { value: string } | null;
+      .query<
+        { value: string },
+        []
+      >(`SELECT value FROM memory_checkpoints WHERE key = 'step:flakyAsyncStep'`)
+      .get();
     expect(failedRow?.value).toBe("failed:transient async failure");
 
     // WHEN it runs again on the next boot

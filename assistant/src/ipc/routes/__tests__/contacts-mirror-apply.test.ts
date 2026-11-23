@@ -1,3 +1,4 @@
+import type { SQLQueryBindings } from "bun:sqlite";
 /**
  * Transactional identity-mirror IPC (`contacts_mirror_apply`) against the REAL
  * assistant DB (via `initializeDb()`; the test preload points
@@ -8,7 +9,6 @@
  * to a new address updates in place instead of colliding). Mid-batch rollback
  * lives in contacts-mirror-apply-atomicity.test.ts (needs an injected throw).
  */
-
 import { beforeEach, describe, expect, test } from "bun:test";
 
 import { getSqlite } from "../../../persistence/db-connection.js";
@@ -157,8 +157,8 @@ describe("contacts_mirror_apply", () => {
     });
     // Exactly one row — no duplicate from a collided insert, no stale sibling.
     const count = getSqlite()
-      .prepare("SELECT COUNT(*) AS n FROM contact_channels")
-      .get() as { n: number };
+      .prepare<{ n: number }, []>("SELECT COUNT(*) AS n FROM contact_channels")
+      .get()!;
     expect(count.n).toBe(1);
   });
 
@@ -190,12 +190,15 @@ describe("contacts_mirror_apply", () => {
     });
 
     const row = getSqlite()
-      .prepare("SELECT address FROM contact_channels WHERE id = ?")
-      .get("g2-ch") as { address: string };
+      .prepare<
+        { address: string },
+        SQLQueryBindings[]
+      >("SELECT address FROM contact_channels WHERE id = ?")
+      .get("g2-ch")!;
     expect(row.address).toBe("NEW-2");
     const count = getSqlite()
-      .prepare("SELECT COUNT(*) AS n FROM contact_channels")
-      .get() as { n: number };
+      .prepare<{ n: number }, []>("SELECT COUNT(*) AS n FROM contact_channels")
+      .get()!;
     expect(count.n).toBe(1);
   });
 
@@ -265,8 +268,8 @@ describe("contacts_mirror_apply", () => {
         .get("stale-ch"),
     ).toBeNull();
     const count = getSqlite()
-      .prepare("SELECT COUNT(*) AS n FROM contact_channels")
-      .get() as { n: number };
+      .prepare<{ n: number }, []>("SELECT COUNT(*) AS n FROM contact_channels")
+      .get()!;
     expect(count.n).toBe(1);
   });
 

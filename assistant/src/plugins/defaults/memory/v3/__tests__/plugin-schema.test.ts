@@ -13,10 +13,10 @@
  * matters) with no connection stub, and the once-per-connection wrapper the
  * stores share is exercised on plain handles the same way.
  */
-
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import type { SQLQueryBindings } from "bun:sqlite";
 import { Database } from "bun:sqlite";
 import { beforeEach, describe, expect, test } from "bun:test";
 
@@ -54,25 +54,27 @@ function legacyRows(
   db: Database,
 ): Array<{ conversation_id: string; slug: string }> {
   return db
-    .query(
+    .query<{ conversation_id: string; slug: string }, []>(
       `SELECT conversation_id, slug FROM memory_v3_ever_injected
        ORDER BY conversation_id, slug`,
     )
-    .all() as Array<{ conversation_id: string; slug: string }>;
+    .all();
 }
 
 function objectNames(db: Database, type: "table" | "index"): string[] {
-  return (
-    db
-      .query(`SELECT name FROM sqlite_master WHERE type = ?`)
-      .all(type) as Array<{ name: string }>
-  ).map((row) => row.name);
+  return db
+    .query<{ name: string }, SQLQueryBindings[]>(
+      `SELECT name FROM sqlite_master WHERE type = ?`,
+    )
+    .all(type)
+    .map((row) => row.name);
 }
 
 function columnNames(db: Database, table: string): string[] {
-  return (
-    db.query(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>
-  ).map((column) => column.name);
+  return db
+    .query<{ name: string }, []>(`PRAGMA table_info(${table})`)
+    .all()
+    .map((column) => column.name);
 }
 
 /** A map-backed checkpoint ledger whose reads or writes can be made to

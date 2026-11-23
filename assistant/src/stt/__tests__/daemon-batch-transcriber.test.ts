@@ -1,3 +1,4 @@
+import assert from "node:assert/strict";
 import { beforeEach, describe, expect, mock, test } from "bun:test";
 
 import { batchBoundaryGapReason } from "../../providers/speech-to-text/provider-catalog.js";
@@ -628,9 +629,9 @@ describe("deepgram-flux factory case", () => {
       createDaemonBatchTranscriber("dg-test-key", "deepgram-flux");
       throw new Error("expected the factory to throw");
     } catch (err) {
-      expect(err).toBeInstanceOf(SttError);
-      expect((err as SttError).category).toBe("provider-error");
-      expect((err as SttError).userFacing).toBe(true);
+      assert(err instanceof SttError, "Expected SttError");
+      expect(err.category).toBe("provider-error");
+      expect(err.userFacing).toBe(true);
     }
   });
 });

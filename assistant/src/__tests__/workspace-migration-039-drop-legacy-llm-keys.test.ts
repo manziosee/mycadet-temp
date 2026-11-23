@@ -10,6 +10,7 @@ import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
 import { dropLegacyLlmKeysMigration } from "../workspace/migrations/039-drop-legacy-llm-keys.js";
+import { jsonObjectSchema } from "./helpers/json-object-schema.js";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -32,8 +33,10 @@ function writeConfig(data: Record<string, unknown>): void {
   );
 }
 
-function readConfig(): Record<string, unknown> {
-  return JSON.parse(readFileSync(join(workspaceDir, "config.json"), "utf-8"));
+function readConfig() {
+  return jsonObjectSchema.parse(
+    JSON.parse(readFileSync(join(workspaceDir, "config.json"), "utf-8")),
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -182,17 +185,17 @@ describe("039-drop-legacy-llm-keys migration", () => {
     expect(services.inference.model).toBeUndefined();
 
     // heartbeat / filing
-    const heartbeat = config.heartbeat as Record<string, unknown>;
+    const heartbeat = jsonObjectSchema.parse(config.heartbeat);
     expect(heartbeat.speed).toBeUndefined();
     expect(heartbeat.enabled).toBe(true);
     expect(heartbeat.intervalMs).toBe(60000);
-    const filing = config.filing as Record<string, unknown>;
+    const filing = jsonObjectSchema.parse(config.filing);
     expect(filing.speed).toBeUndefined();
     expect(filing.enabled).toBe(true);
     expect(filing.intervalMs).toBe(30000);
 
     // analysis
-    const analysis = config.analysis as Record<string, unknown>;
+    const analysis = jsonObjectSchema.parse(config.analysis);
     expect(analysis.modelIntent).toBeUndefined();
     expect(analysis.modelOverride).toBeUndefined();
     expect(analysis.enabled).toBe(true);
@@ -202,15 +205,15 @@ describe("039-drop-legacy-llm-keys migration", () => {
     expect(memory.summarization.modelIntent).toBeUndefined();
 
     // notifications.decisionModelIntent
-    const notifications = config.notifications as Record<string, unknown>;
+    const notifications = jsonObjectSchema.parse(config.notifications);
     expect(notifications.decisionModelIntent).toBeUndefined();
 
     // ui.greetingModelIntent
-    const ui = config.ui as Record<string, unknown>;
+    const ui = jsonObjectSchema.parse(config.ui);
     expect(ui.greetingModelIntent).toBeUndefined();
 
     // calls.model
-    const calls = config.calls as Record<string, unknown>;
+    const calls = jsonObjectSchema.parse(config.calls);
     expect(calls.model).toBeUndefined();
     expect(calls.enabled).toBe(true);
 
@@ -248,7 +251,7 @@ describe("039-drop-legacy-llm-keys migration", () => {
     const services = config.services as { inference: Record<string, unknown> };
     expect(services.inference.provider).toBeUndefined();
     expect(
-      (config.notifications as Record<string, unknown>).decisionModelIntent,
+      jsonObjectSchema.parse(config.notifications).decisionModelIntent,
     ).toBeUndefined();
     expect(config.maxStepsPerSession).toBe(50);
   });

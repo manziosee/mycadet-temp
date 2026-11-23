@@ -23,15 +23,21 @@ function createTestDb() {
 
 function tableNames(db: ReturnType<typeof createTestDb>): string[] {
   const rows = getSqliteFrom(db)
-    .prepare("SELECT name FROM sqlite_master WHERE type = 'table'")
-    .all() as { name: string }[];
+    .prepare<
+      { name: string },
+      []
+    >("SELECT name FROM sqlite_master WHERE type = 'table'")
+    .all();
   return rows.map((row) => row.name);
 }
 
 function indexNames(db: ReturnType<typeof createTestDb>): string[] {
   const rows = getSqliteFrom(db)
-    .prepare("SELECT name FROM sqlite_master WHERE type = 'index'")
-    .all() as { name: string }[];
+    .prepare<
+      { name: string },
+      []
+    >("SELECT name FROM sqlite_master WHERE type = 'index'")
+    .all();
   return rows.map((row) => row.name);
 }
 
@@ -77,8 +83,11 @@ describe("migrateCreateChannelOutboundPosts", () => {
     insert();
 
     const count = sqlite
-      .prepare("SELECT COUNT(*) AS n FROM channel_outbound_posts")
-      .get() as { n: number };
+      .prepare<
+        { n: number },
+        []
+      >("SELECT COUNT(*) AS n FROM channel_outbound_posts")
+      .get()!;
     expect(count.n).toBe(1);
   });
 });

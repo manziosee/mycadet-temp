@@ -18,8 +18,8 @@ function createTestDb() {
 
 function columnNames(raw: Database): string[] {
   const rows = raw
-    .prepare("PRAGMA table_info(watch_timeline_entries)")
-    .all() as Array<{ name: string }>;
+    .prepare<{ name: string }, []>("PRAGMA table_info(watch_timeline_entries)")
+    .all();
   return rows.map((row) => row.name).sort();
 }
 
@@ -63,14 +63,17 @@ describe("migration 368: watch timeline screenshot blob", () => {
     insertEntry(raw, "entry-2", null);
 
     const rows = raw
-      .prepare(
+      .prepare<
+        {
+          id: string;
+          screenshot: unknown;
+          bytes: number | null;
+        },
+        []
+      >(
         "SELECT id, screenshot, length(screenshot) AS bytes FROM watch_timeline_entries ORDER BY id",
       )
-      .all() as Array<{
-      id: string;
-      screenshot: unknown;
-      bytes: number | null;
-    }>;
+      .all();
 
     expect(rows.map((row) => row.bytes)).toEqual([frame.length, null]);
     expect(Buffer.from(rows[0]?.screenshot as Uint8Array)).toEqual(frame);
@@ -87,10 +90,11 @@ describe("migration 368: watch timeline screenshot blob", () => {
     expect(() => migrateWatchTimelineScreenshotBlob(db)).not.toThrow();
 
     const rows = raw
-      .prepare(
-        "SELECT id, length(screenshot) AS bytes FROM watch_timeline_entries",
-      )
-      .all() as Array<{ id: string; bytes: number }>;
+      .prepare<
+        { id: string; bytes: number },
+        []
+      >("SELECT id, length(screenshot) AS bytes FROM watch_timeline_entries")
+      .all();
     expect(rows).toEqual([{ id: "entry-1", bytes: frame.length }]);
     expect(columnNames(raw)).toContain("screenshot");
     expect(columnNames(raw)).not.toContain("screenshot_attachment_id");

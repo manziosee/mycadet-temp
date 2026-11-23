@@ -1,3 +1,4 @@
+import assert from "node:assert/strict";
 /**
  * End-to-end escalation regression for deferred wakes, driven through the real
  * route handlers and the real scheduler tick.
@@ -13,7 +14,6 @@
  * chose a row's target. Everything therefore has to hold on the write side and
  * in the row's own durable provenance.
  */
-
 import { beforeEach, describe, expect, mock, test } from "bun:test";
 
 const mockWakeAgentForOpportunity = mock(
@@ -252,11 +252,9 @@ describe("a locked-field edit is refused as a caller error, not a daemon fault",
     // The refusal itself is correct; what matters here is the shape: a
     // BadRequestError (HTTP 400) whose message names the invariant and the
     // cancel-and-recreate workaround, not a generic InternalError (500).
-    expect(err).toBeInstanceOf(BadRequestError);
-    expect((err as BadRequestError).statusCode).toBe(400);
-    expect((err as BadRequestError).message).toMatch(
-      /fixed at creation; cancel and re-create it/,
-    );
+    assert(err instanceof BadRequestError, "Expected BadRequestError");
+    expect(err.statusCode).toBe(400);
+    expect(err.message).toMatch(/fixed at creation; cancel and re-create it/);
     expect(getSchedule(defer.id)?.message).toBe("check the build");
   });
 

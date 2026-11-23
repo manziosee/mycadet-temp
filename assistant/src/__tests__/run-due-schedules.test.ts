@@ -51,7 +51,7 @@ mock.module("../persistence/lifecycle-quiesce.js", () => ({
   isLifecycleQuiesced: () => quiesceAnswers.shift() ?? false,
 }));
 
-import { getDb } from "../persistence/db-connection.js";
+import { getDb, getSqlite } from "../persistence/db-connection.js";
 import { initializeDb } from "../persistence/db-init.js";
 import { isPluginDirActivated } from "../plugins/mtime-cache.js";
 import {
@@ -65,8 +65,7 @@ import { getWorkspacePluginsDir } from "../util/layout.js";
 await initializeDb();
 
 function rawDb(): import("bun:sqlite").Database {
-  return (getDb() as unknown as { $client: import("bun:sqlite").Database })
-    .$client;
+  return getSqlite();
 }
 
 beforeEach(() => {

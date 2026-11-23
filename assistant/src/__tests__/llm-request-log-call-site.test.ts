@@ -88,22 +88,22 @@ describe("migrateLlmRequestLogCallSite", () => {
     // Drop the column if present (simulate pre-264 state). SQLite supports
     // `DROP COLUMN` since 3.35 (June 2021) — bun-sqlite ships well past that.
     const before = raw
-      .query(`PRAGMA table_info(llm_request_logs)`)
-      .all() as Array<{ name: string }>;
+      .query<{ name: string }, []>(`PRAGMA table_info(llm_request_logs)`)
+      .all();
     if (before.some((c) => c.name === "call_site")) {
       raw.exec(`ALTER TABLE llm_request_logs DROP COLUMN call_site`);
     }
 
     const without = raw
-      .query(`PRAGMA table_info(llm_request_logs)`)
-      .all() as Array<{ name: string }>;
+      .query<{ name: string }, []>(`PRAGMA table_info(llm_request_logs)`)
+      .all();
     expect(without.some((c) => c.name === "call_site")).toBe(false);
 
     migrateLlmRequestLogCallSite(db);
 
     const after = raw
-      .query(`PRAGMA table_info(llm_request_logs)`)
-      .all() as Array<{ name: string }>;
+      .query<{ name: string }, []>(`PRAGMA table_info(llm_request_logs)`)
+      .all();
     expect(after.some((c) => c.name === "call_site")).toBe(true);
   });
 

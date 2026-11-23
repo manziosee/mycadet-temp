@@ -1,3 +1,4 @@
+import assert from "node:assert/strict";
 /**
  * Tests for the default-provider route handlers.
  *
@@ -6,7 +7,6 @@
  *     connection/credential states, CES-unreachable vs missing-credential
  *   PUT /v1/config/llm/default-provider — strict validation, persistence
  */
-
 import { beforeEach, describe, expect, mock, test } from "bun:test";
 
 // ── Module mocks (must come before imports) ──────────────────────────────────
@@ -479,9 +479,9 @@ describe("PUT config/llm/default-provider", () => {
     const err = await put({ provider: "not-a-provider" }).catch(
       (e: unknown) => e,
     );
-    expect(err).toBeInstanceOf(BadRequestError);
-    expect((err as BadRequestError).message).toContain("anthropic");
-    expect((err as BadRequestError).message).toContain("cadet");
+    assert(err instanceof BadRequestError, "Expected BadRequestError");
+    expect(err.message).toContain("anthropic");
+    expect(err.message).toContain("cadet");
     expect(persistedDefaultProvider()).toBeUndefined();
   });
 

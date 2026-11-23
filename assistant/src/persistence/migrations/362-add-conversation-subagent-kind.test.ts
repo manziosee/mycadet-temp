@@ -1,3 +1,4 @@
+import type { SQLQueryBindings } from "bun:sqlite";
 import { Database } from "bun:sqlite";
 import { describe, expect, test } from "bun:test";
 
@@ -34,21 +35,29 @@ function kindOf(
   conversationId: string,
 ): { role: unknown; mode: unknown } {
   const row = sqlite
-    .query(
+    .query<
+      {
+        subagent_role: unknown;
+        subagent_spawn_mode: unknown;
+      },
+      SQLQueryBindings[]
+    >(
       "SELECT subagent_role, subagent_spawn_mode FROM conversations WHERE id = ?",
     )
-    .get(conversationId) as {
-    subagent_role: unknown;
-    subagent_spawn_mode: unknown;
-  };
+    .get(conversationId)!;
   return { role: row.subagent_role, mode: row.subagent_spawn_mode };
 }
 
 function columnInfo(sqlite: Database) {
-  return sqlite.query("PRAGMA table_info(conversations)").all() as Array<{
-    name: string;
-    notnull: number;
-  }>;
+  return sqlite
+    .query<
+      {
+        name: string;
+        notnull: number;
+      },
+      []
+    >("PRAGMA table_info(conversations)")
+    .all();
 }
 
 describe("migration 362: conversations subagent role / spawn mode", () => {
@@ -151,23 +160,25 @@ describe("migration 362: conversations subagent role / spawn mode", () => {
 
     migrateAddConversationSubagentKind(db);
 
-    const indexes = (
-      sqlite.query("PRAGMA index_list(subagents)").all() as Array<{
-        name: string;
-      }>
-    ).map((i) => i.name);
+    const indexes = sqlite
+      .query<
+        {
+          name: string;
+        },
+        []
+      >("PRAGMA index_list(subagents)")
+      .all()
+      .map((i) => i.name);
     expect(indexes).toContain("idx_subagents_conversation_id");
 
     // Both backfill statements look `subagents` up once per `conversations`
     // row. Without the index that lookup is a full scan of `subagents`, which
     // makes a step that blocks daemon startup quadratic.
-    const plan = (
-      sqlite
-        .query(
-          "EXPLAIN QUERY PLAN SELECT 1 FROM subagents s WHERE s.conversation_id = 'c1'",
-        )
-        .all() as Array<{ detail: string }>
-    )
+    const plan = sqlite
+      .query<{ detail: string }, []>(
+        "EXPLAIN QUERY PLAN SELECT 1 FROM subagents s WHERE s.conversation_id = 'c1'",
+      )
+      .all()
       .map((row) => row.detail)
       .join(" ");
     expect(plan).toContain("idx_subagents_conversation_id");

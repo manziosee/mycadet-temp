@@ -1,3 +1,4 @@
+import assert from "node:assert/strict";
 import { beforeAll, beforeEach, describe, expect, test } from "bun:test";
 
 import type { AssistantEvent } from "../api/index.js";
@@ -21,9 +22,26 @@ const { createSurfaceMutex, handleSurfaceAction, surfaceProxyResolver } =
 import { SurfaceType } from "../api/surfaces.js";
 import type { Conversation } from "../daemon/conversation.js";
 import type { UserMessageAttachment } from "../daemon/message-types/shared.js";
-import { UiSurfaceShow } from "../daemon/message-types/surfaces.js";
 import { setBroadcastOverrideForTesting } from "../runtime/assistant-event-hub.js";
-import { asConversation } from "./helpers/mock-conversation.js";
+import {
+  asConversation,
+  mockUnownedModeSessions,
+} from "./helpers/mock-conversation.js";
+
+function findSurfaceShow(events: AssistantEvent[]) {
+  const show = events.find((message) => message.type === "ui_surface_show");
+  assert(show, "Expected a surface show event");
+  return show;
+}
+
+function findSurfaceComplete(surfaceId: string) {
+  return broadcastedMessages.find(
+    (
+      message,
+    ): message is Extract<AssistantEvent, { type: "ui_surface_complete" }> =>
+      message.type === "ui_surface_complete" && message.surfaceId === surfaceId,
+  );
+}
 
 interface ProcessMessageCall {
   content: string;
@@ -60,7 +78,7 @@ function makeContext(sent: AssistantEvent[] = []): Conversation & {
     accumulatedSurfaceState: new Map<string, Record<string, unknown>>(),
     surfaceActionRequestIds: new Set<string>(),
     currentTurnSurfaces: [],
-    modeSessions: {
+    modeSessions: mockUnownedModeSessions({
       acceptTurn: (
         requestId: string,
         response?: { kind: "surface"; responseId: string },
@@ -71,7 +89,7 @@ function makeContext(sent: AssistantEvent[] = []): Conversation & {
         return undefined;
       },
       getTurnOwner: () => undefined,
-    } as unknown as Conversation["modeSessions"],
+    }),
     isProcessing: () => false,
     enqueueMessage: () => ({ queued: false, requestId: "req-1" }),
     getQueueDepth: () => 0,
@@ -252,9 +270,7 @@ describe("surface action delivery to assistant", () => {
     expect(showResult.yieldToUser).toBe(true);
 
     // Verify surface was shown and pending action was registered
-    const showMessage = sent.find(
-      (msg): msg is UiSurfaceShow => msg.type === "ui_surface_show",
-    ) as UiSurfaceShow;
+    const showMessage = findSurfaceShow(sent);
     expect(showMessage).toBeDefined();
     const surfaceId = showMessage.surfaceId;
     expect(ctx.pendingSurfaceActions.has(surfaceId)).toBe(true);
@@ -305,9 +321,7 @@ describe("surface action delivery to assistant", () => {
       actions: [{ id: "archive", label: "Archive" }],
     });
 
-    const showMessage = sent.find(
-      (msg): msg is UiSurfaceShow => msg.type === "ui_surface_show",
-    ) as UiSurfaceShow;
+    const showMessage = findSurfaceShow(sent);
     const surfaceId = showMessage.surfaceId;
 
     await handleSurfaceAction(
@@ -369,9 +383,7 @@ describe("surface action delivery to assistant", () => {
       actions: [{ id: "archive", label: "Archive" }],
     });
 
-    const showMessage = sent.find(
-      (msg): msg is UiSurfaceShow => msg.type === "ui_surface_show",
-    ) as UiSurfaceShow;
+    const showMessage = findSurfaceShow(sent);
     const surfaceId = showMessage.surfaceId;
 
     // Click action WITHOUT selection data (data is undefined)
@@ -475,20 +487,13 @@ describe("surface action delivery to assistant", () => {
     expect(showResult.isError).toBe(false);
     expect(showResult.yieldToUser).toBe(true);
 
-    const showMessage = sent.find(
-      (msg): msg is UiSurfaceShow => msg.type === "ui_surface_show",
-    ) as UiSurfaceShow;
+    const showMessage = findSurfaceShow(sent);
     const surfaceId = showMessage.surfaceId;
     expect(ctx.pendingSurfaceActions.has(surfaceId)).toBe(true);
 
     await handleSurfaceAction(ctx, surfaceId, "confirm", {});
 
-    const completeMsg = broadcastedMessages.find(
-      (m) =>
-        (m as unknown as Record<string, unknown>).type ===
-          "ui_surface_complete" &&
-        (m as unknown as Record<string, unknown>).surfaceId === surfaceId,
-    ) as unknown as Record<string, unknown> | undefined;
+    const completeMsg = findSurfaceComplete(surfaceId);
     expect(completeMsg).toBeDefined();
     expect(completeMsg?.conversationId).toBe("conv-1");
     expect(completeMsg?.summary).toContain("Delete");
@@ -507,9 +512,7 @@ describe("surface action delivery to assistant", () => {
     expect(showResult.isError).toBe(false);
     expect(showResult.yieldToUser).toBe(true);
 
-    const showMessage = sent.find(
-      (msg): msg is UiSurfaceShow => msg.type === "ui_surface_show",
-    ) as UiSurfaceShow;
+    const showMessage = findSurfaceShow(sent);
     const surfaceId = showMessage.surfaceId;
     expect(ctx.pendingSurfaceActions.has(surfaceId)).toBe(true);
 
@@ -523,12 +526,7 @@ describe("surface action delivery to assistant", () => {
       ],
     });
 
-    const completeMsg = broadcastedMessages.find(
-      (m) =>
-        (m as unknown as Record<string, unknown>).type ===
-          "ui_surface_complete" &&
-        (m as unknown as Record<string, unknown>).surfaceId === surfaceId,
-    ) as unknown as Record<string, unknown> | undefined;
+    const completeMsg = findSurfaceComplete(surfaceId);
     expect(completeMsg).toBeDefined();
     expect(completeMsg?.conversationId).toBe("conv-1");
   });
@@ -543,9 +541,7 @@ describe("surface action delivery to assistant", () => {
       data: { accept: "*" },
     });
 
-    const showMessage = sent.find(
-      (msg): msg is UiSurfaceShow => msg.type === "ui_surface_show",
-    ) as UiSurfaceShow;
+    const showMessage = findSurfaceShow(sent);
     const surfaceId = showMessage.surfaceId;
 
     const largeBase64 = "A".repeat(10_000);
@@ -559,12 +555,7 @@ describe("surface action delivery to assistant", () => {
       ],
     });
 
-    const completeMsg = broadcastedMessages.find(
-      (m) =>
-        (m as unknown as Record<string, unknown>).type ===
-          "ui_surface_complete" &&
-        (m as unknown as Record<string, unknown>).surfaceId === surfaceId,
-    ) as unknown as Record<string, unknown> | undefined;
+    const completeMsg = findSurfaceComplete(surfaceId);
     expect(completeMsg).toBeDefined();
 
     const submittedData = completeMsg?.submittedData as
@@ -595,9 +586,7 @@ describe("surface action delivery to assistant", () => {
     expect(showResult.isError).toBe(false);
     expect(showResult.yieldToUser).toBe(true);
 
-    const showMessage = sent.find(
-      (msg): msg is UiSurfaceShow => msg.type === "ui_surface_show",
-    ) as UiSurfaceShow;
+    const showMessage = findSurfaceShow(sent);
     const surfaceId = showMessage.surfaceId;
     expect(ctx.pendingSurfaceActions.has(surfaceId)).toBe(true);
 
@@ -608,12 +597,7 @@ describe("surface action delivery to assistant", () => {
       selectedTitles: ["Clean up my inbox"],
     });
 
-    const completeMsg = broadcastedMessages.find(
-      (m) =>
-        (m as unknown as Record<string, unknown>).type ===
-          "ui_surface_complete" &&
-        (m as unknown as Record<string, unknown>).surfaceId === surfaceId,
-    ) as unknown as Record<string, unknown> | undefined;
+    const completeMsg = findSurfaceComplete(surfaceId);
     expect(completeMsg).toBeDefined();
     expect(completeMsg?.conversationId).toBe("conv-1");
     expect(completeMsg?.summary).toBe('User chose: "Clean up my inbox"');
@@ -634,9 +618,7 @@ describe("surface action delivery to assistant", () => {
       actions: [{ id: "select", label: "Select" }],
     });
 
-    const showMessage = sent.find(
-      (msg): msg is UiSurfaceShow => msg.type === "ui_surface_show",
-    ) as UiSurfaceShow;
+    const showMessage = findSurfaceShow(sent);
     const surfaceId = showMessage.surfaceId;
 
     broadcastedMessages = [];
@@ -645,9 +627,7 @@ describe("surface action delivery to assistant", () => {
     });
 
     const completeMsg = broadcastedMessages.find(
-      (m) =>
-        (m as unknown as Record<string, unknown>).type ===
-        "ui_surface_complete",
+      (m) => m.type === "ui_surface_complete",
     );
     expect(completeMsg).toBeUndefined();
   });

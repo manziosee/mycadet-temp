@@ -10,6 +10,7 @@ import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
 import { extractCollectUsageDataMigration } from "../workspace/migrations/004-extract-collect-usage-data.js";
+import { jsonObjectSchema } from "./helpers/json-object-schema.js";
 
 // Real fs: each test runs the migration against a fresh temp workspace and
 // asserts on the file state it leaves behind.
@@ -21,8 +22,10 @@ function setupConfig(config: unknown): void {
   writeFileSync(CONFIG_PATH(), JSON.stringify(config));
 }
 
-function readConfig(): unknown {
-  return JSON.parse(readFileSync(CONFIG_PATH(), "utf-8"));
+function readConfig() {
+  return jsonObjectSchema.parse(
+    JSON.parse(readFileSync(CONFIG_PATH(), "utf-8")),
+  );
 }
 
 describe("004-extract-collect-usage-data migration", () => {
@@ -49,9 +52,9 @@ describe("004-extract-collect-usage-data migration", () => {
 
     extractCollectUsageDataMigration.run(WORKSPACE_DIR);
 
-    expect(
-      (readConfig() as Record<string, unknown>).assistantFeatureFlagValues,
-    ).toEqual({ "feature_flags.some-other-flag.enabled": true });
+    expect(readConfig().assistantFeatureFlagValues).toEqual({
+      "feature_flags.some-other-flag.enabled": true,
+    });
   });
 
   test("false flag writes collectUsageData: false and removes flag entry", () => {
@@ -59,7 +62,7 @@ describe("004-extract-collect-usage-data migration", () => {
 
     extractCollectUsageDataMigration.run(WORKSPACE_DIR);
 
-    const written = readConfig() as Record<string, unknown>;
+    const written = readConfig();
     expect(written.collectUsageData).toBe(false);
     expect(written.assistantFeatureFlagValues).toBeUndefined();
   });
@@ -69,7 +72,7 @@ describe("004-extract-collect-usage-data migration", () => {
 
     extractCollectUsageDataMigration.run(WORKSPACE_DIR);
 
-    const written = readConfig() as Record<string, unknown>;
+    const written = readConfig();
     expect(written.collectUsageData).toBeUndefined();
     expect(written.assistantFeatureFlagValues).toBeUndefined();
   });
@@ -82,7 +85,7 @@ describe("004-extract-collect-usage-data migration", () => {
 
     extractCollectUsageDataMigration.run(WORKSPACE_DIR);
 
-    const written = readConfig() as Record<string, unknown>;
+    const written = readConfig();
     expect(written.assistantFeatureFlagValues).toBeUndefined();
     expect(written.someSetting).toBe("value");
   });
@@ -97,12 +100,11 @@ describe("004-extract-collect-usage-data migration", () => {
 
     extractCollectUsageDataMigration.run(WORKSPACE_DIR);
 
-    const written = readConfig() as Record<string, unknown>;
+    const written = readConfig();
     expect(written.collectUsageData).toBe(false);
-    const remaining = written.assistantFeatureFlagValues as Record<
-      string,
-      unknown
-    >;
+    const remaining = jsonObjectSchema.parse(
+      written.assistantFeatureFlagValues,
+    );
     expect(remaining).toEqual({
       "feature_flags.some-other-flag.enabled": true,
     });
@@ -122,7 +124,7 @@ describe("004-extract-collect-usage-data migration", () => {
 
     extractCollectUsageDataMigration.run(WORKSPACE_DIR);
 
-    expect(readConfig()).toEqual([1, 2, 3]);
+    expect(JSON.parse(readFileSync(CONFIG_PATH(), "utf-8"))).toEqual([1, 2, 3]);
   });
 
   test("no-op when assistantFeatureFlagValues is not an object", () => {
@@ -130,9 +132,7 @@ describe("004-extract-collect-usage-data migration", () => {
 
     extractCollectUsageDataMigration.run(WORKSPACE_DIR);
 
-    expect(
-      (readConfig() as Record<string, unknown>).assistantFeatureFlagValues,
-    ).toBe("not-an-object");
+    expect(readConfig().assistantFeatureFlagValues).toBe("not-an-object");
   });
 
   test("no-op when flag value is not a boolean", () => {
@@ -140,8 +140,8 @@ describe("004-extract-collect-usage-data migration", () => {
 
     extractCollectUsageDataMigration.run(WORKSPACE_DIR);
 
-    expect(
-      (readConfig() as Record<string, unknown>).assistantFeatureFlagValues,
-    ).toEqual({ [FLAG_KEY]: "string-value" });
+    expect(readConfig().assistantFeatureFlagValues).toEqual({
+      [FLAG_KEY]: "string-value",
+    });
   });
 });

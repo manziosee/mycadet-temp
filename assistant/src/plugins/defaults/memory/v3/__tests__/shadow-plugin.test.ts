@@ -606,43 +606,52 @@ afterAll(() => {
 
 function readRows() {
   return memorySqlite
-    .query(`SELECT slug, source FROM memory_v3_selections ORDER BY slug`)
-    .all() as Array<{ slug: string; source: SelectionSource }>;
+    .query<
+      { slug: string; source: SelectionSource },
+      []
+    >(`SELECT slug, source FROM memory_v3_selections ORDER BY slug`)
+    .all();
 }
 
 function readPools() {
   return memorySqlite
-    .query(
+    .query<
+      {
+        conversation_id: string;
+        turn: number;
+        message_id: string | null;
+        pool_size: number;
+        selected_count: number;
+        selector_ran: number;
+        candidates_json: string;
+      },
+      []
+    >(
       `SELECT conversation_id, turn, message_id, pool_size, selected_count,
               selector_ran, candidates_json
        FROM memory_v3_pools ORDER BY turn`,
     )
-    .all() as Array<{
-    conversation_id: string;
-    turn: number;
-    message_id: string | null;
-    pool_size: number;
-    selected_count: number;
-    selector_ran: number;
-    candidates_json: string;
-  }>;
+    .all();
 }
 
 function readPoolInputs() {
   return memorySqlite
-    .query(
+    .query<
+      {
+        conversation_id: string;
+        turn: number;
+        current_message: string;
+        kept_all: number;
+        gate_reason: string | null;
+        candidate_text_hashes_json: string;
+      },
+      []
+    >(
       `SELECT conversation_id, turn, current_message, kept_all, gate_reason,
               candidate_text_hashes_json
        FROM memory_v3_pool_inputs ORDER BY turn`,
     )
-    .all() as Array<{
-    conversation_id: string;
-    turn: number;
-    current_message: string;
-    kept_all: number;
-    gate_reason: string | null;
-    candidate_text_hashes_json: string;
-  }>;
+    .all();
 }
 
 /** The `chosen` verdict per pooled slug, read from the single pool row. */

@@ -25,11 +25,15 @@ function createTestDb() {
 }
 
 function columnNames(sqlite: Database): string[] {
-  return (
-    sqlite.query("PRAGMA table_info(cron_jobs)").all() as Array<{
-      name: string;
-    }>
-  ).map((c) => c.name);
+  return sqlite
+    .query<
+      {
+        name: string;
+      },
+      []
+    >("PRAGMA table_info(cron_jobs)")
+    .all()
+    .map((c) => c.name);
 }
 
 describe("migration 290: cron_jobs capabilities_json", () => {
@@ -39,12 +43,16 @@ describe("migration 290: cron_jobs capabilities_json", () => {
 
     migrateScheduleCapabilities(db);
 
-    const column = (
-      sqlite.query("PRAGMA table_info(cron_jobs)").all() as Array<{
-        name: string;
-        notnull: number;
-      }>
-    ).find((c) => c.name === "capabilities_json");
+    const column = sqlite
+      .query<
+        {
+          name: string;
+          notnull: number;
+        },
+        []
+      >("PRAGMA table_info(cron_jobs)")
+      .all()
+      .find((c) => c.name === "capabilities_json");
     expect(column).toBeDefined();
     expect(column?.notnull).toBe(0);
   });
@@ -59,8 +67,11 @@ describe("migration 290: cron_jobs capabilities_json", () => {
     migrateScheduleCapabilities(db);
 
     const row = sqlite
-      .query("SELECT capabilities_json FROM cron_jobs WHERE id = 'job-1'")
-      .get() as { capabilities_json: string | null };
+      .query<
+        { capabilities_json: string | null },
+        []
+      >("SELECT capabilities_json FROM cron_jobs WHERE id = 'job-1'")
+      .get()!;
     expect(row.capabilities_json).toBeNull();
   });
 

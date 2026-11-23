@@ -9,6 +9,13 @@ const TEST_API_KEY = "xai-test-key-for-streaming";
 // Mock WebSocket
 // ---------------------------------------------------------------------------
 
+// The test constructor returns a socket double with only the members the transcriber uses.
+function installMockWebSocket(
+  constructor: new (...args: never[]) => object,
+): void {
+  Object.defineProperty(globalThis, "WebSocket", { value: constructor });
+}
+
 type WsEventType = "open" | "close" | "error" | "message";
 type WsListener = (...args: unknown[]) => void;
 
@@ -149,25 +156,27 @@ function createEventCollector(): {
 
 describe("XAIRealtimeTranscriber", () => {
   let mockWs: MockWebSocket;
-  let originalWebSocket: unknown;
+  let originalWebSocket: typeof WebSocket;
 
   beforeEach(() => {
     mockWs = new MockWebSocket();
-    originalWebSocket = (globalThis as Record<string, unknown>).WebSocket;
+    originalWebSocket = globalThis.WebSocket;
 
     // Replace global WebSocket with a factory that returns our mock.
-    (globalThis as Record<string, unknown>).WebSocket = class {
-      constructor(
-        _url: string,
-        _options?: { headers?: Record<string, string> },
-      ) {
-        return mockWs;
-      }
-    };
+    installMockWebSocket(
+      class {
+        constructor(
+          _url: string,
+          _options?: { headers?: Record<string, string> },
+        ) {
+          return mockWs;
+        }
+      },
+    );
   });
 
   afterEach(() => {
-    (globalThis as Record<string, unknown>).WebSocket = originalWebSocket;
+    globalThis.WebSocket = originalWebSocket;
   });
 
   // ── Helper: start a session ────────────────────────────────────────
@@ -199,14 +208,19 @@ describe("XAIRealtimeTranscriber", () => {
   test("start() opens WebSocket with correct URL params and Authorization header", async () => {
     let capturedUrl: string | undefined;
     let capturedOptions: { headers?: Record<string, string> } | undefined;
-    const origWs = (globalThis as Record<string, unknown>).WebSocket;
-    (globalThis as Record<string, unknown>).WebSocket = class {
-      constructor(url: string, options?: { headers?: Record<string, string> }) {
-        capturedUrl = url;
-        capturedOptions = options;
-        return mockWs;
-      }
-    };
+    const origWs = globalThis.WebSocket;
+    installMockWebSocket(
+      class {
+        constructor(
+          url: string,
+          options?: { headers?: Record<string, string> },
+        ) {
+          capturedUrl = url;
+          capturedOptions = options;
+          return mockWs;
+        }
+      },
+    );
 
     const transcriber = new XAIRealtimeTranscriber(TEST_API_KEY);
     const { onEvent } = createEventCollector();
@@ -227,7 +241,7 @@ describe("XAIRealtimeTranscriber", () => {
       `Bearer ${TEST_API_KEY}`,
     );
 
-    (globalThis as Record<string, unknown>).WebSocket = origWs;
+    globalThis.WebSocket = origWs;
   });
 
   // ─────────────────────────────────────────────────────────────────
@@ -339,13 +353,15 @@ describe("XAIRealtimeTranscriber", () => {
 
   test("diarize=true forwards URL param and aggregates speakerLabel with mode + first-word tiebreaker", async () => {
     let capturedUrl: string | undefined;
-    const origWs = (globalThis as Record<string, unknown>).WebSocket;
-    (globalThis as Record<string, unknown>).WebSocket = class {
-      constructor(url: string) {
-        capturedUrl = url;
-        return mockWs;
-      }
-    };
+    const origWs = globalThis.WebSocket;
+    installMockWebSocket(
+      class {
+        constructor(url: string) {
+          capturedUrl = url;
+          return mockWs;
+        }
+      },
+    );
 
     const transcriber = new XAIRealtimeTranscriber(TEST_API_KEY, {
       diarize: true,
@@ -380,7 +396,7 @@ describe("XAIRealtimeTranscriber", () => {
       speakerLabel: "0",
     });
 
-    (globalThis as Record<string, unknown>).WebSocket = origWs;
+    globalThis.WebSocket = origWs;
   });
 
   // ─────────────────────────────────────────────────────────────────
@@ -490,14 +506,16 @@ describe("XAIRealtimeTranscriber", () => {
     // "start() called twice" because the first attempt null'd out
     // this.ws.
     mockWs = new MockWebSocket();
-    (globalThis as Record<string, unknown>).WebSocket = class {
-      constructor(
-        _url: string,
-        _options?: { headers?: Record<string, string> },
-      ) {
-        return mockWs;
-      }
-    };
+    installMockWebSocket(
+      class {
+        constructor(
+          _url: string,
+          _options?: { headers?: Record<string, string> },
+        ) {
+          return mockWs;
+        }
+      },
+    );
 
     const secondAttempt = transcriber.start(onEvent);
     mockWs.simulateOpen();
@@ -529,14 +547,16 @@ describe("XAIRealtimeTranscriber", () => {
 
     // Second attempt — instance must be reusable AND fully functional.
     mockWs = new MockWebSocket();
-    (globalThis as Record<string, unknown>).WebSocket = class {
-      constructor(
-        _url: string,
-        _options?: { headers?: Record<string, string> },
-      ) {
-        return mockWs;
-      }
-    };
+    installMockWebSocket(
+      class {
+        constructor(
+          _url: string,
+          _options?: { headers?: Record<string, string> },
+        ) {
+          return mockWs;
+        }
+      },
+    );
 
     const secondAttempt = transcriber.start(onEvent);
     mockWs.simulateOpen();
@@ -583,14 +603,16 @@ describe("XAIRealtimeTranscriber", () => {
 
     // Retry and confirm the session is fully functional.
     mockWs = new MockWebSocket();
-    (globalThis as Record<string, unknown>).WebSocket = class {
-      constructor(
-        _url: string,
-        _options?: { headers?: Record<string, string> },
-      ) {
-        return mockWs;
-      }
-    };
+    installMockWebSocket(
+      class {
+        constructor(
+          _url: string,
+          _options?: { headers?: Record<string, string> },
+        ) {
+          return mockWs;
+        }
+      },
+    );
 
     const secondAttempt = transcriber.start(onEvent);
     mockWs.simulateOpen();

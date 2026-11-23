@@ -17,8 +17,11 @@ await initializeDb();
 
 function columnInfo(name: string): { notnull: number; dflt_value: unknown } {
   const rows = getSqlite()
-    .query(`PRAGMA table_info(conversations)`)
-    .all() as Array<{ name: string; notnull: number; dflt_value: unknown }>;
+    .query<
+      { name: string; notnull: number; dflt_value: unknown },
+      []
+    >(`PRAGMA table_info(conversations)`)
+    .all();
   const col = rows.find((r) => r.name === name);
   if (!col) {
     throw new Error(`column ${name} missing`);
@@ -27,13 +30,12 @@ function columnInfo(name: string): { notnull: number; dflt_value: unknown } {
 }
 
 function indexNames(): string[] {
-  return (
-    getSqlite()
-      .query(
-        `SELECT name FROM sqlite_master WHERE type = 'index' AND tbl_name = 'conversations' AND sql IS NOT NULL ORDER BY name`,
-      )
-      .all() as Array<{ name: string }>
-  ).map((r) => r.name);
+  return getSqlite()
+    .query<{ name: string }, []>(
+      `SELECT name FROM sqlite_master WHERE type = 'index' AND tbl_name = 'conversations' AND sql IS NOT NULL ORDER BY name`,
+    )
+    .all()
+    .map((r) => r.name);
 }
 
 describe("migration 350 — nullable total_input_tokens", () => {
@@ -51,10 +53,11 @@ describe("migration 350 — nullable total_input_tokens", () => {
       )
       .run("conv-350-null", Date.now(), Date.now());
     const row = getSqlite()
-      .query(
-        `SELECT total_input_tokens FROM conversations WHERE id = 'conv-350-null'`,
-      )
-      .get() as { total_input_tokens: number | null };
+      .query<
+        { total_input_tokens: number | null },
+        []
+      >(`SELECT total_input_tokens FROM conversations WHERE id = 'conv-350-null'`)
+      .get()!;
     expect(row.total_input_tokens).toBeNull();
   });
 

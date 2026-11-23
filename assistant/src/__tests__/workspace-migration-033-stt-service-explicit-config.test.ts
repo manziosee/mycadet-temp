@@ -10,6 +10,7 @@ import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
 import { sttServiceExplicitConfigMigration } from "../workspace/migrations/033-stt-service-explicit-config.js";
+import { jsonObjectSchema } from "./helpers/json-object-schema.js";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -32,8 +33,10 @@ function writeConfig(data: Record<string, unknown>): void {
   );
 }
 
-function readConfig(): Record<string, unknown> {
-  return JSON.parse(readFileSync(join(workspaceDir, "config.json"), "utf-8"));
+function readConfig() {
+  return jsonObjectSchema.parse(
+    JSON.parse(readFileSync(join(workspaceDir, "config.json"), "utf-8")),
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -69,8 +72,8 @@ describe("033-stt-service-explicit-config migration", () => {
     sttServiceExplicitConfigMigration.run(workspaceDir);
 
     const config = readConfig();
-    const services = config.services as Record<string, unknown>;
-    const stt = services.stt as Record<string, unknown>;
+    const services = jsonObjectSchema.parse(config.services);
+    const stt = jsonObjectSchema.parse(services.stt);
 
     expect(stt.mode).toBe("your-own");
     expect(stt.provider).toBe("deepgram");
@@ -91,8 +94,8 @@ describe("033-stt-service-explicit-config migration", () => {
     sttServiceExplicitConfigMigration.run(workspaceDir);
 
     const config = readConfig();
-    const services = config.services as Record<string, unknown>;
-    const stt = services.stt as Record<string, unknown>;
+    const services = jsonObjectSchema.parse(config.services);
+    const stt = jsonObjectSchema.parse(services.stt);
 
     expect(stt.mode).toBe("your-own");
     expect(stt.provider).toBe("deepgram");
@@ -100,7 +103,7 @@ describe("033-stt-service-explicit-config migration", () => {
     expect(stt.providers).toEqual({});
 
     // Existing services preserved
-    const inference = services.inference as Record<string, unknown>;
+    const inference = jsonObjectSchema.parse(services.inference);
     expect(inference.provider).toBe("anthropic");
   });
 
@@ -110,8 +113,8 @@ describe("033-stt-service-explicit-config migration", () => {
     sttServiceExplicitConfigMigration.run(workspaceDir);
 
     const config = readConfig();
-    const services = config.services as Record<string, unknown>;
-    const stt = services.stt as Record<string, unknown>;
+    const services = jsonObjectSchema.parse(config.services);
+    const stt = jsonObjectSchema.parse(services.stt);
 
     expect(stt.mode).toBe("your-own");
     expect(stt.provider).toBe("deepgram");
@@ -134,10 +137,9 @@ describe("033-stt-service-explicit-config migration", () => {
     sttServiceExplicitConfigMigration.run(workspaceDir);
 
     const config = readConfig();
-    const stt = (config.services as Record<string, unknown>).stt as Record<
-      string,
-      unknown
-    >;
+    const stt = jsonObjectSchema.parse(
+      jsonObjectSchema.parse(config.services).stt,
+    );
 
     expect(stt.mode).toBe("your-own");
     expect(stt.provider).toBe("deepgram");
@@ -156,10 +158,9 @@ describe("033-stt-service-explicit-config migration", () => {
     sttServiceExplicitConfigMigration.run(workspaceDir);
 
     const config = readConfig();
-    const stt = (config.services as Record<string, unknown>).stt as Record<
-      string,
-      unknown
-    >;
+    const stt = jsonObjectSchema.parse(
+      jsonObjectSchema.parse(config.services).stt,
+    );
 
     expect(stt.provider).toBe("deepgram");
     expect(stt.mode).toBe("your-own");
@@ -178,10 +179,9 @@ describe("033-stt-service-explicit-config migration", () => {
     sttServiceExplicitConfigMigration.run(workspaceDir);
 
     const config = readConfig();
-    const stt = (config.services as Record<string, unknown>).stt as Record<
-      string,
-      unknown
-    >;
+    const stt = jsonObjectSchema.parse(
+      jsonObjectSchema.parse(config.services).stt,
+    );
 
     // providers is sparse — no per-provider entries seeded
     expect(stt.providers).toEqual({});
@@ -201,11 +201,10 @@ describe("033-stt-service-explicit-config migration", () => {
     sttServiceExplicitConfigMigration.run(workspaceDir);
 
     const config = readConfig();
-    const stt = (config.services as Record<string, unknown>).stt as Record<
-      string,
-      unknown
-    >;
-    const providers = stt.providers as Record<string, unknown>;
+    const stt = jsonObjectSchema.parse(
+      jsonObjectSchema.parse(config.services).stt,
+    );
+    const providers = jsonObjectSchema.parse(stt.providers);
 
     // Existing entry preserved, no new entries injected
     expect(providers["openai-whisper"]).toEqual({});
@@ -228,10 +227,9 @@ describe("033-stt-service-explicit-config migration", () => {
     sttServiceExplicitConfigMigration.run(workspaceDir);
 
     const config = readConfig();
-    const stt = (config.services as Record<string, unknown>).stt as Record<
-      string,
-      unknown
-    >;
+    const stt = jsonObjectSchema.parse(
+      jsonObjectSchema.parse(config.services).stt,
+    );
 
     expect(stt.provider).toBe("deepgram");
   });
@@ -253,13 +251,12 @@ describe("033-stt-service-explicit-config migration", () => {
     sttServiceExplicitConfigMigration.run(workspaceDir);
 
     const config = readConfig();
-    const stt = (config.services as Record<string, unknown>).stt as Record<
-      string,
-      unknown
-    >;
-    const providers = stt.providers as Record<string, unknown>;
-    const whisper = providers["openai-whisper"] as Record<string, unknown>;
-    const deepgram = providers.deepgram as Record<string, unknown>;
+    const stt = jsonObjectSchema.parse(
+      jsonObjectSchema.parse(config.services).stt,
+    );
+    const providers = jsonObjectSchema.parse(stt.providers);
+    const whisper = jsonObjectSchema.parse(providers["openai-whisper"]);
+    const deepgram = jsonObjectSchema.parse(providers.deepgram);
 
     expect(whisper.customSetting).toBe("preserved");
     expect(deepgram.model).toBe("nova-3");
@@ -277,10 +274,9 @@ describe("033-stt-service-explicit-config migration", () => {
     sttServiceExplicitConfigMigration.run(workspaceDir);
 
     const config = readConfig();
-    const stt = (config.services as Record<string, unknown>).stt as Record<
-      string,
-      unknown
-    >;
+    const stt = jsonObjectSchema.parse(
+      jsonObjectSchema.parse(config.services).stt,
+    );
     expect(stt.mode).toBe("your-own");
   });
 
@@ -354,10 +350,9 @@ describe("033-stt-service-explicit-config migration", () => {
     sttServiceExplicitConfigMigration.run(workspaceDir);
 
     const config = readConfig();
-    const stt = (config.services as Record<string, unknown>).stt as Record<
-      string,
-      unknown
-    >;
+    const stt = jsonObjectSchema.parse(
+      jsonObjectSchema.parse(config.services).stt,
+    );
 
     // ensureObj replaces the non-object with a fresh object and backfills
     expect(stt.mode).toBe("your-own");
@@ -372,8 +367,8 @@ describe("033-stt-service-explicit-config migration", () => {
     sttServiceExplicitConfigMigration.run(workspaceDir);
 
     const config = readConfig();
-    const services = config.services as Record<string, unknown>;
-    const stt = services.stt as Record<string, unknown>;
+    const services = jsonObjectSchema.parse(config.services);
+    const stt = jsonObjectSchema.parse(services.stt);
 
     expect(stt.mode).toBe("your-own");
     expect(stt.provider).toBe("deepgram");
@@ -481,7 +476,7 @@ describe("033-stt-service-explicit-config migration", () => {
       sttServiceExplicitConfigMigration.down(workspaceDir);
 
       const config = readConfig();
-      const services = config.services as Record<string, unknown>;
+      const services = jsonObjectSchema.parse(config.services);
       expect(services.stt).toBeUndefined();
       // Other services preserved
       expect(services.inference).toBeDefined();
@@ -511,7 +506,7 @@ describe("033-stt-service-explicit-config migration", () => {
       sttServiceExplicitConfigMigration.down(workspaceDir);
 
       const config = readConfig();
-      const services = config.services as Record<string, unknown>;
+      const services = jsonObjectSchema.parse(config.services);
       expect(services.inference).toBeDefined();
     });
 
@@ -530,7 +525,7 @@ describe("033-stt-service-explicit-config migration", () => {
       sttServiceExplicitConfigMigration.down(workspaceDir);
 
       const config = readConfig();
-      const services = config.services as Record<string, unknown>;
+      const services = jsonObjectSchema.parse(config.services);
       expect(services.stt).toBeUndefined();
     });
 

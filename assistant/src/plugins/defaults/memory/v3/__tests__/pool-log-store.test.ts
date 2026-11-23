@@ -498,20 +498,24 @@ describe("ensureMemoryV3PoolsSchema", () => {
     expect(() => ensureMemoryV3PoolsSchema(memorySqlite)).not.toThrow();
 
     const indexes = memorySqlite
-      .query(`PRAGMA index_list(memory_v3_pools)`)
-      .all() as Array<{ name: string }>;
+      .query<{ name: string }, []>(`PRAGMA index_list(memory_v3_pools)`)
+      .all();
     const names = new Set(indexes.map((i) => i.name));
     expect(names.has("idx_memory_v3_pools_message")).toBe(true);
     expect(names.has("idx_memory_v3_pools_conv")).toBe(true);
   });
 
   test("selector_ran defaults to 1 so a row written without it reads as a judged pool", () => {
-    const column = (
-      memorySqlite.query(`PRAGMA table_info(memory_v3_pools)`).all() as Array<{
-        name: string;
-        dflt_value: string | null;
-      }>
-    ).find((c) => c.name === "selector_ran");
+    const column = memorySqlite
+      .query<
+        {
+          name: string;
+          dflt_value: string | null;
+        },
+        []
+      >(`PRAGMA table_info(memory_v3_pools)`)
+      .all()
+      .find((c) => c.name === "selector_ran");
     expect(column?.dflt_value).toBe("1");
   });
 });
@@ -719,11 +723,12 @@ describe("pool input capture", () => {
       ),
     );
     const textCount = () =>
-      (
-        memorySqlite
-          .query(`SELECT COUNT(*) AS n FROM memory_v3_pool_texts`)
-          .get() as { n: number }
-      ).n;
+      memorySqlite
+        .query<
+          { n: number },
+          []
+        >(`SELECT COUNT(*) AS n FROM memory_v3_pool_texts`)
+        .get()!.n;
     expect(textCount()).toBe(new Set(capture.input.candidate_text_hashes).size);
     expect(readPoolInputForTurn("conv-1", 5)?.current_message).toBe(
       "and the fence?",
@@ -741,11 +746,12 @@ describe("pool input capture", () => {
     );
     expect(readPoolInputForTurn("conv-1", 4)?.current_message).toBe("again");
     expect(
-      (
-        memorySqlite
-          .query(`SELECT COUNT(*) AS n FROM memory_v3_pool_inputs`)
-          .get() as { n: number }
-      ).n,
+      memorySqlite
+        .query<
+          { n: number },
+          []
+        >(`SELECT COUNT(*) AS n FROM memory_v3_pool_inputs`)
+        .get()!.n,
     ).toBe(2);
   });
 

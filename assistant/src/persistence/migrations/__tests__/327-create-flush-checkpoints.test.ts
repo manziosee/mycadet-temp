@@ -1,3 +1,4 @@
+import type { SQLQueryBindings } from "bun:sqlite";
 /**
  * Tests for migration 327 — the `flush_checkpoints` table on the dedicated
  * telemetry database, and the one-time move of the telemetry reporter's
@@ -31,15 +32,21 @@ function telemetrySqlite() {
 
 function readTelemetryValue(key: string): string | null {
   const row = telemetrySqlite()
-    .query(`SELECT value FROM flush_checkpoints WHERE key = ?`)
-    .get(key) as { value: string } | null;
+    .query<
+      { value: string },
+      SQLQueryBindings[]
+    >(`SELECT value FROM flush_checkpoints WHERE key = ?`)
+    .get(key);
   return row?.value ?? null;
 }
 
 function readMainValue(key: string): string | null {
   const row = getSqlite()
-    .query(`SELECT value FROM memory_checkpoints WHERE key = ?`)
-    .get(key) as { value: string } | null;
+    .query<
+      { value: string },
+      SQLQueryBindings[]
+    >(`SELECT value FROM memory_checkpoints WHERE key = ?`)
+    .get(key);
   return row?.value ?? null;
 }
 
@@ -125,8 +132,8 @@ describe("migration 327 — flush_checkpoints on the telemetry database", () => 
   test("no-op when there are no legacy keys", () => {
     createFlushCheckpointsTable(getDb());
     const count = telemetrySqlite()
-      .query(`SELECT COUNT(*) as c FROM flush_checkpoints`)
-      .get() as { c: number };
+      .query<{ c: number }, []>(`SELECT COUNT(*) as c FROM flush_checkpoints`)
+      .get()!;
     expect(count.c).toBe(0);
   });
 });

@@ -15,11 +15,15 @@ function createTestDb() {
 }
 
 function getColumnNames(raw: Database): string[] {
-  return (
-    raw.query(`PRAGMA table_info(conversations)`).all() as Array<{
-      name: string;
-    }>
-  ).map((column) => column.name);
+  return raw
+    .query<
+      {
+        name: string;
+      },
+      []
+    >(`PRAGMA table_info(conversations)`)
+    .all()
+    .map((column) => column.name);
 }
 
 function bootstrapMinimalConversations(raw: Database): void {
@@ -55,10 +59,11 @@ describe("migrate rename inferenceProfile → inference_profile", () => {
     expect(columns).not.toContain("inferenceProfile");
 
     const row = raw
-      .query(
-        `SELECT id, inference_profile FROM conversations WHERE id = 'conv-1'`,
-      )
-      .get() as { id: string; inference_profile: string | null } | null;
+      .query<
+        { id: string; inference_profile: string | null },
+        []
+      >(`SELECT id, inference_profile FROM conversations WHERE id = 'conv-1'`)
+      .get();
     expect(row).toEqual({
       id: "conv-1",
       inference_profile: "quality-optimized",
@@ -86,8 +91,11 @@ describe("migrate rename inferenceProfile → inference_profile", () => {
     expect(columns).not.toContain("inferenceProfile");
 
     const row = raw
-      .query(`SELECT inference_profile FROM conversations WHERE id = 'conv-2'`)
-      .get() as { inference_profile: string | null } | null;
+      .query<
+        { inference_profile: string | null },
+        []
+      >(`SELECT inference_profile FROM conversations WHERE id = 'conv-2'`)
+      .get();
     expect(row).toEqual({ inference_profile: "balanced" });
   });
 

@@ -24,19 +24,27 @@ function createTestDb() {
 }
 
 function columnNames(sqlite: Database): string[] {
-  return (
-    sqlite.query("PRAGMA table_info(memory_v3_selections)").all() as Array<{
-      name: string;
-    }>
-  ).map((c) => c.name);
+  return sqlite
+    .query<
+      {
+        name: string;
+      },
+      []
+    >("PRAGMA table_info(memory_v3_selections)")
+    .all()
+    .map((c) => c.name);
 }
 
 function indexNames(sqlite: Database): string[] {
-  return (
-    sqlite.query("PRAGMA index_list(memory_v3_selections)").all() as Array<{
-      name: string;
-    }>
-  ).map((i) => i.name);
+  return sqlite
+    .query<
+      {
+        name: string;
+      },
+      []
+    >("PRAGMA index_list(memory_v3_selections)")
+    .all()
+    .map((i) => i.name);
 }
 
 describe("migration 283: memory_v3_selections message_id + section columns", () => {
@@ -47,8 +55,11 @@ describe("migration 283: memory_v3_selections message_id + section columns", () 
     migrateMemoryV3SelectionsMessageIdAndSections(db);
 
     const cols = sqlite
-      .query("PRAGMA table_info(memory_v3_selections)")
-      .all() as Array<{ name: string; notnull: number }>;
+      .query<
+        { name: string; notnull: number },
+        []
+      >("PRAGMA table_info(memory_v3_selections)")
+      .all();
     for (const name of ["message_id", "section_ordinal", "section_title"]) {
       const col = cols.find((c) => c.name === name);
       expect(col).toBeDefined();
@@ -68,15 +79,18 @@ describe("migration 283: memory_v3_selections message_id + section columns", () 
     migrateMemoryV3SelectionsMessageIdAndSections(db);
 
     const row = sqlite
-      .query(
+      .query<
+        {
+          message_id: string | null;
+          section_ordinal: number | null;
+          section_title: string | null;
+        },
+        []
+      >(
         `SELECT message_id, section_ordinal, section_title
            FROM memory_v3_selections WHERE conversation_id = 'conv-1'`,
       )
-      .get() as {
-      message_id: string | null;
-      section_ordinal: number | null;
-      section_title: string | null;
-    };
+      .get()!;
     expect(row.message_id).toBeNull();
     expect(row.section_ordinal).toBeNull();
     expect(row.section_title).toBeNull();

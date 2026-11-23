@@ -2292,8 +2292,8 @@ describe("handleChannelInbound — Slack thread backfill wiring", () => {
 
     const db = getDb();
     const rows = db.$client
-      .prepare("SELECT metadata FROM messages")
-      .all() as Array<{ metadata: string | null }>;
+      .prepare<{ metadata: string | null }, []>("SELECT metadata FROM messages")
+      .all();
 
     const channelTimestamps = new Set<string>();
     for (const row of rows) {
@@ -2736,8 +2736,8 @@ describe("handleChannelInbound — Slack thread backfill wiring", () => {
     // not yet be persisted, and the agent loop must not have fired.
     const db = getDb();
     const rowsBeforeResolve = db.$client
-      .prepare("SELECT metadata FROM messages")
-      .all() as Array<{ metadata: string | null }>;
+      .prepare<{ metadata: string | null }, []>("SELECT metadata FROM messages")
+      .all();
     const tsBefore = rowsBeforeResolve
       .map((row) => {
         if (!row.metadata) {
@@ -2764,8 +2764,8 @@ describe("handleChannelInbound — Slack thread backfill wiring", () => {
     expect(resp.status).toBe(200);
 
     const rowsAfter = db.$client
-      .prepare("SELECT metadata FROM messages")
-      .all() as Array<{ metadata: string | null }>;
+      .prepare<{ metadata: string | null }, []>("SELECT metadata FROM messages")
+      .all();
     const tsAfter = rowsAfter
       .map((row) => {
         if (!row.metadata) {

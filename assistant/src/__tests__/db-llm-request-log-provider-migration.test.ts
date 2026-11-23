@@ -25,10 +25,15 @@ function createTestDb() {
 function getColumnInfo(
   raw: Database,
 ): Array<{ name: string; notnull: number }> {
-  return raw.query(`PRAGMA table_info(llm_request_logs)`).all() as Array<{
-    name: string;
-    notnull: number;
-  }>;
+  return raw
+    .query<
+      {
+        name: string;
+        notnull: number;
+      },
+      []
+    >(`PRAGMA table_info(llm_request_logs)`)
+    .all();
 }
 
 function bootstrapPreProviderLlmRequestLogs(raw: Database): void {
@@ -102,20 +107,23 @@ describe("llm_request_logs provider migration", () => {
     ).toBe(true);
 
     const row = raw
-      .query(
+      .query<
+        {
+          id: string;
+          conversation_id: string;
+          message_id: string | null;
+          provider: string | null;
+          request_payload: string;
+          response_payload: string;
+          created_at: number;
+        },
+        []
+      >(
         `SELECT id, conversation_id, message_id, provider, request_payload, response_payload, created_at
          FROM llm_request_logs
          WHERE id = 'log-upgrade'`,
       )
-      .get() as {
-      id: string;
-      conversation_id: string;
-      message_id: string | null;
-      provider: string | null;
-      request_payload: string;
-      response_payload: string;
-      created_at: number;
-    } | null;
+      .get();
 
     expect(row).toEqual({
       id: "log-upgrade",
@@ -163,8 +171,11 @@ describe("llm_request_logs provider migration", () => {
     expect(() => migrateLlmRequestLogProvider(db)).not.toThrow();
 
     const row = raw
-      .query(`SELECT provider FROM llm_request_logs WHERE id = 'log-rerun'`)
-      .get() as { provider: string | null } | null;
+      .query<
+        { provider: string | null },
+        []
+      >(`SELECT provider FROM llm_request_logs WHERE id = 'log-rerun'`)
+      .get();
 
     expect(row).toEqual({
       provider: "anthropic",
