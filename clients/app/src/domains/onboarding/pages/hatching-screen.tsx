@@ -1,3 +1,7 @@
+import {
+  peekPendingProviderKey,
+  setPendingProviderKey,
+} from "@app/domains/onboarding/provider-key";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router";
 
@@ -82,9 +86,8 @@ export function interpolateSegmentProgress(
  * with the funnel's hosting choice as the remote param. The hatch operation
  * discriminates (local, docker, cloud), so this screen never branches on the
  * mode: it waits the answer out, polls the resolution endpoint until the
- * hatched assistant answers, and hands off to research. The pending provider
- * key stays staged for the downstream apply (same sessionStorage, same
- * origin), and the shell's resolution owns the not-ready states afterwards.
+ * hatched assistant answers, and hands off to the assistant. The provider
+ * choice and key ride the hatch operation and remain staged on failure.
  */
 export function HatchingScreen() {
   const { t } = useTranslation("account");
@@ -195,7 +198,21 @@ export function HatchingScreen() {
         // hatch operation discriminates (local, docker, cloud), so this
         // screen never branches on the mode.
         const remote = hosting ?? "local";
-        const result = await hatchAssistant(remote);
+        const pendingProvider = peekPendingProviderKey();
+        const result = await hatchAssistant(
+          remote,
+          pendingProvider
+            ? {
+                provider: pendingProvider.provider,
+                precollectedApiKey: pendingProvider.key,
+                configValues: pendingProvider.model
+                  ? {
+                      "llm.default.model": pendingProvider.model,
+                    }
+                  : undefined,
+              }
+            : undefined,
+        );
         if (cancelled) {
           return;
         }
@@ -204,6 +221,7 @@ export function HatchingScreen() {
           setError(result.error ?? "Failed to hatch your assistant.");
           return;
         }
+        setPendingProviderKey(null);
         if (result.assistantId) {
           writeSelectedAssistantId(result.assistantId);
         }
@@ -219,6 +237,7 @@ export function HatchingScreen() {
             // settle (transport error, timeout) keeps polling within the
             // deadline below.
             const resolution = await resolveAssistant({
+              assistantId: result.assistantId,
               signal: AbortSignal.timeout(10_000),
             }).catch(() => null);
             if (resolution?.status === "ready") {

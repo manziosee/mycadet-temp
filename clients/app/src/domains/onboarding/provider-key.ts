@@ -1,14 +1,7 @@
 import type { OnboardingProviderId } from "@app/domains/onboarding/provider-catalog";
 
-// Model-provider API key collected during onboarding. Held in sessionStorage
-// (consume-once) between the API-key step and the post-hatch application, then
-// written to the freshly hatched assistant. Mirrors the macOS flow, which
-// holds the key in-memory and POSTs it to the daemon once the assistant is up.
-//
-// The storage half of web's `provider-key.ts` — same key, same origin, so a
-// key staged here is consumed by the hatching screen (still web-side) through
-// the shell's same-origin sessionStorage. The consume-and-apply half (the
-// daemon SDK writes) stays web-side.
+// Provider settings staged between the API-key screen and hatch. Keep them
+// on failure so a retry can resend; clear them after a successful hatch.
 
 const PENDING_KEY_STORAGE = "onboarding.providerKey";
 

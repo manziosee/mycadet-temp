@@ -317,6 +317,24 @@ describe("the hatch row — POST /v1/assistants/hatch", () => {
     expect(hatchAssistantMock).toHaveBeenCalledWith({ remote: "docker" });
   });
 
+  test("forwards the provider, collected key, and model config to hatch", async () => {
+    const params = {
+      remote: "local",
+      provider: "fireworks",
+      precollectedApiKey: "fw_test",
+      configValues: {
+        "llm.default.model": "accounts/fireworks/models/minimax-m3",
+      },
+    };
+    const response = await dispatchAnswered(
+      "/v1/assistants/hatch",
+      "POST",
+      params,
+    );
+    expect(response.status).toBe(200);
+    expect(hatchAssistantMock).toHaveBeenCalledWith(params);
+  });
+
   test("a non-object body degrades to a plain hatch", async () => {
     const response = await dispatchAnswered("/v1/assistants/hatch", "POST", {});
     expect(hatchAssistantMock).toHaveBeenCalledWith({ remote: "local" });
