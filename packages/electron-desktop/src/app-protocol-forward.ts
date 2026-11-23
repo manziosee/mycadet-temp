@@ -103,14 +103,14 @@ export function registerAppProtocol(): void {
   const webIndexHtml = path.join(webDistRoot, "index.html");
   const appDistRoot = resolveAppDistRoot();
   const appIndexHtml = path.join(appDistRoot, "index.html");
-  // Single origin: the injected config carries THIS host's origin as
-  // `baseUrl` — the renderer's one origin for API, auth, and the assistant
-  // mount.
-  const configJson = JSON.stringify({
-    baseUrl: `${APP_PROTOCOL}://${APP_HOST}`,
-    deviceId: getDeviceId() ?? undefined,
-    ...servedConfigFromLockfile(readLockfile()),
-  }).replace(/</g, "\\u003c");
+  // Read only when serving config or an assistant document. A hatch or
+  // selection can change the served assistant after protocol registration.
+  const configJson = () =>
+    JSON.stringify({
+      baseUrl: `${APP_PROTOCOL}://${APP_HOST}`,
+      deviceId: getDeviceId() ?? undefined,
+      ...servedConfigFromLockfile(readLockfile()),
+    }).replace(/</g, "\\u003c");
 
   const respond = async (request: Request): Promise<Response> => {
     if (new URL(request.url).host !== APP_HOST) {
@@ -118,7 +118,7 @@ export function registerAppProtocol(): void {
     }
     const pathname = new URL(request.url).pathname;
     if (pathname === "/assistant/__config" || pathname === "/__config") {
-      return new Response(configJson, {
+      return new Response(configJson(), {
         headers: { "Content-Type": "application/json" },
       });
     }
@@ -169,7 +169,7 @@ export function registerAppProtocol(): void {
         asset.path === webIndexHtml
           ? html.replace(
               "</head>",
-              `<script>window.__CADET_CONFIG__=${configJson}</script></head>`,
+              `<script>window.__CADET_CONFIG__=${configJson()}</script></head>`,
             )
           : html;
       return new Response(finalHtml, { status: response.status, headers });
