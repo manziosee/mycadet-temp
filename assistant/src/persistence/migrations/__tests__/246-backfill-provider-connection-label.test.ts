@@ -1,3 +1,4 @@
+import type { SQLQueryBindings } from "bun:sqlite";
 import { Database } from "bun:sqlite";
 import { describe, expect, test } from "bun:test";
 
@@ -71,8 +72,11 @@ describe("migration 246 — backfill provider_connection label", () => {
     migrateBackfillProviderConnectionLabel(db);
 
     const row = raw
-      .query(`SELECT name, label FROM provider_connections WHERE name = ?`)
-      .get("anthropic-personal") as ConnectionRow;
+      .query<
+        ConnectionRow,
+        SQLQueryBindings[]
+      >(`SELECT name, label FROM provider_connections WHERE name = ?`)
+      .get("anthropic-personal")!;
     expect(row.label).toBe("anthropic-personal");
   });
 
@@ -116,11 +120,17 @@ describe("migration 246 — backfill provider_connection label", () => {
     migrateBackfillProviderConnectionLabel(db);
 
     const empty = raw
-      .query(`SELECT label FROM provider_connections WHERE name = ?`)
-      .get("openai-empty") as ConnectionRow;
+      .query<
+        ConnectionRow,
+        SQLQueryBindings[]
+      >(`SELECT label FROM provider_connections WHERE name = ?`)
+      .get("openai-empty")!;
     const whitespace = raw
-      .query(`SELECT label FROM provider_connections WHERE name = ?`)
-      .get("openai-whitespace") as ConnectionRow;
+      .query<
+        ConnectionRow,
+        SQLQueryBindings[]
+      >(`SELECT label FROM provider_connections WHERE name = ?`)
+      .get("openai-whitespace")!;
     expect(empty.label).toBe("openai-empty");
     expect(whitespace.label).toBe("openai-whitespace");
   });
@@ -150,8 +160,11 @@ describe("migration 246 — backfill provider_connection label", () => {
     migrateBackfillProviderConnectionLabel(db);
 
     const row = raw
-      .query(`SELECT label FROM provider_connections WHERE name = ?`)
-      .get("anthropic-work") as ConnectionRow;
+      .query<
+        ConnectionRow,
+        SQLQueryBindings[]
+      >(`SELECT label FROM provider_connections WHERE name = ?`)
+      .get("anthropic-work")!;
     expect(row.label).toBe("Anthropic — Work");
   });
 
@@ -179,11 +192,12 @@ describe("migration 246 — backfill provider_connection label", () => {
     // First run: backfills NULL → "anthropic-personal".
     migrateBackfillProviderConnectionLabel(db);
     expect(
-      (
-        raw
-          .query(`SELECT label FROM provider_connections WHERE name = ?`)
-          .get("anthropic-personal") as ConnectionRow
-      ).label,
+      raw
+        .query<
+          ConnectionRow,
+          SQLQueryBindings[]
+        >(`SELECT label FROM provider_connections WHERE name = ?`)
+        .get("anthropic-personal")!.label,
     ).toBe("anthropic-personal");
 
     // User clears the label after the backfill ran.
@@ -195,11 +209,12 @@ describe("migration 246 — backfill provider_connection label", () => {
     // the checkpoint was set on the first successful run.
     migrateBackfillProviderConnectionLabel(db);
     expect(
-      (
-        raw
-          .query(`SELECT label FROM provider_connections WHERE name = ?`)
-          .get("anthropic-personal") as ConnectionRow
-      ).label,
+      raw
+        .query<
+          ConnectionRow,
+          SQLQueryBindings[]
+        >(`SELECT label FROM provider_connections WHERE name = ?`)
+        .get("anthropic-personal")!.label,
     ).toBeNull();
   });
 
@@ -211,8 +226,11 @@ describe("migration 246 — backfill provider_connection label", () => {
     migrateBackfillProviderConnectionLabel(db);
 
     const checkpoint = raw
-      .query(`SELECT key FROM memory_checkpoints WHERE key = ?`)
-      .get("backfill_provider_connection_label") as { key: string } | null;
+      .query<
+        { key: string },
+        SQLQueryBindings[]
+      >(`SELECT key FROM memory_checkpoints WHERE key = ?`)
+      .get("backfill_provider_connection_label");
     expect(checkpoint).not.toBeNull();
     expect(checkpoint?.key).toBe("backfill_provider_connection_label");
   });

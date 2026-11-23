@@ -1,3 +1,4 @@
+import type { SQLQueryBindings } from "bun:sqlite";
 import { Database } from "bun:sqlite";
 import { describe, expect, test } from "bun:test";
 
@@ -81,15 +82,16 @@ describe("document_conversations migration", () => {
     migrateCreateDocumentConversations(db);
 
     const tableRow = raw
-      .query(
-        `SELECT name FROM sqlite_master WHERE type='table' AND name='document_conversations'`,
-      )
-      .get() as TableRow | null;
+      .query<
+        TableRow,
+        []
+      >(`SELECT name FROM sqlite_master WHERE type='table' AND name='document_conversations'`)
+      .get();
     expect(tableRow?.name).toBe("document_conversations");
 
     const columns = raw
-      .query(`PRAGMA table_info(document_conversations)`)
-      .all() as ColumnRow[];
+      .query<ColumnRow, []>(`PRAGMA table_info(document_conversations)`)
+      .all();
 
     const byName = new Map(columns.map((c) => [c.name, c]));
     expect(byName.get("surface_id")?.type).toBe("TEXT");
@@ -103,10 +105,11 @@ describe("document_conversations migration", () => {
 
     // Verify index on conversation_id
     const indexRow = raw
-      .query(
-        `SELECT name FROM sqlite_master WHERE type='index' AND name='idx_doc_conv_conversation_id'`,
-      )
-      .get() as TableRow | null;
+      .query<
+        TableRow,
+        []
+      >(`SELECT name FROM sqlite_master WHERE type='index' AND name='idx_doc_conv_conversation_id'`)
+      .get();
     expect(indexRow?.name).toBe("idx_doc_conv_conversation_id");
   });
 
@@ -128,10 +131,11 @@ describe("document_conversations migration", () => {
     migrateCreateDocumentConversations(db);
 
     const rows = raw
-      .query(
-        `SELECT surface_id, conversation_id, created_at FROM document_conversations`,
-      )
-      .all() as JunctionRow[];
+      .query<
+        JunctionRow,
+        []
+      >(`SELECT surface_id, conversation_id, created_at FROM document_conversations`)
+      .all();
 
     expect(rows).toHaveLength(1);
     expect(rows[0]!.surface_id).toBe("doc-1");
@@ -161,10 +165,11 @@ describe("document_conversations migration", () => {
       .run("doc-a", "conv-a", 2000);
 
     const rows = raw
-      .query(
-        `SELECT surface_id, conversation_id FROM document_conversations WHERE surface_id = ?`,
-      )
-      .all("doc-a") as JunctionRow[];
+      .query<
+        JunctionRow,
+        SQLQueryBindings[]
+      >(`SELECT surface_id, conversation_id FROM document_conversations WHERE surface_id = ?`)
+      .all("doc-a");
 
     expect(rows).toHaveLength(1);
     expect(rows[0]!.conversation_id).toBe("conv-a");
@@ -198,10 +203,11 @@ describe("document_conversations migration", () => {
       .run("doc-a", "conv-b", 3000);
 
     const rows = raw
-      .query(
-        `SELECT surface_id, conversation_id FROM document_conversations WHERE surface_id = ? ORDER BY conversation_id`,
-      )
-      .all("doc-a") as JunctionRow[];
+      .query<
+        JunctionRow,
+        SQLQueryBindings[]
+      >(`SELECT surface_id, conversation_id FROM document_conversations WHERE surface_id = ? ORDER BY conversation_id`)
+      .all("doc-a");
 
     expect(rows).toHaveLength(2);
     expect(rows[0]!.conversation_id).toBe("conv-a");
@@ -237,7 +243,14 @@ describe("document_conversations migration", () => {
 
     // Query via junction for conv-viewer — should return conv-viewer as conversation_id
     const results = raw
-      .query(
+      .query<
+        {
+          surface_id: string;
+          conversation_id: string;
+          title: string;
+        },
+        SQLQueryBindings[]
+      >(
         /*sql*/ `
         SELECT d.surface_id, dc.conversation_id AS conversation_id,
                d.title, d.word_count, d.created_at, d.updated_at
@@ -247,11 +260,7 @@ describe("document_conversations migration", () => {
         ORDER BY d.updated_at DESC
       `,
       )
-      .all("conv-viewer") as {
-      surface_id: string;
-      conversation_id: string;
-      title: string;
-    }[];
+      .all("conv-viewer");
 
     expect(results).toHaveLength(1);
     expect(results[0]!.surface_id).toBe("doc-x");
@@ -286,16 +295,22 @@ describe("document_conversations migration", () => {
 
     // Verify junction rows exist
     let junctionRows = raw
-      .query(`SELECT * FROM document_conversations WHERE surface_id = ?`)
-      .all("doc-del") as JunctionRow[];
+      .query<
+        JunctionRow,
+        SQLQueryBindings[]
+      >(`SELECT * FROM document_conversations WHERE surface_id = ?`)
+      .all("doc-del");
     expect(junctionRows).toHaveLength(2);
 
     // Delete the document — should cascade to junction table
     raw.query(`DELETE FROM documents WHERE surface_id = ?`).run("doc-del");
 
     junctionRows = raw
-      .query(`SELECT * FROM document_conversations WHERE surface_id = ?`)
-      .all("doc-del") as JunctionRow[];
+      .query<
+        JunctionRow,
+        SQLQueryBindings[]
+      >(`SELECT * FROM document_conversations WHERE surface_id = ?`)
+      .all("doc-del");
     expect(junctionRows).toHaveLength(0);
   });
 
@@ -325,8 +340,11 @@ describe("document_conversations migration", () => {
     expect(() => migrateCreateDocumentConversations(db)).not.toThrow();
 
     const rows = raw
-      .query(`SELECT * FROM document_conversations WHERE surface_id = ?`)
-      .all("doc-idem") as JunctionRow[];
+      .query<
+        JunctionRow,
+        SQLQueryBindings[]
+      >(`SELECT * FROM document_conversations WHERE surface_id = ?`)
+      .all("doc-idem");
     expect(rows).toHaveLength(1);
   });
 });

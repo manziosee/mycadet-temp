@@ -1,11 +1,14 @@
 import { beforeEach, describe, expect, mock, test } from "bun:test";
 
+import { z } from "zod";
+
 import {
   BadRequestError,
   ForbiddenError,
   InternalError,
 } from "../runtime/routes/errors.js";
 import type { CredentialMetadata } from "../tools/credentials/metadata-store.js";
+import { jsonObjectSchema } from "./helpers/json-object-schema.js";
 
 // ---------------------------------------------------------------------------
 // Mutable mock state (closed over by the mock factories below)
@@ -142,7 +145,14 @@ import {
   openRevealProofWindow,
   revealedValueSince,
 } from "../runtime/reveal-success-registry.js";
-import { ROUTES } from "../runtime/routes/credential-routes.js";
+import {
+  credentialDeleteResponseSchema,
+  credentialInspectResponseSchema,
+  credentialRevealResponseSchema,
+  credentialSetResponseSchema,
+  credentialsListResponseSchema,
+  ROUTES,
+} from "../runtime/routes/credential-routes.js";
 
 // A delete looks up the provider connections that resolve their auth through
 // the credential, so the inference schema has to exist. No connection is
@@ -158,20 +168,9 @@ const inspectRoute = ROUTES.find(
   (r) => r.operationId === "credentials_inspect",
 );
 
-type SetResponse = { credentialId: string; service: string; field: string };
-type ListResponse = {
-  credentials: Array<{
-    service: string;
-    field: string;
-    scrubbedValue: string;
-    hasSecret: boolean;
-  }>;
-};
-type DeleteResponse = {
-  service: string;
-  field: string;
-  affectedConnections: string[];
-};
+const typedCredentialsListSchema = credentialsListResponseSchema.extend({
+  credentials: z.array(jsonObjectSchema),
+});
 
 const SECRET_VALUE = "super-secret-token-value";
 
@@ -203,14 +202,16 @@ describe("credentials routes", () => {
       const watermark = currentRevealSuccessWatermark();
 
       // WHEN revealed by the local principal with its tool-shell nonce
-      const result = (await revealRoute!.handler({
-        body: {
-          service: "vercel",
-          field: "api_token",
-          revealNonce: "nonce-A",
-        },
-        headers: { "x-cadet-principal-type": "local" },
-      })) as { value: string };
+      const result = credentialRevealResponseSchema.parse(
+        await revealRoute!.handler({
+          body: {
+            service: "vercel",
+            field: "api_token",
+            revealNonce: "nonce-A",
+          },
+          headers: { "x-cadet-principal-type": "local" },
+        }),
+      );
 
       // THEN the value is returned and the proof is recorded
       expect(result.value).toBe(SECRET_VALUE);
@@ -231,14 +232,16 @@ describe("credentials routes", () => {
       const watermark = currentRevealSuccessWatermark();
 
       for (const principal of ["user", "svc_gateway"]) {
-        const result = (await revealRoute!.handler({
-          body: {
-            service: "vercel",
-            field: "api_token",
-            revealNonce: "nonce-A",
-          },
-          headers: { "x-cadet-principal-type": principal },
-        })) as { value: string };
+        const result = credentialRevealResponseSchema.parse(
+          await revealRoute!.handler({
+            body: {
+              service: "vercel",
+              field: "api_token",
+              revealNonce: "nonce-A",
+            },
+            headers: { "x-cadet-principal-type": principal },
+          }),
+        );
         expect(result.value).toBe(SECRET_VALUE);
       }
 
@@ -258,17 +261,19 @@ describe("credentials routes", () => {
       openRevealProofWindow();
       const watermark = currentRevealSuccessWatermark();
 
-      const result = (await revealRoute!.handler({
-        body: {
-          service: "vercel",
-          field: "api_token",
-          revealNonce: "nonce-A",
-        },
-        headers: {
-          "x-cadet-principal-type": "local",
-          "x-cadet-proxy-server": "ipc",
-        },
-      })) as { value: string };
+      const result = credentialRevealResponseSchema.parse(
+        await revealRoute!.handler({
+          body: {
+            service: "vercel",
+            field: "api_token",
+            revealNonce: "nonce-A",
+          },
+          headers: {
+            "x-cadet-principal-type": "local",
+            "x-cadet-proxy-server": "ipc",
+          },
+        }),
+      );
 
       expect(result.value).toBe(SECRET_VALUE);
       expect(
@@ -285,10 +290,12 @@ describe("credentials routes", () => {
       secureStore.set(seedKey("vercel", "api_token"), SECRET_VALUE);
       const watermark = currentRevealSuccessWatermark();
 
-      const result = (await revealRoute!.handler({
-        body: { service: "vercel", field: "api_token" },
-        headers: { "x-cadet-principal-type": "local" },
-      })) as { value: string };
+      const result = credentialRevealResponseSchema.parse(
+        await revealRoute!.handler({
+          body: { service: "vercel", field: "api_token" },
+          headers: { "x-cadet-principal-type": "local" },
+        }),
+      );
 
       expect(result.value).toBe(SECRET_VALUE);
       expect(
@@ -301,9 +308,11 @@ describe("credentials routes", () => {
       openRevealProofWindow();
       const watermark = currentRevealSuccessWatermark();
 
-      const result = (await revealRoute!.handler({
-        body: { service: "vercel", field: "api_token" },
-      })) as { value: string };
+      const result = credentialRevealResponseSchema.parse(
+        await revealRoute!.handler({
+          body: { service: "vercel", field: "api_token" },
+        }),
+      );
 
       expect(result.value).toBe(SECRET_VALUE);
       expect(
@@ -323,16 +332,18 @@ describe("credentials routes", () => {
       expect(setRoute).toBeDefined();
 
       // WHEN a credential is stored with a label, description, and allowed tools
-      const result = (await setRoute!.handler({
-        body: {
-          service: "vercel",
-          field: "api_token",
-          value: SECRET_VALUE,
-          label: "Vercel API Token",
-          description: "Used to deploy pages",
-          allowedTools: ["publish_page"],
-        },
-      })) as SetResponse;
+      const result = credentialSetResponseSchema.parse(
+        await setRoute!.handler({
+          body: {
+            service: "vercel",
+            field: "api_token",
+            value: SECRET_VALUE,
+            label: "Vercel API Token",
+            description: "Used to deploy pages",
+            allowedTools: ["publish_page"],
+          },
+        }),
+      );
 
       // THEN the response carries the credential identifiers only
       expect(result.service).toBe("vercel");
@@ -387,13 +398,15 @@ describe("credentials routes", () => {
     });
 
     test("accepts a Claude OAuth token in the ACP OAuth-token field", async () => {
-      const result = (await setRoute!.handler({
-        body: {
-          service: "acp",
-          field: "claude_oauth_token",
-          value: "sk-ant-oat01-a-real-oauth-token",
-        },
-      })) as SetResponse;
+      const result = credentialSetResponseSchema.parse(
+        await setRoute!.handler({
+          body: {
+            service: "acp",
+            field: "claude_oauth_token",
+            value: "sk-ant-oat01-a-real-oauth-token",
+          },
+        }),
+      );
 
       expect(result.service).toBe("acp");
       expect(result.field).toBe("claude_oauth_token");
@@ -506,13 +519,15 @@ describe("credentials routes", () => {
        * The guard is scoped to the ACP service; the same field name on another
        * service stores whatever value it is given.
        */
-      const result = (await setRoute!.handler({
-        body: {
-          service: "vercel",
-          field: "claude_oauth_token",
-          value: "sk-ant-api03-not-an-oauth-token",
-        },
-      })) as SetResponse;
+      const result = credentialSetResponseSchema.parse(
+        await setRoute!.handler({
+          body: {
+            service: "vercel",
+            field: "claude_oauth_token",
+            value: "sk-ant-api03-not-an-oauth-token",
+          },
+        }),
+      );
 
       expect(result.service).toBe("vercel");
       expect(secureStore.get(seedKey("vercel", "claude_oauth_token"))).toBe(
@@ -607,7 +622,9 @@ describe("credentials routes", () => {
       });
 
       // WHEN the credentials are listed
-      const result = (await listRoute!.handler({ body: {} })) as ListResponse;
+      const result = typedCredentialsListSchema.parse(
+        await listRoute!.handler({ body: {} }),
+      );
 
       // THEN the listing includes the credential with a masked value
       expect(result.credentials).toHaveLength(1);
@@ -631,7 +648,9 @@ describe("credentials routes", () => {
         },
       });
 
-      const result = (await listRoute!.handler({ body: {} })) as ListResponse;
+      const result = typedCredentialsListSchema.parse(
+        await listRoute!.handler({ body: {} }),
+      );
       expect(result.credentials).toHaveLength(1);
       expect(result.credentials[0].scrubbedValue).toBe("cfat****");
       expect(JSON.stringify(result)).not.toContain(token);
@@ -651,9 +670,11 @@ describe("credentials routes", () => {
       });
 
       // WHEN the listing is filtered by a service substring
-      const result = (await listRoute!.handler({
-        body: { search: "git" },
-      })) as ListResponse;
+      const result = typedCredentialsListSchema.parse(
+        await listRoute!.handler({
+          body: { search: "git" },
+        }),
+      );
 
       // THEN only the matching credential is returned
       expect(result.credentials).toHaveLength(1);
@@ -720,7 +741,9 @@ describe("credentials routes", () => {
       });
 
       // WHEN the credentials are listed
-      const result = (await listRoute!.handler({ body: {} })) as ListResponse;
+      const result = typedCredentialsListSchema.parse(
+        await listRoute!.handler({ body: {} }),
+      );
 
       // THEN only the user's credential is a row, and no platform value leaks
       expect(result.credentials.map((c) => `${c.service}:${c.field}`)).toEqual([
@@ -825,17 +848,21 @@ describe("credentials routes", () => {
     });
 
     test("a user credential is still writable and deletable", async () => {
-      const stored = (await setRoute!.handler({
-        body: { service: "vercel", field: "api_token", value: SECRET_VALUE },
-      })) as SetResponse;
+      const stored = credentialSetResponseSchema.parse(
+        await setRoute!.handler({
+          body: { service: "vercel", field: "api_token", value: SECRET_VALUE },
+        }),
+      );
       expect(stored.service).toBe("vercel");
       expect(secureStore.get(seedKey("vercel", "api_token"))).toBe(
         SECRET_VALUE,
       );
 
-      const deleted = (await deleteRoute!.handler({
-        body: { service: "vercel", field: "api_token" },
-      })) as DeleteResponse;
+      const deleted = credentialDeleteResponseSchema.parse(
+        await deleteRoute!.handler({
+          body: { service: "vercel", field: "api_token" },
+        }),
+      );
       expect(deleted.field).toBe("api_token");
       expect(secureStore.has(seedKey("vercel", "api_token"))).toBe(false);
     });
@@ -846,15 +873,19 @@ describe("credentials routes", () => {
         body: { service: "vercel", field: "api_token", value: SECRET_VALUE },
       });
 
-      const inspected = (await inspectRoute!.handler({
-        body: { service: "vercel", field: "api_token" },
-      })) as { scrubbedValue: string };
+      const inspected = credentialInspectResponseSchema.parse(
+        await inspectRoute!.handler({
+          body: { service: "vercel", field: "api_token" },
+        }),
+      );
       expect(inspected.scrubbedValue).toBe("supe****");
 
-      const revealed = (await revealRoute!.handler({
-        body: { service: "vercel", field: "api_token" },
-        headers: { "x-cadet-principal-type": "user" },
-      })) as { value: string };
+      const revealed = credentialRevealResponseSchema.parse(
+        await revealRoute!.handler({
+          body: { service: "vercel", field: "api_token" },
+          headers: { "x-cadet-principal-type": "user" },
+        }),
+      );
       expect(revealed.value).toBe(SECRET_VALUE);
     });
   });
@@ -893,7 +924,9 @@ describe("credentials routes", () => {
       });
 
       // WHEN the credentials are listed
-      const result = (await listRoute!.handler({ body: {} })) as ListResponse;
+      const result = typedCredentialsListSchema.parse(
+        await listRoute!.handler({ body: {} }),
+      );
 
       // THEN only the user's credential is a row, and no platform value leaks
       expect(result.credentials.map((c) => `${c.service}:${c.field}`)).toEqual([
@@ -998,17 +1031,21 @@ describe("credentials routes", () => {
     });
 
     test("a user credential is still writable and deletable", async () => {
-      const stored = (await setRoute!.handler({
-        body: { service: "vercel", field: "api_token", value: SECRET_VALUE },
-      })) as SetResponse;
+      const stored = credentialSetResponseSchema.parse(
+        await setRoute!.handler({
+          body: { service: "vercel", field: "api_token", value: SECRET_VALUE },
+        }),
+      );
       expect(stored.service).toBe("vercel");
       expect(secureStore.get(seedKey("vercel", "api_token"))).toBe(
         SECRET_VALUE,
       );
 
-      const deleted = (await deleteRoute!.handler({
-        body: { service: "vercel", field: "api_token" },
-      })) as DeleteResponse;
+      const deleted = credentialDeleteResponseSchema.parse(
+        await deleteRoute!.handler({
+          body: { service: "vercel", field: "api_token" },
+        }),
+      );
       expect(deleted.field).toBe("api_token");
       expect(secureStore.has(seedKey("vercel", "api_token"))).toBe(false);
     });
@@ -1019,15 +1056,19 @@ describe("credentials routes", () => {
         body: { service: "vercel", field: "api_token", value: SECRET_VALUE },
       });
 
-      const inspected = (await inspectRoute!.handler({
-        body: { service: "vercel", field: "api_token" },
-      })) as { scrubbedValue: string };
+      const inspected = credentialInspectResponseSchema.parse(
+        await inspectRoute!.handler({
+          body: { service: "vercel", field: "api_token" },
+        }),
+      );
       expect(inspected.scrubbedValue).toBe("supe****");
 
-      const revealed = (await revealRoute!.handler({
-        body: { service: "vercel", field: "api_token" },
-        headers: { "x-cadet-principal-type": "user" },
-      })) as { value: string };
+      const revealed = credentialRevealResponseSchema.parse(
+        await revealRoute!.handler({
+          body: { service: "vercel", field: "api_token" },
+          headers: { "x-cadet-principal-type": "user" },
+        }),
+      );
       expect(revealed.value).toBe(SECRET_VALUE);
     });
   });
@@ -1045,9 +1086,11 @@ describe("credentials routes", () => {
       expect(secureStore.has(seedKey("vercel", "api_token"))).toBe(true);
 
       // WHEN the credential is deleted
-      const result = (await deleteRoute!.handler({
-        body: { service: "vercel", field: "api_token" },
-      })) as DeleteResponse;
+      const result = credentialDeleteResponseSchema.parse(
+        await deleteRoute!.handler({
+          body: { service: "vercel", field: "api_token" },
+        }),
+      );
 
       // THEN the response echoes the identifiers
       expect(result).toEqual({
@@ -1074,9 +1117,11 @@ describe("credentials routes", () => {
       secureStore.set(seedKey("slack_channel", "user_token"), "xoxp-user");
 
       // WHEN only the user_token is deleted
-      const result = (await deleteRoute!.handler({
-        body: { service: "slack_channel", field: "user_token" },
-      })) as DeleteResponse;
+      const result = credentialDeleteResponseSchema.parse(
+        await deleteRoute!.handler({
+          body: { service: "slack_channel", field: "user_token" },
+        }),
+      );
 
       // THEN the response echoes the identifiers
       expect(result).toEqual({

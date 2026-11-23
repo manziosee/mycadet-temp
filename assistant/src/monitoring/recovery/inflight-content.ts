@@ -109,7 +109,7 @@ export function recoverInflightContent(
     // Throws here (missing `finalized`/`processing_started_at` column) propagate
     // to the caller as "schema not ready yet".
     const rows = db
-      .query(
+      .query<UnfinalizedRow, []>(
         `SELECT m.id AS id,
                 m.conversation_id AS conversationId,
                 m.content AS content,
@@ -118,7 +118,7 @@ export function recoverInflightContent(
            LEFT JOIN conversations c ON c.id = m.conversation_id
           WHERE m.finalized = 0`,
       )
-      .all() as UnfinalizedRow[];
+      .all();
 
     // `AND finalized = 0` makes the write a no-op if the daemon finalized the
     // row between our read and this write; `changes` then reports 0 and we
@@ -186,8 +186,11 @@ function sweepOrphanDeltaFiles(
 ): number {
   const referenced = new Set<string>();
   const rows = db
-    .query(`SELECT content FROM messages WHERE finalized = 0`)
-    .all() as Array<{ content: string }>;
+    .query<
+      { content: string },
+      []
+    >(`SELECT content FROM messages WHERE finalized = 0`)
+    .all();
   for (const row of rows) {
     const absPath = refAbsPath(row.content);
     if (absPath != null) {

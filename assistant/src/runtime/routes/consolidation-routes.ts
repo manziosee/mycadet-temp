@@ -87,6 +87,44 @@ function readConsolidationConfigResponse() {
 // Shared ROUTES
 // ---------------------------------------------------------------------------
 
+export const consolidationConfigResponseSchema = z.object({
+  available: z.boolean(),
+  enabled: z.boolean(),
+  intervalMs: z.number(),
+  nextRunAt: z.number().nullable(),
+  lastRunAt: z.number().nullable(),
+  success: z.boolean(),
+});
+
+export const consolidationRunResponseSchema = z.object({
+  success: z.boolean(),
+  ran: z.boolean().describe("Whether a job was enqueued"),
+  jobId: z.string().nullable(),
+});
+
+export const consolidationRunsResponseSchema = z.object({
+  runs: z
+    .array(
+      z.object({
+        id: z.string(),
+        scheduledFor: z.number(),
+        startedAt: z.number().nullable(),
+        finishedAt: z.number().nullable(),
+        durationMs: z.number().nullable(),
+        status: z.enum(["ok", "running"]),
+        skipReason: z.string().nullable(),
+        error: z.string().nullable(),
+        conversationId: z.string().nullable(),
+        conversationExists: z.boolean(),
+        conversationArchivedAt: z.number().nullable(),
+        estimatedCostUsd: z.number(),
+        createdAt: z.number(),
+      }),
+    )
+    .describe("Consolidation run records"),
+  nextCursor: RUNS_NEXT_CURSOR_SCHEMA,
+});
+
 export const ROUTES: RouteDefinition[] = [
   {
     operationId: "getConsolidationConfig",
@@ -100,14 +138,7 @@ export const ROUTES: RouteDefinition[] = [
     description:
       "Return the current memory v2 consolidation schedule configuration.",
     tags: ["consolidation"],
-    responseBody: z.object({
-      available: z.boolean(),
-      enabled: z.boolean(),
-      intervalMs: z.number(),
-      nextRunAt: z.number().nullable(),
-      lastRunAt: z.number().nullable(),
-      success: z.boolean(),
-    }),
+    responseBody: consolidationConfigResponseSchema,
     handler: async (_args: RouteHandlerArgs) => {
       return readConsolidationConfigResponse();
     },
@@ -124,11 +155,7 @@ export const ROUTES: RouteDefinition[] = [
     description:
       "Enqueue an immediate memory v2 consolidation job. Returns once the job is queued; the job itself runs through the memory jobs worker.",
     tags: ["consolidation"],
-    responseBody: z.object({
-      success: z.boolean(),
-      ran: z.boolean().describe("Whether a job was enqueued"),
-      jobId: z.string().nullable(),
-    }),
+    responseBody: consolidationRunResponseSchema,
     handler: async (_args: RouteHandlerArgs) => {
       if (!isConsolidationAvailable()) {
         throw new BadRequestError(
@@ -177,28 +204,7 @@ export const ROUTES: RouteDefinition[] = [
       "schedules settings UI can reuse its run-row component.",
     tags: ["consolidation"],
     queryParams: RUNS_PAGINATION_QUERY_PARAMS(20),
-    responseBody: z.object({
-      runs: z
-        .array(
-          z.object({
-            id: z.string(),
-            scheduledFor: z.number(),
-            startedAt: z.number().nullable(),
-            finishedAt: z.number().nullable(),
-            durationMs: z.number().nullable(),
-            status: z.enum(["ok", "running"]),
-            skipReason: z.string().nullable(),
-            error: z.string().nullable(),
-            conversationId: z.string().nullable(),
-            conversationExists: z.boolean(),
-            conversationArchivedAt: z.number().nullable(),
-            estimatedCostUsd: z.number(),
-            createdAt: z.number(),
-          }),
-        )
-        .describe("Consolidation run records"),
-      nextCursor: RUNS_NEXT_CURSOR_SCHEMA,
-    }),
+    responseBody: consolidationRunsResponseSchema,
     handler: async ({ queryParams }: RouteHandlerArgs) => {
       const params = queryParams ?? {};
       const limit = parseRunsLimit(params, 20);

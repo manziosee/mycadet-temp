@@ -100,19 +100,16 @@ const readSelectionsOr = memoryReader(
 );
 
 function rowsForTurn(conversationId: string, turn: number): SelectionRow[] {
-  return readSelectionsOr(
-    "rowsForTurn",
-    [],
-    (raw) =>
-      raw
-        .query(
-          /*sql*/ `
+  return readSelectionsOr("rowsForTurn", [], (raw) =>
+    raw
+      .query<SelectionRow, SQLQueryBindings[]>(
+        /*sql*/ `
           SELECT ${SELECTION_COLUMNS} FROM memory_v3_selections
           WHERE conversation_id = ? AND turn = ?
           ORDER BY rowid
         `,
-        )
-        .all(conversationId, turn) as SelectionRow[],
+      )
+      .all(conversationId, turn),
   );
 }
 
@@ -124,19 +121,16 @@ function rowsForMessageIds(messageIds: string[]): SelectionRow[] | null {
     return null;
   }
   const placeholders = messageIds.map(() => "?").join(", ");
-  const rows = readSelectionsOr(
-    "rowsForMessageIds",
-    [],
-    (raw) =>
-      raw
-        .query(
-          /*sql*/ `
+  const rows = readSelectionsOr("rowsForMessageIds", [], (raw) =>
+    raw
+      .query<SelectionRow, SQLQueryBindings[]>(
+        /*sql*/ `
           SELECT ${SELECTION_COLUMNS} FROM memory_v3_selections
           WHERE message_id IN (${placeholders})
           ORDER BY rowid
         `,
-        )
-        .all(...messageIds) as SelectionRow[],
+      )
+      .all(...messageIds),
   );
   return rows.length > 0 ? rows : null;
 }

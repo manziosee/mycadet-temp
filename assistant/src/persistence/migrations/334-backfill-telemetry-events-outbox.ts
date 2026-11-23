@@ -237,20 +237,22 @@ function selectUnshippedRows(
   const base = /*sql*/ `SELECT * FROM ${spec.table}`;
   const order = /*sql*/ ` ORDER BY created_at, id`;
   if (at == null || !Number.isFinite(at)) {
-    return raw.query(base + order).all() as LegacyRow[];
+    return raw.query<LegacyRow, []>(base + order).all();
   }
   if (id != null) {
     return raw
-      .query(
-        base +
-          /*sql*/ ` WHERE created_at > ? OR (created_at = ? AND id > ?)` +
-          order,
-      )
-      .all(at, at, id) as LegacyRow[];
+      .query<
+        LegacyRow,
+        SQLQueryBindings[]
+      >(base + /*sql*/ ` WHERE created_at > ? OR (created_at = ? AND id > ?)` + order)
+      .all(at, at, id);
   }
   return raw
-    .query(base + /*sql*/ ` WHERE created_at > ?` + order)
-    .all(at) as LegacyRow[];
+    .query<
+      LegacyRow,
+      SQLQueryBindings[]
+    >(base + /*sql*/ ` WHERE created_at > ?` + order)
+    .all(at);
 }
 
 /**

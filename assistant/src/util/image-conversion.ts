@@ -154,7 +154,7 @@ function readFromCache(key: string): Buffer | null {
     if (!existsSync(cachePath)) {
       return null;
     }
-    const bytes = readFileSync(cachePath) as Buffer;
+    const bytes: Buffer = readFileSync(cachePath);
     if (!isCompleteJpeg(bytes)) {
       // Poisoned entry (torn write, disk full, etc.): drop it so the caller
       // re-converts and re-caches.
@@ -266,7 +266,7 @@ async function runSips(
     if (proc.exitCode !== 0) {
       return null;
     }
-    const out = readFileSync(outPath) as Buffer;
+    const out: Buffer = readFileSync(outPath);
     // A zero-exit sips can still leave a truncated file (disk full, timeout
     // kill racing the write). Returning it would poison the cache and every
     // downstream provider call. Treat it as a failed conversion instead.

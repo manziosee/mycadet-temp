@@ -127,7 +127,7 @@ function handleGetApp({ queryParams = {} }: RouteHandlerArgs) {
 }
 
 async function handleUpsertApp({ body = {} }: RouteHandlerArgs) {
-  const b = body as Record<string, unknown>;
+  const b: Record<string, unknown> = body;
   const providerKey = b.provider_key as string | undefined;
   const clientId = b.client_id as string | undefined;
 
@@ -255,10 +255,10 @@ async function handleConnectApp({ pathParams = {}, body }: RouteHandlerArgs) {
     throw new NotFoundError(`OAuth app not found: ${pathParams.appId}`);
   }
 
-  const parsed = (body ?? {}) as {
+  const parsed: {
     scopes?: string[];
     callback_transport?: "loopback" | "gateway";
-  };
+  } = body ?? {};
 
   if (
     parsed.callback_transport !== undefined &&

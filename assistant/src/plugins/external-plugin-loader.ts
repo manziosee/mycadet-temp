@@ -247,7 +247,7 @@ async function loadHooks(
  */
 async function buildPluginFromDir(pluginDir: string): Promise<Plugin> {
   const resolvedManifest = readPluginManifest(pluginDir);
-  const legacyFields = resolvedManifest.raw as LegacyPluginFields;
+  const legacyFields: LegacyPluginFields = resolvedManifest.raw;
   // A plugin's identity is its install directory name — the slug the plugin
   // was installed under (a marketplace slug or a GitHub path leaf). This is
   // the identity every other surface uses: `plugins list`, enable/disable,
@@ -465,7 +465,7 @@ export async function parsePluginPresentation(
 ): Promise<PluginPresentation | undefined> {
   try {
     const manifest = readPluginManifest(pluginDir);
-    const legacyFields = manifest.raw as LegacyPluginFields;
+    const legacyFields: LegacyPluginFields = manifest.raw;
     return {
       displayName:
         manifest.source === LEGACY_PLUGIN_MANIFEST
@@ -501,7 +501,7 @@ export async function parsePluginManifest(
     }
     return undefined;
   }
-  const legacyFields = resolvedManifest.raw as LegacyPluginFields;
+  const legacyFields: LegacyPluginFields = resolvedManifest.raw;
   const name = basename(pluginDir);
   const version =
     resolvedManifest.version && resolvedManifest.version.length > 0

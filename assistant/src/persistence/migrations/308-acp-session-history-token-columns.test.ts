@@ -36,10 +36,15 @@ function createTestDb() {
 }
 
 function tableInfo(sqlite: Database) {
-  return sqlite.query("PRAGMA table_info(acp_session_history)").all() as Array<{
-    name: string;
-    notnull: number;
-  }>;
+  return sqlite
+    .query<
+      {
+        name: string;
+        notnull: number;
+      },
+      []
+    >("PRAGMA table_info(acp_session_history)")
+    .all();
 }
 
 describe("migration 305: acp_session_history token columns", () => {
@@ -72,10 +77,11 @@ describe("migration 305: acp_session_history token columns", () => {
     migrateAcpSessionHistoryTokenColumns(db);
 
     const row = sqlite
-      .query(
-        `SELECT ${NEW_COLUMNS.join(", ")} FROM acp_session_history WHERE id = 'acp-1'`,
-      )
-      .get() as Record<string, unknown>;
+      .query<
+        Record<string, unknown>,
+        []
+      >(`SELECT ${NEW_COLUMNS.join(", ")} FROM acp_session_history WHERE id = 'acp-1'`)
+      .get()!;
     for (const name of NEW_COLUMNS) {
       expect(row[name]).toBeNull();
     }
@@ -95,10 +101,11 @@ describe("migration 305: acp_session_history token columns", () => {
     `);
 
     const row = sqlite
-      .query(
-        `SELECT ${NEW_COLUMNS.join(", ")} FROM acp_session_history WHERE id = 'acp-2'`,
-      )
-      .get() as Record<string, unknown>;
+      .query<
+        Record<string, unknown>,
+        []
+      >(`SELECT ${NEW_COLUMNS.join(", ")} FROM acp_session_history WHERE id = 'acp-2'`)
+      .get()!;
     expect(row).toEqual({
       input_tokens: 1500,
       output_tokens: 750,

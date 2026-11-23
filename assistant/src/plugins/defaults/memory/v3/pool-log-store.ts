@@ -41,8 +41,8 @@
  * input row is purged with the conversation; the texts are page-derived and
  * content-keyed, so they are not.
  */
-
 import { createHash } from "node:crypto";
+import type { SQLQueryBindings } from "bun:sqlite";
 
 import { getLogger } from "../logging.js";
 import type { MemorySqlite } from "../memory-db.js";
@@ -274,17 +274,15 @@ export function readPoolForTurn(
   conversationId: string,
   turn: number,
 ): PoolRecord | null {
-  const stored = readPool(
-    "readPoolForTurn",
-    (raw) =>
-      raw
-        .query(
-          /*sql*/ `
+  const stored = readPool("readPoolForTurn", (raw) =>
+    raw
+      .query<PoolRow, SQLQueryBindings[]>(
+        /*sql*/ `
         SELECT ${POOL_COLUMNS} FROM memory_v3_pools
         WHERE conversation_id = ? AND turn = ?
       `,
-        )
-        .get(conversationId, turn) as PoolRow | null,
+      )
+      .get(conversationId, turn),
   );
   return stored?.record ?? null;
 }
@@ -303,18 +301,16 @@ export function readPoolForMessageIds(messageIds: string[]): StoredPool | null {
     return null;
   }
   const placeholders = messageIds.map(() => "?").join(", ");
-  return readPool(
-    "readPoolForMessageIds",
-    (raw) =>
-      raw
-        .query(
-          /*sql*/ `
+  return readPool("readPoolForMessageIds", (raw) =>
+    raw
+      .query<PoolRow, SQLQueryBindings[]>(
+        /*sql*/ `
         SELECT ${POOL_COLUMNS} FROM memory_v3_pools
         WHERE message_id IN (${placeholders})
         ORDER BY rowid
       `,
-        )
-        .get(...messageIds) as PoolRow | null,
+      )
+      .get(...messageIds),
   );
 }
 
@@ -485,7 +481,7 @@ export function readPoolInputForTurn(
 ): PoolInputRecord | null {
   return readPoolInputOr("readPoolInputForTurn", null, (raw) => {
     const row = raw
-      .query(
+      .query<PoolInputRow, SQLQueryBindings[]>(
         /*sql*/ `
         SELECT situational_context, recent_context, current_message,
                previous_assistant_message, selector_prompt_hash, kept_all,
@@ -494,7 +490,7 @@ export function readPoolInputForTurn(
         WHERE conversation_id = ? AND turn = ?
       `,
       )
-      .get(conversationId, turn) as PoolInputRow | null;
+      .get(conversationId, turn);
     if (!row) {
       return null;
     }
@@ -520,10 +516,11 @@ export function readPoolInputForTurn(
 export function readPoolText(textHash: string): string | null {
   return readPoolInputOr("readPoolText", null, (raw) => {
     const row = raw
-      .query(
-        /*sql*/ `SELECT text FROM memory_v3_pool_texts WHERE text_hash = ?`,
-      )
-      .get(textHash) as { text: string } | null;
+      .query<
+        { text: string },
+        SQLQueryBindings[]
+      >(/*sql*/ `SELECT text FROM memory_v3_pool_texts WHERE text_hash = ?`)
+      .get(textHash);
     return row?.text ?? null;
   });
 }

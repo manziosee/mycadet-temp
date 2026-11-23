@@ -545,7 +545,7 @@ async function handleListProfiles() {
   // on-disk insertion order of `llm.profiles`.
   const profiles = await Promise.all(
     orderProfileKeys(effective, config.llm.profileOrder).map(async (name) => {
-      const record = effective[name] as Record<string, unknown>;
+      const record: Record<string, unknown> = effective[name];
       const configIssue = profileConfigIssue(record);
       const supportsVision = resolveSupportsVision(effective[name]);
       return {
@@ -601,7 +601,7 @@ async function handleGetProfile({ pathParams = {} }: RouteHandlerArgs) {
   if (!entry) {
     throw new NotFoundError(`Profile "${name}" not found.`);
   }
-  const record = entry as Record<string, unknown>;
+  const record: Record<string, unknown> = entry;
   const configIssue = profileConfigIssue(record);
   return {
     name,
@@ -907,7 +907,7 @@ async function handleSetActiveProfile({ body = {} }: RouteHandlerArgs) {
   // which would reset the user's chat-model selection.
   const config = getConfigReadOnly();
   const effective = getUserSelectableProfilesForProvider(config.llm);
-  const entry = effective[name] as Record<string, unknown> | undefined;
+  const entry: Record<string, unknown> | undefined = effective[name];
   if (!entry) {
     const valid = Object.keys(effective).sort().join(", ");
     throw new BadRequestError(

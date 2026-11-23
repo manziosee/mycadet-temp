@@ -1,3 +1,4 @@
+import type { SQLQueryBindings } from "bun:sqlite";
 import { Database } from "bun:sqlite";
 import { describe, expect, test } from "bun:test";
 
@@ -58,8 +59,8 @@ function bootstrapLegacyConversations(raw: Database): void {
 
 function getConversationColumns(raw: Database): Map<string, ColumnRow> {
   const columns = raw
-    .query(`PRAGMA table_info(conversations)`)
-    .all() as ColumnRow[];
+    .query<ColumnRow, []>(`PRAGMA table_info(conversations)`)
+    .all();
   return new Map(columns.map((column) => [column.name, column]));
 }
 
@@ -107,7 +108,7 @@ describe("migrateSlackCompactionWatermark", () => {
     });
 
     const row = raw
-      .query(
+      .query<ConversationCompactionRow, SQLQueryBindings[]>(
         /*sql*/ `
           SELECT
             id,
@@ -120,7 +121,7 @@ describe("migrateSlackCompactionWatermark", () => {
           WHERE id = ?
         `,
       )
-      .get("conv-1") as ConversationCompactionRow | null;
+      .get("conv-1");
 
     expect(row).toEqual({
       id: "conv-1",

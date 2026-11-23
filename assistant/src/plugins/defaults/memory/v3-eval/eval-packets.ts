@@ -433,7 +433,7 @@ function mineTurns(
 
   const maxScan = opts.maxScan ?? 6000;
   const exclude = opts.excludeConversationIds ?? [];
-  const recent = db
+  const recent: RawMsgRow[] = db
     .select({
       conversationId: messages.conversationId,
       id: messages.id,
@@ -457,7 +457,7 @@ function mineTurns(
     )
     .orderBy(desc(messages.createdAt), desc(messages.id))
     .limit(maxScan)
-    .all() as RawMsgRow[];
+    .all();
 
   return pairTurns(sortForPairing(recent), opts);
 }
@@ -465,7 +465,7 @@ function mineTurns(
 /** Re-mine exactly the pinned turns from their conversations (no recency cap). */
 function minePinnedTurns(db: DrizzleDb, pinnedTurnIds: string[]): MinedTurn[] {
   const conversationIds = [...new Set(pinnedTurnIds.map(turnConversationId))];
-  const rows = db
+  const rows: RawMsgRow[] = db
     .select({
       conversationId: messages.conversationId,
       id: messages.id,
@@ -485,7 +485,7 @@ function minePinnedTurns(db: DrizzleDb, pinnedTurnIds: string[]): MinedTurn[] {
         sql`${conversations.scheduleJobId} IS NULL`,
       ),
     )
-    .all() as RawMsgRow[];
+    .all();
 
   const allTurns = pairTurns(sortForPairing(rows), {
     limit: Number.MAX_SAFE_INTEGER,

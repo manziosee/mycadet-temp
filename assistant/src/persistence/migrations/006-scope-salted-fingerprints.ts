@@ -34,8 +34,11 @@ export function migrateMemoryItemsScopeSaltedFingerprints(
   }
 
   const items = raw
-    .query(`SELECT id, kind, subject, statement, scope_id FROM memory_items`)
-    .all() as ItemRow[];
+    .query<
+      ItemRow,
+      []
+    >(`SELECT id, kind, subject, statement, scope_id FROM memory_items`)
+    .all();
 
   if (items.length === 0) {
     raw
@@ -99,8 +102,8 @@ export function downMemoryItemsScopeSaltedFingerprints(
   }
 
   const items = raw
-    .query(`SELECT id, kind, subject, statement FROM memory_items`)
-    .all() as ItemRow[];
+    .query<ItemRow, []>(`SELECT id, kind, subject, statement FROM memory_items`)
+    .all();
 
   if (items.length === 0) {
     return;

@@ -35,7 +35,12 @@ import { getDb, getMemorySqlite } from "../../../persistence/db-connection.js";
 import { initializeDb } from "../../../persistence/db-init.js";
 import { recordUsageEvent } from "../../../persistence/llm-usage-store.js";
 import { rawRun } from "../../../persistence/raw-query.js";
-import { ROUTES } from "../consolidation-routes.js";
+import {
+  consolidationConfigResponseSchema,
+  consolidationRunResponseSchema,
+  consolidationRunsResponseSchema,
+  ROUTES,
+} from "../consolidation-routes.js";
 import type { RouteDefinition } from "../types.js";
 
 await initializeDb();
@@ -137,24 +142,6 @@ function readMemoryJobRows(): Array<{
   }>;
 }
 
-interface RunRecord {
-  id: string;
-  scheduledFor: number;
-  startedAt: number | null;
-  finishedAt: number | null;
-  durationMs: number | null;
-  status: "ok" | "running";
-  skipReason: string | null;
-  error: string | null;
-  conversationId: string | null;
-  estimatedCostUsd: number;
-  createdAt: number;
-}
-
-interface ListRunsResponse {
-  runs: RunRecord[];
-}
-
 describe("listConsolidationRuns handler", () => {
   beforeEach(() => {
     workspaceDir = mkdtempSync(join(tmpdir(), "cadet-consolidation-routes-"));
@@ -181,7 +168,7 @@ describe("listConsolidationRuns handler", () => {
     createConversation({ title: "u1", source: "user" });
 
     const handler = findHandler("listConsolidationRuns");
-    const result = (await handler({})) as ListRunsResponse;
+    const result = consolidationRunsResponseSchema.parse(await handler({}));
 
     expect(result.runs).toHaveLength(1);
   });
@@ -206,7 +193,7 @@ describe("listConsolidationRuns handler", () => {
     insertMessage(conv.id, "assistant", 2500);
 
     const handler = findHandler("listConsolidationRuns");
-    const result = (await handler({})) as ListRunsResponse;
+    const result = consolidationRunsResponseSchema.parse(await handler({}));
 
     expect(result.runs).toHaveLength(1);
     const run = result.runs[0]!;
@@ -239,7 +226,7 @@ describe("listConsolidationRuns handler", () => {
     recordUsageCostAt(conv.id, "consolidation-fallback-cost", 1500, 0.99);
 
     const handler = findHandler("listConsolidationRuns");
-    const result = (await handler({})) as ListRunsResponse;
+    const result = consolidationRunsResponseSchema.parse(await handler({}));
 
     expect(result.runs[0]!.estimatedCostUsd).toBeCloseTo(0.42);
   });
@@ -261,7 +248,7 @@ describe("listConsolidationRuns handler", () => {
     recordUsageCostAt(conv.id, "consolidation-after", 2001, 0.5);
 
     const handler = findHandler("listConsolidationRuns");
-    const result = (await handler({})) as ListRunsResponse;
+    const result = consolidationRunsResponseSchema.parse(await handler({}));
 
     expect(result.runs[0]!.estimatedCostUsd).toBeCloseTo(0.07);
   });
@@ -270,7 +257,7 @@ describe("listConsolidationRuns handler", () => {
     createConversation({ title: "c1", source: "memory_v2_consolidation" });
 
     const handler = findHandler("listConsolidationRuns");
-    const result = (await handler({})) as ListRunsResponse;
+    const result = consolidationRunsResponseSchema.parse(await handler({}));
 
     expect(result.runs).toHaveLength(1);
     const run = result.runs[0]!;
@@ -300,7 +287,7 @@ describe("listConsolidationRuns handler", () => {
     insertMessage(conv.id, "user", 1100);
 
     const handler = findHandler("listConsolidationRuns");
-    const result = (await handler({})) as ListRunsResponse;
+    const result = consolidationRunsResponseSchema.parse(await handler({}));
 
     expect(result.runs).toHaveLength(1);
     const run = result.runs[0]!;
@@ -317,7 +304,7 @@ describe("listConsolidationRuns handler", () => {
     insertMessage(conv.id, "assistant", 2000);
 
     const handler = findHandler("listConsolidationRuns");
-    const result = (await handler({})) as ListRunsResponse;
+    const result = consolidationRunsResponseSchema.parse(await handler({}));
 
     expect(result.runs[0]!.skipReason).toBeNull();
     expect(result.runs[0]!.error).toBeNull();
@@ -356,7 +343,7 @@ describe("listConsolidationRuns handler", () => {
     );
 
     const handler = findHandler("listConsolidationRuns");
-    const result = (await handler({})) as ListRunsResponse;
+    const result = consolidationRunsResponseSchema.parse(await handler({}));
 
     expect(result.runs.map((r) => r.id)).toEqual([b.id, c.id, a.id]);
   });
@@ -372,31 +359,39 @@ describe("listConsolidationRuns handler", () => {
     const handler = findHandler("listConsolidationRuns");
 
     // Default — all 5 returned (under the 20 default).
-    const def = (await handler({})) as ListRunsResponse;
+    const def = consolidationRunsResponseSchema.parse(await handler({}));
     expect(def.runs).toHaveLength(5);
 
     // Explicit limit honored.
-    const lim2 = (await handler({
-      queryParams: { limit: "2" },
-    })) as ListRunsResponse;
+    const lim2 = consolidationRunsResponseSchema.parse(
+      await handler({
+        queryParams: { limit: "2" },
+      }),
+    );
     expect(lim2.runs).toHaveLength(2);
 
     // Negative clamps to 1.
-    const neg = (await handler({
-      queryParams: { limit: "-5" },
-    })) as ListRunsResponse;
+    const neg = consolidationRunsResponseSchema.parse(
+      await handler({
+        queryParams: { limit: "-5" },
+      }),
+    );
     expect(neg.runs).toHaveLength(1);
 
     // Zero clamps to 1.
-    const zero = (await handler({
-      queryParams: { limit: "0" },
-    })) as ListRunsResponse;
+    const zero = consolidationRunsResponseSchema.parse(
+      await handler({
+        queryParams: { limit: "0" },
+      }),
+    );
     expect(zero.runs).toHaveLength(1);
 
     // Non-numeric falls back to the default (20 → all 5 here).
-    const bad = (await handler({
-      queryParams: { limit: "garbage" },
-    })) as ListRunsResponse;
+    const bad = consolidationRunsResponseSchema.parse(
+      await handler({
+        queryParams: { limit: "garbage" },
+      }),
+    );
     expect(bad.runs).toHaveLength(5);
   });
 });
@@ -440,13 +435,7 @@ describe("consolidation config and run-now handlers", () => {
     );
 
     const handler = findHandler("getConsolidationConfig");
-    const result = (await handler({})) as {
-      available: boolean;
-      enabled: boolean;
-      intervalMs: number;
-      nextRunAt: number | null;
-      success: boolean;
-    };
+    const result = consolidationConfigResponseSchema.parse(await handler({}));
 
     expect(result).toMatchObject({
       available: false,
@@ -495,11 +484,7 @@ describe("consolidation config and run-now handlers", () => {
     );
 
     const handler = findHandler("runConsolidationNow");
-    const result = (await handler({})) as {
-      success: boolean;
-      ran: boolean;
-      jobId: string | null;
-    };
+    const result = consolidationRunResponseSchema.parse(await handler({}));
 
     expect(result.success).toBe(true);
     expect(result.ran).toBe(true);

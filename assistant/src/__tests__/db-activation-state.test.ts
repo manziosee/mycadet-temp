@@ -49,15 +49,16 @@ describe("activation_state migration", () => {
     migrateActivationState(db);
 
     const tableRow = raw
-      .query(
-        `SELECT name FROM sqlite_master WHERE type='table' AND name='activation_state'`,
-      )
-      .get() as TableRow | null;
+      .query<
+        TableRow,
+        []
+      >(`SELECT name FROM sqlite_master WHERE type='table' AND name='activation_state'`)
+      .get();
     expect(tableRow?.name).toBe("activation_state");
 
     const columns = raw
-      .query(`PRAGMA table_info(activation_state)`)
-      .all() as ColumnRow[];
+      .query<ColumnRow, []>(`PRAGMA table_info(activation_state)`)
+      .all();
 
     const byName = new Map(columns.map((c) => [c.name, c]));
     expect(byName.get("conversation_id")?.pk).toBe(1);

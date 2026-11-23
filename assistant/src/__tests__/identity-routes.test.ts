@@ -205,7 +205,7 @@ describe("identity routes — health endpoint", () => {
       const body = jsonObjectSchema.parse(await res.json());
 
       expect(body.ces).toBeDefined();
-      expect((body.ces as Record<string, unknown>).connected).toBe(false);
+      expect(jsonObjectSchema.parse(body.ces).connected).toBe(false);
     });
 
     test("detailed health reports MIGRATING while DB migrations are running", async () => {
@@ -239,7 +239,7 @@ describe("identity routes — health endpoint", () => {
       const body = jsonObjectSchema.parse(await res.json());
 
       expect(body.ces).toBeDefined();
-      expect((body.ces as Record<string, unknown>).connected).toBe(true);
+      expect(jsonObjectSchema.parse(body.ces).connected).toBe(true);
     });
 
     test("/v1/health reports ces.connected=false when CES is not ready", async () => {
@@ -248,7 +248,7 @@ describe("identity routes — health endpoint", () => {
       const body = jsonObjectSchema.parse(await res.json());
 
       expect(body.ces).toBeDefined();
-      expect((body.ces as Record<string, unknown>).connected).toBe(false);
+      expect(jsonObjectSchema.parse(body.ces).connected).toBe(false);
     });
   });
 
@@ -283,7 +283,7 @@ describe("identity routes — health endpoint", () => {
       const res = await handleDetailedHealth();
       const body = jsonObjectSchema.parse(await res.json());
       const profiler = jsonObjectSchema.parse(body.profiler);
-      const budget = profiler.budget as Record<string, unknown>;
+      const budget = jsonObjectSchema.parse(profiler.budget);
 
       expect(budget).toBeDefined();
       expect(budget.maxBytes).toBe(50_000_000);
@@ -321,7 +321,7 @@ describe("identity routes — health endpoint", () => {
       const res = await handleDetailedHealth();
       const body = jsonObjectSchema.parse(await res.json());
       const profiler = jsonObjectSchema.parse(body.profiler);
-      const budget = profiler.budget as Record<string, unknown>;
+      const budget = jsonObjectSchema.parse(profiler.budget);
 
       expect(budget.overBudget).toBe(true);
       expect(budget.remainingBytes).toBe(0);
@@ -366,7 +366,7 @@ describe("identity routes — health endpoint", () => {
       const res = await handleDetailedHealth();
       const body = jsonObjectSchema.parse(await res.json());
       const profiler = jsonObjectSchema.parse(body.profiler);
-      const last = profiler.lastCompletedRun as Record<string, unknown>;
+      const last = jsonObjectSchema.parse(profiler.lastCompletedRun);
 
       expect(last).toBeDefined();
       expect(last.runId).toBe(completedId);
@@ -403,7 +403,7 @@ describe("identity routes — health endpoint", () => {
       const res = await handleDetailedHealth();
       const body = jsonObjectSchema.parse(await res.json());
       const profiler = jsonObjectSchema.parse(body.profiler);
-      const last = profiler.lastCompletedRun as Record<string, unknown>;
+      const last = jsonObjectSchema.parse(profiler.lastCompletedRun);
 
       expect(last).toBeDefined();
       expect(last.runId).toBe("newer-completed");

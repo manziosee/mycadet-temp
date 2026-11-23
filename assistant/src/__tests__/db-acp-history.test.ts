@@ -57,15 +57,16 @@ describe("acp_session_history migration", () => {
     migrate230AcpSessionHistory(db);
 
     const tableRow = raw
-      .query(
-        `SELECT name FROM sqlite_master WHERE type='table' AND name='acp_session_history'`,
-      )
-      .get() as TableRow | null;
+      .query<
+        TableRow,
+        []
+      >(`SELECT name FROM sqlite_master WHERE type='table' AND name='acp_session_history'`)
+      .get();
     expect(tableRow?.name).toBe("acp_session_history");
 
     const columns = raw
-      .query(`PRAGMA table_info(acp_session_history)`)
-      .all() as ColumnRow[];
+      .query<ColumnRow, []>(`PRAGMA table_info(acp_session_history)`)
+      .all();
 
     const byName = new Map(columns.map((c) => [c.name, c]));
     expect(byName.get("id")?.pk).toBe(1);
@@ -91,8 +92,8 @@ describe("acp_session_history migration", () => {
     migrate230AcpSessionHistory(db);
 
     const indexes = raw
-      .query(`PRAGMA index_list(acp_session_history)`)
-      .all() as IndexInfoRow[];
+      .query<IndexInfoRow, []>(`PRAGMA index_list(acp_session_history)`)
+      .all();
     const indexNames = indexes.map((i) => i.name);
 
     expect(indexNames).toContain("idx_acp_session_history_started_at");
@@ -101,18 +102,22 @@ describe("acp_session_history migration", () => {
     );
 
     const startedAtCols = raw
-      .query(`PRAGMA index_xinfo("idx_acp_session_history_started_at")`)
-      .all() as IndexColumnRow[];
+      .query<
+        IndexColumnRow,
+        []
+      >(`PRAGMA index_xinfo("idx_acp_session_history_started_at")`)
+      .all();
     const startedAtKey = startedAtCols.find((c) => c.name === "started_at");
     expect(startedAtKey).toBeDefined();
     // desc=1 means DESC ordering on the indexed column.
     expect(startedAtKey?.desc).toBe(1);
 
     const parentCols = raw
-      .query(
-        `PRAGMA index_xinfo("idx_acp_session_history_parent_conversation_id")`,
-      )
-      .all() as IndexColumnRow[];
+      .query<
+        IndexColumnRow,
+        []
+      >(`PRAGMA index_xinfo("idx_acp_session_history_parent_conversation_id")`)
+      .all();
     const parentKey = parentCols.find(
       (c) => c.name === "parent_conversation_id",
     );
@@ -297,8 +302,8 @@ describe("acp_session_history migration", () => {
 describe("acp_session_history cwd migration (272)", () => {
   function readColumns(raw: Database): Map<string, ColumnRow> {
     const columns = raw
-      .query(`PRAGMA table_info(acp_session_history)`)
-      .all() as ColumnRow[];
+      .query<ColumnRow, []>(`PRAGMA table_info(acp_session_history)`)
+      .all();
     return new Map(columns.map((c) => [c.name, c]));
   }
 
@@ -337,8 +342,8 @@ describe("acp_session_history cwd migration (272)", () => {
     expect(() => migrateAcpSessionHistoryCwd(db)).not.toThrow();
 
     const columns = raw
-      .query(`PRAGMA table_info(acp_session_history)`)
-      .all() as ColumnRow[];
+      .query<ColumnRow, []>(`PRAGMA table_info(acp_session_history)`)
+      .all();
     expect(columns.filter((c) => c.name === "cwd")).toHaveLength(1);
   });
 

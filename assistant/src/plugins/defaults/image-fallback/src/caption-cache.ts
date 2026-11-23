@@ -24,9 +24,9 @@
  * reads behave as misses and writes are dropped, degrading to
  * in-memory-only caching rather than surfacing an error into the sweep.
  */
-
 import { createHash } from "node:crypto";
 import { join } from "node:path";
+import type { SQLQueryBindings } from "bun:sqlite";
 import { Database } from "bun:sqlite";
 
 const MAX_MEMORY_ENTRIES = 500;
@@ -128,10 +128,11 @@ function dbLookupCaption(hash: string): string | undefined {
   }
   try {
     const row = db
-      .query(
-        /*sql*/ `SELECT caption FROM image_captions WHERE image_hash = ? LIMIT 1`,
-      )
-      .get(hash) as { caption: string } | null;
+      .query<
+        { caption: string },
+        SQLQueryBindings[]
+      >(/*sql*/ `SELECT caption FROM image_captions WHERE image_hash = ? LIMIT 1`)
+      .get(hash);
     return row?.caption;
   } catch {
     // Fail open: an unavailable DB behaves as a miss.
@@ -197,10 +198,11 @@ export function deleteConversationCaptions(conversationId: string): number {
   }
   try {
     const rows = db
-      .query(
-        /*sql*/ `SELECT image_hash FROM image_captions WHERE conversation_id = ?`,
-      )
-      .all(conversationId) as Array<{ image_hash: string }>;
+      .query<
+        { image_hash: string },
+        SQLQueryBindings[]
+      >(/*sql*/ `SELECT image_hash FROM image_captions WHERE conversation_id = ?`)
+      .all(conversationId);
     if (rows.length === 0) {
       return 0;
     }

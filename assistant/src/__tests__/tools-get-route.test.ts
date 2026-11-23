@@ -7,16 +7,20 @@
  * — with the source read from the registry's ownership map rather than off
  * the tool object.
  */
-
 import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+
+import { z } from "zod";
 
 import {
   clearConversations,
   setConversation,
 } from "../daemon/conversation-registry.js";
-import { ROUTES } from "../runtime/routes/settings-routes.js";
+import {
+  ROUTES,
+  toolsGetResponseSchema,
+} from "../runtime/routes/settings-routes.js";
 import {
   __resetRegistryForTesting,
   registerMcpTools,
@@ -30,25 +34,16 @@ import type { Tool, ToolContext, ToolExecutionResult } from "../tools/types.js";
 import { getWorkspacePluginsDir } from "../util/layout.js";
 import { asConversation } from "./helpers/mock-conversation.js";
 
-interface ToolListEntry {
-  name: string;
-  description: string;
-  riskLevel: string;
-  category: string;
-  source: string;
-}
-
-interface ToolsGetResponse {
-  names: string[];
-  schemas: Record<string, unknown>;
-  tools: ToolListEntry[];
-  agent?: {
-    requested: string;
-    role: string;
-    alias?: string;
-    persona?: string;
-  };
-}
+const typedToolsGetSchema = toolsGetResponseSchema.extend({
+  agent: z
+    .looseObject({
+      requested: z.string(),
+      role: z.string(),
+      alias: z.string().optional(),
+      persona: z.string().optional(),
+    })
+    .optional(),
+});
 
 function makeFakeTool(name: string, extras: Partial<Tool> = {}): Tool {
   return {
@@ -130,7 +125,9 @@ describe("GET /tools", () => {
     registerTool(makeFakeTool("a_core_tool"));
 
     // WHEN the tools handler runs
-    const { names, schemas, tools } = (await handler({})) as ToolsGetResponse;
+    const { names, schemas, tools } = typedToolsGetSchema.parse(
+      await handler({}),
+    );
 
     // THEN the catalog fields the permission simulator reads are present
     expect(names).toContain("a_core_tool");
@@ -164,7 +161,7 @@ describe("GET /tools", () => {
     registerSkillTools("my-skill", [makeFakeTool("s_tool")]);
 
     // WHEN the tools handler runs
-    const { tools } = (await handler({})) as ToolsGetResponse;
+    const { tools } = typedToolsGetSchema.parse(await handler({}));
 
     // THEN each tool's source encodes its owning extension
     const sourceOf = (name: string) =>
@@ -180,7 +177,7 @@ describe("GET /tools", () => {
     registerPluginTools("git-workflow", [makeFakeTool("gw_tool")]);
 
     // THEN the plugin tool is visible before disabling
-    const before = (await handler({})) as ToolsGetResponse;
+    const before = typedToolsGetSchema.parse(await handler({}));
     expect(before.names).toContain("gw_tool");
     expect(before.tools.some((t) => t.name === "gw_tool")).toBe(true);
     expect(before.schemas.gw_tool).toBeDefined();
@@ -191,7 +188,7 @@ describe("GET /tools", () => {
     // THEN the plugin's tool drops from names, schemas, and the metadata
     // array on the next call — no daemon restart required — while the core
     // tool stays put.
-    const after = (await handler({})) as ToolsGetResponse;
+    const after = typedToolsGetSchema.parse(await handler({}));
     expect(after.names).not.toContain("gw_tool");
     expect(after.tools.some((t) => t.name === "gw_tool")).toBe(false);
     expect(after.schemas.gw_tool).toBeUndefined();
@@ -214,9 +211,11 @@ describe("GET /tools", () => {
     registerFakeConversation("conv-1", ["c_core_tool", "a_core_tool"]);
 
     // WHEN the handler runs with that conversationId
-    const { names, schemas, tools } = (await handler({
-      queryParams: { conversationId: "conv-1" },
-    })) as ToolsGetResponse;
+    const { names, schemas, tools } = typedToolsGetSchema.parse(
+      await handler({
+        queryParams: { conversationId: "conv-1" },
+      }),
+    );
 
     // THEN only the conversation's tools are returned, sorted, with schemas
     expect(names).toEqual(["a_core_tool", "c_core_tool"]);
@@ -235,9 +234,11 @@ describe("GET /tools", () => {
     registerFakeConversation("conv-1", ["ghost_skill_tool"]);
 
     // WHEN the handler runs with that conversationId
-    const { tools } = (await handler({
-      queryParams: { conversationId: "conv-1" },
-    })) as ToolsGetResponse;
+    const { tools } = typedToolsGetSchema.parse(
+      await handler({
+        queryParams: { conversationId: "conv-1" },
+      }),
+    );
 
     // THEN the tool still appears, with unknown source and empty metadata
     expect(tools).toEqual([
@@ -274,9 +275,11 @@ describe("GET /tools", () => {
     registerTool(makeFakeTool("file_edit"));
 
     // WHEN the handler runs with agent=researcher
-    const { names } = (await handler({
-      queryParams: { agent: "researcher" },
-    })) as ToolsGetResponse;
+    const { names } = typedToolsGetSchema.parse(
+      await handler({
+        queryParams: { agent: "researcher" },
+      }),
+    );
 
     // THEN only the researcher allowlist tools are returned
     expect(names).toContain("web_search");
@@ -299,9 +302,11 @@ describe("GET /tools", () => {
     registerTool(makeFakeTool("send_email"));
 
     // WHEN the handler runs with agent=builder
-    const { names } = (await handler({
-      queryParams: { agent: "builder" },
-    })) as ToolsGetResponse;
+    const { names } = typedToolsGetSchema.parse(
+      await handler({
+        queryParams: { agent: "builder" },
+      }),
+    );
 
     // THEN nothing is filtered out: a builder, and so every spawn that names
     // no role, reaches connectors, MCP tools, and everything else the parent
@@ -317,9 +322,11 @@ describe("GET /tools", () => {
     registerTool(makeFakeTool("notify_parent"));
 
     // WHEN the handler runs with agent=researcher
-    const { names, tools } = (await handler({
-      queryParams: { agent: "researcher" },
-    })) as ToolsGetResponse;
+    const { names, tools } = typedToolsGetSchema.parse(
+      await handler({
+        queryParams: { agent: "researcher" },
+      }),
+    );
 
     // THEN notify_parent appears because isSubagent=true satisfies
     // the SUBAGENT_ONLY_TOOL_NAMES gate in isToolActiveForContext
@@ -330,9 +337,11 @@ describe("GET /tools", () => {
   test("with agent=role, reports the type it listed", async () => {
     registerTool(makeFakeTool("file_read"));
 
-    const { agent } = (await handler({
-      queryParams: { agent: "researcher" },
-    })) as ToolsGetResponse;
+    const { agent } = typedToolsGetSchema.parse(
+      await handler({
+        queryParams: { agent: "researcher" },
+      }),
+    );
 
     expect(agent).toEqual({ requested: "researcher", role: "researcher" });
   });
@@ -343,9 +352,11 @@ describe("GET /tools", () => {
     registerTool(makeFakeTool("bash"));
 
     // WHEN the handler runs with an older role name a spawn still accepts
-    const { names, agent } = (await handler({
-      queryParams: { agent: "coder" },
-    })) as ToolsGetResponse;
+    const { names, agent } = typedToolsGetSchema.parse(
+      await handler({
+        queryParams: { agent: "coder" },
+      }),
+    );
 
     // THEN it previews the type that name resolves to, and says which alias
     // produced it rather than 404ing on a name spawns still take.
@@ -361,9 +372,11 @@ describe("GET /tools", () => {
     registerTool(makeFakeTool("file_read"));
     registerTool(makeFakeTool("bash"));
 
-    const { names, agent } = (await handler({
-      queryParams: { agent: "a skeptical security reviewer" },
-    })) as ToolsGetResponse;
+    const { names, agent } = typedToolsGetSchema.parse(
+      await handler({
+        queryParams: { agent: "a skeptical security reviewer" },
+      }),
+    );
 
     // A role naming no type runs as a researcher carrying the text as a
     // persona, so the preview is the read-only surface, reported as such.
@@ -387,9 +400,11 @@ describe("GET /tools", () => {
       { tool: makeFakeTool("file_read"), workspacePath: "/ws/file_read.ts" },
     ]);
 
-    const { names, agent } = (await handler({
-      queryParams: { agent: "advisor" },
-    })) as ToolsGetResponse;
+    const { names, agent } = typedToolsGetSchema.parse(
+      await handler({
+        queryParams: { agent: "advisor" },
+      }),
+    );
 
     expect(agent?.role).toBe("advisor");
     expect(names).not.toContain("file_read");

@@ -33,15 +33,15 @@ interface DbStats {
 
 function getDbStats(): DbStats {
   const sqlite = getSqlite();
-  const pageSize = (
-    sqlite.query("PRAGMA page_size").get() as { page_size: number }
-  ).page_size;
-  const pageCount = (
-    sqlite.query("PRAGMA page_count").get() as { page_count: number }
-  ).page_count;
-  const freelistCount = (
-    sqlite.query("PRAGMA freelist_count").get() as { freelist_count: number }
-  ).freelist_count;
+  const pageSize = sqlite
+    .query<{ page_size: number }, []>("PRAGMA page_size")
+    .get()!.page_size;
+  const pageCount = sqlite
+    .query<{ page_count: number }, []>("PRAGMA page_count")
+    .get()!.page_count;
+  const freelistCount = sqlite
+    .query<{ freelist_count: number }, []>("PRAGMA freelist_count")
+    .get()!.freelist_count;
   let fileSizeBytes: number | null = null;
   try {
     fileSizeBytes = statSync(getDbPath()).size;

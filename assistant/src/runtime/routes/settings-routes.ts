@@ -876,6 +876,24 @@ function handleUpdateIngressConfig({ body = {} }: RouteHandlerArgs) {
 // Route definitions
 // ---------------------------------------------------------------------------
 
+export const toolsGetResponseSchema = z.object({
+  names: z.array(z.string()),
+  schemas: z.record(z.string(), z.record(z.string(), z.unknown())),
+  tools: z.array(
+    z.object({
+      name: z.string(),
+      description: z.string(),
+      riskLevel: z.string(),
+      category: z.string(),
+      source: z
+        .string()
+        .describe(
+          'Tool origin as "<kind>:<id>" (e.g. "default:default" for built-ins, "plugin:echo", "skill:my-skill", "mcp:server").',
+        ),
+    }),
+  ),
+});
+
 export const ROUTES: RouteDefinition[] = [
   {
     operationId: "settings_voice_put",
@@ -1007,23 +1025,7 @@ export const ROUTES: RouteDefinition[] = [
           "A subagent role name or a live subagent id. Simulates the subagent tool projection for that role or resolves the live subagent's conversation.",
       },
     ],
-    responseBody: z.object({
-      names: z.array(z.string()),
-      schemas: z.record(z.string(), z.record(z.string(), z.unknown())),
-      tools: z.array(
-        z.object({
-          name: z.string(),
-          description: z.string(),
-          riskLevel: z.string(),
-          category: z.string(),
-          source: z
-            .string()
-            .describe(
-              'Tool origin as "<kind>:<id>" (e.g. "default:default" for built-ins, "plugin:echo", "skill:my-skill", "mcp:server").',
-            ),
-        }),
-      ),
-    }),
+    responseBody: toolsGetResponseSchema,
     handler: ({ queryParams }) =>
       handleToolNamesList(queryParams?.conversationId, queryParams?.agent),
   },

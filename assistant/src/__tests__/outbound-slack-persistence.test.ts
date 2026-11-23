@@ -13,6 +13,8 @@
  */
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 
+import { z } from "zod";
+
 import { jsonObjectSchema } from "./helpers/json-object-schema.js";
 
 // ── Shared mock plumbing (must precede module-under-test imports) ──────────
@@ -20,6 +22,8 @@ import { jsonObjectSchema } from "./helpers/json-object-schema.js";
 // `addMessage` is the only DB-touching call we need to inspect. We capture
 // its arguments per test invocation so each case can assert on the metadata
 // that was actually persisted.
+const capturedStringSchema = z.string();
+
 interface AddMessageCall {
   id: string;
   conversationId: string;
@@ -305,10 +309,9 @@ describe("outbound assistant Slack metadata persistence", () => {
     const providerMetaRaw = persisted.metadata?.providerMeta;
     expect(typeof providerMetaRaw).toBe("string");
 
-    const providerMeta = JSON.parse(providerMetaRaw as string) as Record<
-      string,
-      unknown
-    >;
+    const providerMeta = JSON.parse(
+      capturedStringSchema.parse(providerMetaRaw),
+    ) as Record<string, unknown>;
     expect(providerMeta.source).toBe("slack");
     expect(providerMeta.eventKind).toBe("message");
     expect(providerMeta.conversationExternalId).toBe(channelId);
@@ -347,7 +350,7 @@ describe("outbound assistant Slack metadata persistence", () => {
 
     const persisted = lastAssistantPersisted();
     const providerMeta = jsonObjectSchema.parse(
-      JSON.parse(persisted.metadata?.providerMeta as string),
+      JSON.parse(capturedStringSchema.parse(persisted.metadata?.providerMeta)),
     );
     expect(providerMeta.timestampTimezone).toBe("America/Denver");
     expect(providerMeta.timestampTimezoneLabel).toBe("MT");
@@ -372,7 +375,7 @@ describe("outbound assistant Slack metadata persistence", () => {
 
     const persisted = lastAssistantPersisted();
     const providerMeta = jsonObjectSchema.parse(
-      JSON.parse(persisted.metadata?.providerMeta as string),
+      JSON.parse(capturedStringSchema.parse(persisted.metadata?.providerMeta)),
     );
     expect(providerMeta.timestampTimezone).toBe("America/Los_Angeles");
     expect(providerMeta.timestampTimezoneLabel).toBe("PT");
@@ -446,7 +449,7 @@ describe("outbound assistant Slack metadata persistence", () => {
 
     const persisted = lastAssistantPersisted();
     const providerMeta = jsonObjectSchema.parse(
-      JSON.parse(persisted.metadata?.providerMeta as string),
+      JSON.parse(capturedStringSchema.parse(persisted.metadata?.providerMeta)),
     );
     expect(providerMeta.source).toBe("slack");
     expect(providerMeta.eventKind).toBe("message");
@@ -482,7 +485,7 @@ describe("outbound assistant Slack metadata persistence", () => {
     const persisted = lastAssistantPersisted();
     expect(persisted.metadata?.provenanceTrustClass).toBe("trusted_contact");
     const providerMeta = jsonObjectSchema.parse(
-      JSON.parse(persisted.metadata?.providerMeta as string),
+      JSON.parse(capturedStringSchema.parse(persisted.metadata?.providerMeta)),
     );
     expect(providerMeta.conversationExternalId).toBe("C-CONTACT");
     expect(providerMeta.threadId).toBe("1723300000.000100");
@@ -506,7 +509,7 @@ describe("outbound assistant Slack metadata persistence", () => {
 
     const persisted = lastAssistantPersisted();
     const providerMeta = jsonObjectSchema.parse(
-      JSON.parse(persisted.metadata?.providerMeta as string),
+      JSON.parse(capturedStringSchema.parse(persisted.metadata?.providerMeta)),
     );
     expect(providerMeta.threadId).toBeUndefined();
   });
@@ -548,10 +551,9 @@ describe("outbound assistant Slack metadata persistence", () => {
     const persisted = lastAssistantPersisted();
     const providerMetaRaw = persisted.metadata?.providerMeta;
     expect(typeof providerMetaRaw).toBe("string");
-    const providerMeta = JSON.parse(providerMetaRaw as string) as Record<
-      string,
-      unknown
-    >;
+    const providerMeta = JSON.parse(
+      capturedStringSchema.parse(providerMetaRaw),
+    ) as Record<string, unknown>;
     expect(providerMeta.source).toBe("discord");
     expect(providerMeta.conversationExternalId).toBe("9990001112223334445");
     expect(providerMeta.eventKind).toBe("message");
@@ -593,10 +595,9 @@ describe("outbound assistant Slack metadata persistence", () => {
     );
     expect(typeof row?.metadata).toBe("string");
     const envelope = jsonObjectSchema.parse(JSON.parse(row!.metadata!));
-    const reconciled = JSON.parse(envelope.providerMeta as string) as Record<
-      string,
-      unknown
-    >;
+    const reconciled = JSON.parse(
+      capturedStringSchema.parse(envelope.providerMeta),
+    ) as Record<string, unknown>;
     expect(reconciled.messageId).toBe("1234567890123456789");
     expect(reconciled.source).toBe("discord");
     expect(reconciled.conversationExternalId).toBe(chatId);
@@ -616,7 +617,11 @@ describe("outbound assistant Slack metadata persistence", () => {
       (candidate) => candidate.id === persisted.id,
     );
     const metaAfter = jsonObjectSchema.parse(
-      JSON.parse(JSON.parse(rowAfter!.metadata!).providerMeta as string),
+      JSON.parse(
+        capturedStringSchema.parse(
+          JSON.parse(rowAfter!.metadata!).providerMeta,
+        ),
+      ),
     );
     expect(metaAfter.messageId).toBe("1234567890123456789");
     expect(metaAfter.additionalMessageIds).toEqual(["8888888888888888888"]);
@@ -640,7 +645,11 @@ describe("outbound assistant Slack metadata persistence", () => {
       (candidate) => candidate.id === persisted.id,
     );
     const metaRedelivered = jsonObjectSchema.parse(
-      JSON.parse(JSON.parse(rowRedelivered!.metadata!).providerMeta as string),
+      JSON.parse(
+        capturedStringSchema.parse(
+          JSON.parse(rowRedelivered!.metadata!).providerMeta,
+        ),
+      ),
     );
     expect(metaRedelivered.additionalMessageIds).toEqual([
       "8888888888888888888",

@@ -50,8 +50,8 @@ describe("migration 281 — memory_retrospective_state.remembered_log", () => {
     migrateMemoryRetrospectiveRememberedLog(db);
 
     const cols = raw
-      .query(`PRAGMA table_info(memory_retrospective_state)`)
-      .all() as ColumnRow[];
+      .query<ColumnRow, []>(`PRAGMA table_info(memory_retrospective_state)`)
+      .all();
     const col = cols.find((c) => c.name === "remembered_log");
 
     expect(col).toBeDefined();
@@ -69,8 +69,8 @@ describe("migration 281 — memory_retrospective_state.remembered_log", () => {
     expect(() => migrateMemoryRetrospectiveRememberedLog(db)).not.toThrow();
 
     const cols = raw
-      .query(`PRAGMA table_info(memory_retrospective_state)`)
-      .all() as ColumnRow[];
+      .query<ColumnRow, []>(`PRAGMA table_info(memory_retrospective_state)`)
+      .all();
     expect(cols.filter((c) => c.name === "remembered_log")).toHaveLength(1);
   });
 
@@ -87,10 +87,11 @@ describe("migration 281 — memory_retrospective_state.remembered_log", () => {
     migrateMemoryRetrospectiveRememberedLog(db);
 
     const row = raw
-      .query(
-        `SELECT remembered_log FROM memory_retrospective_state WHERE conversation_id = 'c1'`,
-      )
-      .get() as { remembered_log: string | null };
+      .query<
+        { remembered_log: string | null },
+        []
+      >(`SELECT remembered_log FROM memory_retrospective_state WHERE conversation_id = 'c1'`)
+      .get()!;
     expect(row.remembered_log).toBeNull();
   });
 });

@@ -98,8 +98,8 @@ function insertBookmark(
 
 function countBookmarks(raw: Database): number {
   const row = raw
-    .query(`SELECT COUNT(*) AS n FROM message_bookmarks`)
-    .get() as CountRow | null;
+    .query<CountRow, []>(`SELECT COUNT(*) AS n FROM message_bookmarks`)
+    .get();
   return row?.n ?? 0;
 }
 
@@ -113,8 +113,8 @@ describe("message_bookmarks schema migration", () => {
     migrateMessageBookmarks(db);
 
     const columns = raw
-      .query(`PRAGMA table_info(message_bookmarks)`)
-      .all() as ColumnRow[];
+      .query<ColumnRow, []>(`PRAGMA table_info(message_bookmarks)`)
+      .all();
     const byName = new Map(columns.map((c) => [c.name, c]));
     expect(byName.get("id")?.pk).toBe(1);
     expect(byName.get("id")?.type).toBe("TEXT");
@@ -124,8 +124,8 @@ describe("message_bookmarks schema migration", () => {
     expect(byName.get("created_at")?.type).toBe("INTEGER");
 
     const indexes = raw
-      .query(`PRAGMA index_list(message_bookmarks)`)
-      .all() as IndexInfoRow[];
+      .query<IndexInfoRow, []>(`PRAGMA index_list(message_bookmarks)`)
+      .all();
     const indexByName = new Map(indexes.map((i) => [i.name, i]));
     const uniqIndex = indexByName.get("message_bookmarks_message_id_uniq");
     expect(uniqIndex).toBeDefined();

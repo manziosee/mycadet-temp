@@ -9,11 +9,11 @@
  * files in a directory run, so each stub delegates to the real
  * implementation unless this test is actively running.
  */
-
 import { afterAll, beforeEach, describe, expect, mock, test } from "bun:test";
 
 import { eq } from "drizzle-orm";
 
+import { jsonObjectSchema } from "../../../../__tests__/helpers/json-object-schema.js";
 import { setConfig } from "../../../../__tests__/helpers/set-config.js";
 import { getMemoryDb } from "../../../../persistence/db-connection.js";
 import { initializeDb } from "../../../../persistence/db-init.js";
@@ -151,7 +151,7 @@ async function runClaimed(): Promise<void> {
   const resolution = await skillUpdateReceiptJob({
     id: row.id,
     type: "skill_update_receipt",
-    payload: JSON.parse(row.payload) as Record<string, unknown>,
+    payload: jsonObjectSchema.parse(JSON.parse(row.payload)),
     status: "running",
     attempts: 0,
     deferrals: 0,
@@ -360,7 +360,7 @@ describe("skillUpdateReceiptJob", () => {
     expect(emit.dedupeKey).toBe(skillUpdateReceiptDedupeKey(row!.id));
     expect(emit.sourceContextId).toBe(`skill-update-receipt:${row!.id}`);
     expect(emit.sourceChannel).toBe("assistant_tool");
-    const payload = emit.contextPayload as Record<string, unknown>;
+    const payload = jsonObjectSchema.parse(emit.contextPayload);
     expect(payload.title).toBe("2 skills updated");
     expect(payload.updates).toEqual([
       {
@@ -391,7 +391,7 @@ describe("skillUpdateReceiptJob", () => {
     await runClaimed();
 
     expect(emits).toHaveLength(1);
-    const payload = emits[0]!.contextPayload as Record<string, unknown>;
+    const payload = jsonObjectSchema.parse(emits[0]!.contextPayload);
     expect(
       (payload.updates as Array<{ skillId: string }>).map((u) => u.skillId),
     ).toEqual(["b", "c"]);
@@ -411,9 +411,7 @@ describe("skillUpdateReceiptJob", () => {
 
     expect(emits).toHaveLength(1);
     expect(emits[0]!.sourceContextId).toBe("conv-kept");
-    expect((emits[0]!.contextPayload as Record<string, unknown>).skillId).toBe(
-      "b",
-    );
+    expect(jsonObjectSchema.parse(emits[0]!.contextPayload).skillId).toBe("b");
   });
 
   test("a receipt whose every source was deleted announces nothing", async () => {
@@ -436,9 +434,7 @@ describe("skillUpdateReceiptJob", () => {
     await runClaimed();
 
     expect(emits[0]!.sourceContextId).toBe("conv-1");
-    expect((emits[0]!.contextPayload as Record<string, unknown>).skillId).toBe(
-      "a",
-    );
+    expect(jsonObjectSchema.parse(emits[0]!.contextPayload).skillId).toBe("a");
   });
 
   test("nothing is announced before the quiet window; the payload moves to a row due at its end", async () => {

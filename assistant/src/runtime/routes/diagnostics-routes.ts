@@ -244,9 +244,8 @@ async function classifyDictation(
             signal,
           },
         );
-        const input = extractToolUse(response)?.input as
-          | { mode?: string }
-          | undefined;
+        const input: { mode?: string } | undefined =
+          extractToolUse(response)?.input;
         if (input?.mode === "action" || input?.mode === "dictation") {
           return input.mode;
         }
@@ -337,7 +336,7 @@ async function handleCommandMode(
     );
 
     const toolBlock = extractToolUse(response);
-    const input = (toolBlock?.input ?? {}) as { kind?: string; text?: string };
+    const input: { kind?: string; text?: string } = toolBlock?.input ?? {};
     const edited = input.text?.trim() ?? "";
     const isQuestion =
       input.kind === "answer" || (toolBlock !== undefined && !edited);

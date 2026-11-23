@@ -9,7 +9,11 @@
  */
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 
+import { z } from "zod";
+
 import { fetchMock } from "../../../__tests__/helpers/fetch-mock.js";
+
+const capturedStringSchema = z.string();
 
 const BOT_TOKEN = "discord-bot-token";
 
@@ -128,7 +132,7 @@ describe("sendDiscordReply", () => {
     // server. Losing this field is silent until it pings 5000 people.
     await sendDiscordReply({ channelId: "C1" }, "@everyone hi <@&12345>");
 
-    const body = JSON.parse(calls[0].body as string);
+    const body = JSON.parse(capturedStringSchema.parse(calls[0].body));
     expect(body.allowed_mentions).toEqual({ parse: ["users"] });
     expect(body.allowed_mentions.parse).not.toContain("everyone");
     expect(body.allowed_mentions.parse).not.toContain("roles");
@@ -146,11 +150,15 @@ describe("sendDiscordReply", () => {
     const result = await sendDiscordReply({ channelId: "C1" }, long);
 
     expect(calls.length).toBeGreaterThan(1);
-    const contents = calls.map((c) => JSON.parse(c.body as string).content);
+    const contents = calls.map(
+      (c) => JSON.parse(capturedStringSchema.parse(c.body)).content,
+    );
     // Reassembles in send order, so the reply reads top to bottom.
     expect(contents.join("\n")).toBe(long);
     for (const call of calls) {
-      expect(JSON.parse(call.body as string).allowed_mentions).toEqual({
+      expect(
+        JSON.parse(capturedStringSchema.parse(call.body)).allowed_mentions,
+      ).toEqual({
         parse: ["users"],
       });
     }
@@ -216,7 +224,7 @@ describe("sendDiscordReply", () => {
       plainTextFallback: "reply approve or reject",
     });
 
-    const body = JSON.parse(calls[0].body as string);
+    const body = JSON.parse(capturedStringSchema.parse(calls[0].body));
     expect(body.components).toEqual([
       {
         type: 1,
@@ -248,7 +256,8 @@ describe("sendDiscordReply", () => {
 
     expect(calls.length).toBeGreaterThan(1);
     const withComponents = calls.filter(
-      (c) => JSON.parse(c.body as string).components !== undefined,
+      (c) =>
+        JSON.parse(capturedStringSchema.parse(c.body)).components !== undefined,
     );
     // The final chunk's id is the one the delivery row records, so the
     // message a press arrives on is the message the row can find.
@@ -266,7 +275,8 @@ describe("sendDiscordReply", () => {
       plainTextFallback: "reply accept or later",
     });
 
-    const row = JSON.parse(calls[0].body as string).components[0];
+    const row = JSON.parse(capturedStringSchema.parse(calls[0].body))
+      .components[0];
     expect(row.components[0].style).toBe(2);
     expect(row.components[1].style).toBe(2);
   });
@@ -309,7 +319,9 @@ describe("sendDiscordReply", () => {
     expect(partial.lastMessageId).toBe("msg-1");
     // The delivered prefix plus the named remainder reassemble the text, so
     // a caller completing the card sends no line twice and drops none.
-    const delivered = JSON.parse(calls[0].body as string).content;
+    const delivered = JSON.parse(
+      capturedStringSchema.parse(calls[0].body),
+    ).content;
     expect(`${delivered}\n${partial.remainingText}`).toBe(long);
   });
 
@@ -376,7 +388,7 @@ describe("sendDiscordAttachments", () => {
     // The user gets a notice naming the file, not silence.
     const notice = calls
       .filter((c) => typeof c.body === "string")
-      .map((c) => JSON.parse(c.body as string).content)
+      .map((c) => JSON.parse(capturedStringSchema.parse(c.body)).content)
       .join(" ");
     expect(notice).toContain("huge.bin");
     expect(notice).toContain("413");
@@ -399,7 +411,7 @@ describe("editDiscordMessage", () => {
 
   test("an edit always strips components, so a settled card keeps no live buttons", async () => {
     await editDiscordMessage({ channelId: "C1" }, "m1", "Approved");
-    const body = JSON.parse(calls[0].body as string);
+    const body = JSON.parse(capturedStringSchema.parse(calls[0].body));
     expect(body.components).toEqual([]);
   });
 

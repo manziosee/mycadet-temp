@@ -165,7 +165,7 @@ export async function cliIpcCall<T = unknown>(
         if (envelope.id !== reqId) {
           return;
         }
-        const msg = envelope as IpcResponse;
+        const msg: IpcResponse = envelope;
         if (msg.error) {
           finish({
             ok: false,
@@ -327,7 +327,7 @@ export async function cliIpcCallBinary(
         if (envelope.id !== reqId) {
           return;
         }
-        const msg = envelope as IpcResponse;
+        const msg: IpcResponse = envelope;
         if (msg.error) {
           finish({
             ok: false,
@@ -526,7 +526,7 @@ export async function cliIpcCallStream(
         if (envelope.id !== reqId) {
           return;
         }
-        const msg = envelope as IpcResponse;
+        const msg: IpcResponse = envelope;
         finishError({
           ok: false,
           error: msg.error ?? "Unexpected non-streaming response",

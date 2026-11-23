@@ -291,7 +291,7 @@ async function identifyDuplicateGroups(
     return [];
   }
 
-  const input = toolBlock.input as { groups?: string[][] };
+  const input: { groups?: string[][] } = toolBlock.input;
   if (!input.groups) {
     return [];
   }
@@ -487,7 +487,7 @@ async function consolidateChunk(
     return result;
   }
 
-  const input = toolBlock.input as {
+  const input: {
     updates?: Array<{
       id: string;
       content?: string;
@@ -498,7 +498,7 @@ async function consolidateChunk(
     }>;
     delete_ids?: string[];
     merge_edges?: Array<{ survivor_id: string; deleted_id: string }>;
-  };
+  } = toolBlock.input;
 
   // Build nodeMap once upfront; patch entries after each updateNode() so
   // later iterations always read fresh in-memory state.
