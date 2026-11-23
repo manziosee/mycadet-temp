@@ -31,10 +31,11 @@ export function migrateEmbeddingVectorBlob(database: DrizzleDb): void {
 
   // Backfill: convert each JSON vector to a Float32Array BLOB
   const rows = raw
-    .query(
-      `SELECT id, vector_json FROM memory_embeddings WHERE vector_blob IS NULL AND vector_json IS NOT NULL`,
-    )
-    .all() as Array<{ id: string; vector_json: string }>;
+    .query<
+      { id: string; vector_json: string },
+      []
+    >(`SELECT id, vector_json FROM memory_embeddings WHERE vector_blob IS NULL AND vector_json IS NOT NULL`)
+    .all();
 
   if (rows.length > 0) {
     const update = raw.prepare(
@@ -102,18 +103,22 @@ export function downEmbeddingVectorBlob(database: DrizzleDb): void {
 
     // Get the current columns minus vector_blob
     const columns = raw
-      .query(`SELECT name FROM pragma_table_info('memory_embeddings')`)
-      .all() as Array<{ name: string }>;
+      .query<
+        { name: string },
+        []
+      >(`SELECT name FROM pragma_table_info('memory_embeddings')`)
+      .all();
     const keepColumns = columns
       .map((c) => c.name)
       .filter((n) => n !== "vector_blob");
 
     // Get the current DDL to understand the table structure
     const ddl = raw
-      .query(
-        `SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'memory_embeddings'`,
-      )
-      .get() as { sql: string } | null;
+      .query<
+        { sql: string },
+        []
+      >(`SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'memory_embeddings'`)
+      .get();
     if (!ddl) {
       raw.exec("ROLLBACK");
       return;

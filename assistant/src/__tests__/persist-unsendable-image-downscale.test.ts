@@ -161,7 +161,7 @@ describe("persistUnsendableImageDowngrades (downscalable host)", () => {
       "image/png",
       oversizedPngBase64(),
     );
-    const referenceBlock = {
+    const referenceBlock: Extract<ContentBlock, { type: "image" }> = {
       type: "image",
       source: {
         type: "workspace_ref",
@@ -173,7 +173,7 @@ describe("persistUnsendableImageDowngrades (downscalable host)", () => {
         width: 12000,
         height: 9000,
       },
-    } as Extract<ContentBlock, { type: "image" }>;
+    };
 
     const replacement = await unsendableImageReplacement(referenceBlock);
 
@@ -190,7 +190,7 @@ describe("persistUnsendableImageDowngrades (downscalable host)", () => {
 
   /** An inline resize input carries its id on the top-level field instead. */
   test("a resized inline block keeps its top-level attachment id", async () => {
-    const inlineBlock = {
+    const inlineBlock: Extract<ContentBlock, { type: "image" }> = {
       type: "image",
       source: {
         type: "base64",
@@ -198,7 +198,7 @@ describe("persistUnsendableImageDowngrades (downscalable host)", () => {
         data: oversizedPngBase64(),
       },
       _attachmentId: "att-inline-1",
-    } as Extract<ContentBlock, { type: "image" }>;
+    };
 
     const replacement = await unsendableImageReplacement(inlineBlock);
 

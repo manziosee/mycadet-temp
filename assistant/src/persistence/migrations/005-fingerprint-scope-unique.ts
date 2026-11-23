@@ -21,10 +21,11 @@ export function migrateMemoryItemsFingerprintScopeUnique(
   // the CREATE TABLE DDL for the word UNIQUE (the PK also creates an autoindex,
   // so we cannot rely on sqlite_autoindex_* presence alone).
   const tableDdl = raw
-    .query(
-      `SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'memory_items'`,
-    )
-    .get() as { sql: string } | null;
+    .query<
+      { sql: string },
+      []
+    >(`SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'memory_items'`)
+    .get();
   if (
     !tableDdl ||
     !tableDdl.sql.match(/fingerprint\s+TEXT\s+NOT\s+NULL\s+UNIQUE/i)
@@ -112,10 +113,11 @@ export function downMemoryItemsFingerprintScopeUnique(
 
   // Check if the column-level UNIQUE already exists — if so, nothing to do.
   const tableDdl = raw
-    .query(
-      `SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'memory_items'`,
-    )
-    .get() as { sql: string } | null;
+    .query<
+      { sql: string },
+      []
+    >(`SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'memory_items'`)
+    .get();
   if (
     !tableDdl ||
     tableDdl.sql.match(/fingerprint\s+TEXT\s+NOT\s+NULL\s+UNIQUE/i)

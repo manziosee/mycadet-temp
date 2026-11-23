@@ -51,8 +51,11 @@ export function validateMigrationState(
   let rows: Array<{ key: string; value: string }>;
   try {
     rows = raw
-      .query(`SELECT key, value FROM memory_checkpoints`)
-      .all() as Array<{ key: string; value: string }>;
+      .query<
+        { key: string; value: string },
+        []
+      >(`SELECT key, value FROM memory_checkpoints`)
+      .all();
   } catch {
     // memory_checkpoints may not exist on a very old database; skip.
     return { crashed: [], dependencyViolations: [], unknownCheckpoints: [] };
@@ -198,8 +201,11 @@ export function rollbackMemoryMigration(
   let rows: Array<{ key: string; value: string }>;
   try {
     rows = raw
-      .query(`SELECT key, value FROM memory_checkpoints`)
-      .all() as Array<{ key: string; value: string }>;
+      .query<
+        { key: string; value: string },
+        []
+      >(`SELECT key, value FROM memory_checkpoints`)
+      .all();
   } catch {
     return [];
   }

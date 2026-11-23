@@ -37,14 +37,14 @@ function stubProcessKill(
       return true;
     }
     if (permissionErrorPids.has(pid)) {
-      const err = new Error("kill EPERM") as NodeJS.ErrnoException;
+      const err: NodeJS.ErrnoException = new Error("kill EPERM");
       err.code = "EPERM";
       throw err;
     }
     if (livePids.has(pid)) {
       return true;
     }
-    const err = new Error("kill ESRCH") as NodeJS.ErrnoException;
+    const err: NodeJS.ErrnoException = new Error("kill ESRCH");
     err.code = "ESRCH";
     throw err;
   }) as typeof process.kill;

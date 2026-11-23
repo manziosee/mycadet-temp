@@ -106,9 +106,10 @@ describe("handleContactsInfoBatch", () => {
       metadata: { model: "opus" },
     });
 
-    const result = handleContactsInfoBatch({
-      body: { contactIds: ["c1", "c2", "missing"] },
-    }) as { infos: Array<Record<string, unknown>> };
+    const result: { infos: Array<Record<string, unknown>> } =
+      handleContactsInfoBatch({
+        body: { contactIds: ["c1", "c2", "missing"] },
+      });
 
     expect(result.infos).toHaveLength(2);
     const c1 = result.infos.find((i) => i.contactId === "c1")!;
@@ -128,9 +129,10 @@ describe("handleContactsInfoBatch", () => {
     insertContact({ id: "c1", contactType: "human" });
     insertMetadata({ contactId: "c1", species: "cadet", metadata: { x: 1 } });
 
-    const result = handleContactsInfoBatch({
-      body: { contactIds: ["c1"] },
-    }) as { infos: Array<Record<string, unknown>> };
+    const result: { infos: Array<Record<string, unknown>> } =
+      handleContactsInfoBatch({
+        body: { contactIds: ["c1"] },
+      });
     expect(result.infos[0].assistantMetadata).toBeNull();
   });
 
@@ -141,9 +143,10 @@ describe("handleContactsInfoBatch", () => {
       ["c1", "cadet", "{not valid json"],
     );
 
-    const result = handleContactsInfoBatch({
-      body: { contactIds: ["c1"] },
-    }) as { infos: Array<Record<string, unknown>> };
+    const result: { infos: Array<Record<string, unknown>> } =
+      handleContactsInfoBatch({
+        body: { contactIds: ["c1"] },
+      });
     expect(result.infos[0].assistantMetadata).toEqual({
       species: "cadet",
       metadata: null,
@@ -170,9 +173,10 @@ describe("handleContactChannelIdentityLookup", () => {
       externalChatId: "chat-1",
     });
 
-    const result = handleContactChannelIdentityLookup({
-      body: { type: "email", address: "alice@example.com" },
-    }) as { channel: Record<string, unknown> | null };
+    const result: { channel: Record<string, unknown> | null } =
+      handleContactChannelIdentityLookup({
+        body: { type: "email", address: "alice@example.com" },
+      });
 
     expect(result.channel).toEqual({
       id: "ch1",
@@ -193,9 +197,10 @@ describe("handleContactChannelIdentityLookup", () => {
       address: "U123",
     });
 
-    const result = handleContactChannelIdentityLookup({
-      body: { channelId: "ch1" },
-    }) as { channel: Record<string, unknown> | null };
+    const result: { channel: Record<string, unknown> | null } =
+      handleContactChannelIdentityLookup({
+        body: { channelId: "ch1" },
+      });
     expect(result.channel?.type).toBe("slack");
     expect(result.channel?.address).toBe("U123");
     expect(result.channel?.displayName).toBe("Bob");
@@ -229,9 +234,10 @@ describe("handleContactChannelIdentityLookup", () => {
       updatedAt: 2_000,
     });
 
-    const result = handleContactChannelIdentityLookup({
-      body: { type: "email", address: "DUP@example.com" },
-    }) as { channel: { id: string; contactId: string } | null };
+    const result: { channel: { id: string; contactId: string } | null } =
+      handleContactChannelIdentityLookup({
+        body: { type: "email", address: "DUP@example.com" },
+      });
     expect(result.channel?.id).toBe("ch-new");
     expect(result.channel?.contactId).toBe("c-new");
   });
@@ -254,9 +260,10 @@ describe("handleContactChannelIdentityLookup", () => {
       updatedAt: 1_000,
     });
 
-    const result = handleContactChannelIdentityLookup({
-      body: { type: "email", address: "nulldup@example.com" },
-    }) as { channel: { id: string } | null };
+    const result: { channel: { id: string } | null } =
+      handleContactChannelIdentityLookup({
+        body: { type: "email", address: "nulldup@example.com" },
+      });
     expect(result.channel?.id).toBe("ch-stamped");
   });
 
@@ -292,9 +299,9 @@ describe("handleContactMirrorProbe", () => {
     insertChannel({ id: "ch1", contactId: "c1", address: "addr" });
     insertMetadata({ contactId: "c1", species: "cadet" });
 
-    const result = handleContactMirrorProbe({
+    const result: Record<string, unknown> = handleContactMirrorProbe({
       body: { contactId: "c1" },
-    }) as Record<string, unknown>;
+    });
     expect(result).toEqual({
       exists: true,
       hasChannels: true,
@@ -307,9 +314,9 @@ describe("handleContactMirrorProbe", () => {
 
   test("row present with no channels or metadata (bare seed contact)", () => {
     insertContact({ id: "c1", contactType: "human" });
-    const result = handleContactMirrorProbe({
+    const result: Record<string, unknown> = handleContactMirrorProbe({
       body: { contactId: "c1" },
-    }) as Record<string, unknown>;
+    });
     expect(result.exists).toBe(true);
     expect(result.hasChannels).toBe(false);
     expect(result.hasMetadata).toBe(false);
@@ -326,9 +333,9 @@ describe("handleContactUserFileSlugs", () => {
     insertContact({ id: "c3", userFile: "bob.md" });
     insertContact({ id: "c4", userFile: null });
 
-    const result = handleContactUserFileSlugs({
+    const result: { userFiles: string[] } = handleContactUserFileSlugs({
       body: { prefix: "alice" },
-    }) as { userFiles: string[] };
+    });
     expect(result.userFiles.sort()).toEqual(["alice-2.md", "alice.md"]);
   });
 

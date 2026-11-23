@@ -535,17 +535,15 @@ describe("AnthropicProvider — Cache-Control Characterization", () => {
     );
 
     let breakpoints = 0;
-    const system = lastStreamParams!.system as
-      | Array<{ cache_control?: unknown }>
-      | undefined;
+    const system: Array<{ cache_control?: unknown }> | undefined =
+      lastStreamParams!.system;
     for (const b of system ?? []) {
       if (b.cache_control) {
         breakpoints++;
       }
     }
-    const tools = lastStreamParams!.tools as
-      | Array<{ cache_control?: unknown }>
-      | undefined;
+    const tools: Array<{ cache_control?: unknown }> | undefined =
+      lastStreamParams!.tools;
     for (const t of tools ?? []) {
       if (t.cache_control) {
         breakpoints++;

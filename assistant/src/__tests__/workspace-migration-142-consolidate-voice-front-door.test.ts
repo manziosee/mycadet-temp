@@ -11,6 +11,7 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
 import { consolidateVoiceFrontDoorMigration } from "../workspace/migrations/142-consolidate-voice-front-door.js";
 import { WORKSPACE_MIGRATIONS } from "../workspace/migrations/registry.js";
+import { jsonObjectSchema } from "./helpers/json-object-schema.js";
 
 let workspaceDir: string;
 let configPath: string;
@@ -73,8 +74,8 @@ describe("142-consolidate-voice-front-door migration", () => {
     consolidateVoiceFrontDoorMigration.run(workspaceDir);
 
     const config = readConfig();
-    const llm = config.llm as Record<string, unknown>;
-    const callSites = llm.callSites as Record<string, unknown>;
+    const llm = jsonObjectSchema.parse(config.llm);
+    const callSites = jsonObjectSchema.parse(llm.callSites);
     expect(callSites.voiceProgressNarration).toEqual({
       profile: "cost-optimized",
       effort: "low",
@@ -82,8 +83,8 @@ describe("142-consolidate-voice-front-door migration", () => {
     expect(callSites).not.toHaveProperty("voiceFrontDecision");
     expect(callSites.voiceFrontDoor).toEqual({ profile: "latency-optimized" });
 
-    const liveVoice = config.liveVoice as Record<string, unknown>;
-    const frontModel = liveVoice.frontModel as Record<string, unknown>;
+    const liveVoice = jsonObjectSchema.parse(config.liveVoice);
+    const frontModel = jsonObjectSchema.parse(liveVoice.frontModel);
     expect(frontModel).not.toHaveProperty("ackFirstDeltaTimeoutMs");
     expect(frontModel).not.toHaveProperty("ackGenerationTimeoutMs");
     expect(frontModel.endpointDecisionTimeoutMs).toBe(900);
@@ -103,8 +104,8 @@ describe("142-consolidate-voice-front-door migration", () => {
     consolidateVoiceFrontDoorMigration.run(workspaceDir);
 
     const config = readConfig();
-    const llm = config.llm as Record<string, unknown>;
-    const callSites = llm.callSites as Record<string, unknown>;
+    const llm = jsonObjectSchema.parse(config.llm);
+    const callSites = jsonObjectSchema.parse(llm.callSites);
     expect(callSites.voiceProgressNarration).toEqual({
       profile: "latency-optimized",
     });

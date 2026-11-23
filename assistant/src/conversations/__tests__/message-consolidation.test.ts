@@ -268,7 +268,7 @@ describe("mergeToolResultsIntoAssistantMessages", () => {
     const merged = mergeToolResultsIntoAssistantMessages(messages);
     expect(merged).toHaveLength(1);
     expect(merged[0].role).toBe("assistant");
-    const blocks = merged[0].content as Array<{ type: string }>;
+    const blocks: Array<{ type: string }> = merged[0].content;
     expect(blocks.map((b) => b.type)).toEqual(["tool_use", "tool_result"]);
   });
 
@@ -289,7 +289,7 @@ describe("mergeToolResultsIntoAssistantMessages", () => {
     const merged = mergeToolResultsIntoAssistantMessages(messages);
     expect(merged).toHaveLength(2);
     expect(merged[1].role).toBe("user");
-    const userBlocks = merged[1].content as Array<{ type: string }>;
+    const userBlocks: Array<{ type: string }> = merged[1].content;
     expect(userBlocks.map((b) => b.type)).toEqual(["text"]);
   });
 

@@ -28,10 +28,11 @@ export function migrateStripIntegrationPrefixFromProviderKeys(
   try {
     // Find all provider keys with the integration: prefix.
     const rows = raw
-      .prepare(
-        /*sql*/ `SELECT provider_key FROM oauth_providers WHERE provider_key LIKE 'integration:%'`,
-      )
-      .all() as Array<{ provider_key: string }>;
+      .prepare<
+        { provider_key: string },
+        []
+      >(/*sql*/ `SELECT provider_key FROM oauth_providers WHERE provider_key LIKE 'integration:%'`)
+      .all();
 
     for (const { provider_key: oldKey } of rows) {
       const newKey = oldKey.replace(/^integration:/, "");
@@ -107,10 +108,11 @@ export function migrateStripIntegrationPrefixFromProviderKeysDown(
   raw.exec("PRAGMA foreign_keys = OFF");
   try {
     const rows = raw
-      .prepare(
-        /*sql*/ `SELECT provider_key FROM oauth_providers WHERE provider_key NOT LIKE 'integration:%'`,
-      )
-      .all() as Array<{ provider_key: string }>;
+      .prepare<
+        { provider_key: string },
+        []
+      >(/*sql*/ `SELECT provider_key FROM oauth_providers WHERE provider_key NOT LIKE 'integration:%'`)
+      .all();
 
     for (const { provider_key: bareKey } of rows) {
       if (ALWAYS_BARE.has(bareKey)) {
@@ -158,10 +160,11 @@ export function migrateStripIntegrationPrefixFromProviderKeysDown(
     // Reverse the watchers table update — re-add the prefix for keys that
     // aren't known bare-name providers.
     const watcherRows = raw
-      .prepare(
-        /*sql*/ `SELECT DISTINCT credential_service FROM watchers WHERE credential_service NOT LIKE 'integration:%'`,
-      )
-      .all() as Array<{ credential_service: string }>;
+      .prepare<
+        { credential_service: string },
+        []
+      >(/*sql*/ `SELECT DISTINCT credential_service FROM watchers WHERE credential_service NOT LIKE 'integration:%'`)
+      .all();
 
     for (const { credential_service: bareKey } of watcherRows) {
       if (ALWAYS_BARE.has(bareKey)) {

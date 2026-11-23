@@ -217,7 +217,7 @@ describe("assistant_tool pass-through in notification decision engine", () => {
         visibleInSourceNow: false,
       },
     });
-    const availableChannels = ["cadet", "telegram"] as NotificationChannel[];
+    const availableChannels: NotificationChannel[] = ["cadet", "telegram"];
     const decision = await evaluateSignal(signal, availableChannels);
 
     expect(decision.shouldNotify).toBe(true);
@@ -300,7 +300,7 @@ describe("assistant_tool pass-through in notification decision engine", () => {
         visibleInSourceNow: false,
       },
     });
-    const available = ["cadet", "telegram", "slack"] as NotificationChannel[];
+    const available: NotificationChannel[] = ["cadet", "telegram", "slack"];
     const decision = await evaluateSignal(signal, available);
 
     // Urgent broadcasts to every available channel; the additive union
@@ -323,7 +323,7 @@ describe("assistant_tool pass-through in notification decision engine", () => {
       },
       routingIntent: "all_channels",
     });
-    const connected = ["cadet", "telegram"] as NotificationChannel[];
+    const connected: NotificationChannel[] = ["cadet", "telegram"];
     const decision = await evaluateSignal(signal, connected);
     const enforced = enforceRoutingIntent(
       decision,
@@ -525,11 +525,7 @@ describe("chat.assistant_reply pass-through in notification decision engine", ()
   test("seeds rendered copy for every available channel, not just the selected one", async () => {
     // A channel added to COMPLETION_CHANNELS (or appended by a
     // downstream guard) inherits the verbatim copy instead of falling back.
-    const available = [
-      "cadet",
-      "telegram",
-      "platform",
-    ] as NotificationChannel[];
+    const available: NotificationChannel[] = ["cadet", "telegram", "platform"];
     const decision = await evaluateSignal(
       makeAssistantReplySignal(),
       available,
@@ -905,11 +901,7 @@ describe("scheduler requested-message pass-through in notification decision engi
   });
 
   test("keeps a scheduler-owned report verbatim on every urgency-selected channel", async () => {
-    const available = [
-      "cadet",
-      "telegram",
-      "platform",
-    ] as NotificationChannel[];
+    const available: NotificationChannel[] = ["cadet", "telegram", "platform"];
     const decision = await evaluateSignal(
       makeSchedulerShareSignal(),
       available,
@@ -932,11 +924,7 @@ describe("scheduler requested-message pass-through in notification decision engi
   });
 
   test("copies the complete report onto the urgency-narrowed channel set", async () => {
-    const available = [
-      "cadet",
-      "telegram",
-      "platform",
-    ] as NotificationChannel[];
+    const available: NotificationChannel[] = ["cadet", "telegram", "platform"];
     const decision = await evaluateSignal(
       makeSchedulerShareSignal({
         attentionHints: {

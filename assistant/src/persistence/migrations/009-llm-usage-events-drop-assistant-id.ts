@@ -25,10 +25,11 @@ export function migrateLlmUsageEventsDropAssistantId(
   // DDL guard: if the column was already removed (fresh install or migrateRemoveAssistantIdColumns
   // ran with the llm_usage_events block), just record the checkpoint and exit.
   const lueDdl = raw
-    .query(
-      `SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'llm_usage_events'`,
-    )
-    .get() as { sql: string } | null;
+    .query<
+      { sql: string },
+      []
+    >(`SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'llm_usage_events'`)
+    .get();
 
   if (!lueDdl?.sql.includes("assistant_id")) {
     raw
@@ -109,10 +110,11 @@ export function downLlmUsageEventsDropAssistantId(database: DrizzleDb): void {
   const raw = getSqliteFrom(database);
 
   const ddl = raw
-    .query(
-      `SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'llm_usage_events'`,
-    )
-    .get() as { sql: string } | null;
+    .query<
+      { sql: string },
+      []
+    >(`SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'llm_usage_events'`)
+    .get();
   if (!ddl || ddl.sql.includes("assistant_id")) {
     return;
   }

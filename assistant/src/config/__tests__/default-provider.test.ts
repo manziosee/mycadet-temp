@@ -18,6 +18,8 @@ import {
 
 import { z } from "zod";
 
+import { jsonObjectSchema } from "../../__tests__/helpers/json-object-schema.js";
+
 const WORKSPACE_DIR = process.env.CADET_WORKSPACE_DIR!;
 const CONFIG_PATH = join(WORKSPACE_DIR, "config.json");
 
@@ -218,7 +220,7 @@ describe("setDefaultProvider", () => {
     setDefaultProvider({ provider: "openai", connectionName: "openai-work" });
 
     const raw = loadRawConfig();
-    const llm = raw.llm as Record<string, unknown>;
+    const llm = jsonObjectSchema.parse(raw.llm);
     expect(llm.default).toEqual({
       provider: "openai",
       provider_connection: "openai-work",
@@ -238,8 +240,9 @@ describe("setDefaultProvider", () => {
     setDefaultProvider({ provider: "openai", connectionName: "openai-work" });
     setDefaultProvider({ provider: "openai" });
 
-    const blob = (loadRawConfig().llm as Record<string, unknown>)
-      .default as Record<string, unknown>;
+    const blob = jsonObjectSchema.parse(
+      jsonObjectSchema.parse(loadRawConfig().llm).default,
+    );
     expect(blob).toEqual({ provider: "openai" });
   });
 
@@ -256,15 +259,16 @@ describe("setDefaultProvider", () => {
 
     setDefaultProvider({ provider: "openai" });
 
-    const blob = (loadRawConfig().llm as Record<string, unknown>)
-      .default as Record<string, unknown>;
+    const blob = jsonObjectSchema.parse(
+      jsonObjectSchema.parse(loadRawConfig().llm).default,
+    );
     expect(blob).toEqual({ provider: "openai", model: "x" });
   });
 
   test("writes invalidate the config cache so getConfigReadOnly sees the new value", () => {
     setDefaultProvider({ provider: "fireworks" });
     const after = readConfig();
-    expect((after.llm as Record<string, unknown>).default).toEqual({
+    expect(jsonObjectSchema.parse(after.llm).default).toEqual({
       provider: "fireworks",
     });
   });

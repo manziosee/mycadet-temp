@@ -17,6 +17,8 @@ import {
   test,
 } from "bun:test";
 
+import { jsonObjectSchema } from "../../__tests__/helpers/json-object-schema.js";
+
 // ---------------------------------------------------------------------------
 // Mocks — declared before imports that depend on platform/logger
 // ---------------------------------------------------------------------------
@@ -112,12 +114,9 @@ describe("deployment-context embedding-provider default (via getConfig)", () => 
     // config.json on disk is NOT mutated: no persisted provider / vectorSize /
     // geminiDimensions under memory. The fill is in-memory only.
     const raw = readConfig();
-    const memoryRaw = (raw.memory ?? {}) as Record<string, unknown>;
-    const embeddingsRaw = (memoryRaw.embeddings ?? {}) as Record<
-      string,
-      unknown
-    >;
-    const qdrantRaw = (memoryRaw.qdrant ?? {}) as Record<string, unknown>;
+    const memoryRaw = jsonObjectSchema.parse(raw.memory ?? {});
+    const embeddingsRaw = jsonObjectSchema.parse(memoryRaw.embeddings ?? {});
+    const qdrantRaw = jsonObjectSchema.parse(memoryRaw.qdrant ?? {});
     expect(embeddingsRaw.provider).toBeUndefined();
     expect(embeddingsRaw.geminiDimensions).toBeUndefined();
     expect(qdrantRaw.vectorSize).toBeUndefined();
@@ -142,30 +141,25 @@ describe("deployment-context embedding-provider default (via getConfig)", () => 
     // load as an explicit user choice and permanently suppress re-applying the
     // platform "gemini" default.
     const raw = readConfig();
-    const memoryRaw = (raw.memory ?? {}) as Record<string, unknown>;
-    const embeddingsRaw = (memoryRaw.embeddings ?? {}) as Record<
-      string,
-      unknown
-    >;
+    const memoryRaw = jsonObjectSchema.parse(raw.memory ?? {});
+    const embeddingsRaw = jsonObjectSchema.parse(memoryRaw.embeddings ?? {});
     expect(embeddingsRaw.provider).toBeUndefined();
 
     // Managed service modes ARE persisted on first launch, but web-search is
     // exempt: `provider` is its only axis, and a context-filled `mode` would
     // override BYOK configs on every load. The persisted value is the schema
     // default rather than an injected "managed".
-    const servicesRaw = (raw.services ?? {}) as Record<string, unknown>;
-    const webSearchRaw = (servicesRaw["web-search"] ?? {}) as Record<
-      string,
-      unknown
-    >;
+    const servicesRaw = jsonObjectSchema.parse(raw.services ?? {});
+    const webSearchRaw = jsonObjectSchema.parse(
+      servicesRaw["web-search"] ?? {},
+    );
     expect(webSearchRaw.mode).not.toBe("managed");
 
     // image-generation's managed axis is its provider: the seeded value is
     // the cloud fill "cadet", never an injected managed mode.
-    const imageGenRaw = (servicesRaw["image-generation"] ?? {}) as Record<
-      string,
-      unknown
-    >;
+    const imageGenRaw = jsonObjectSchema.parse(
+      servicesRaw["image-generation"] ?? {},
+    );
     expect(imageGenRaw.provider).toBe("cadet");
     expect(imageGenRaw.mode).not.toBe("managed");
 
@@ -198,8 +192,8 @@ describe("deployment-context embedding-provider default (via getConfig)", () => 
 
     // On-disk value is preserved exactly; the cloud default does not bleed in.
     const raw = readConfig();
-    const memoryRaw = raw.memory as Record<string, unknown>;
-    const embeddingsRaw = memoryRaw.embeddings as Record<string, unknown>;
+    const memoryRaw = jsonObjectSchema.parse(raw.memory);
+    const embeddingsRaw = jsonObjectSchema.parse(memoryRaw.embeddings);
     expect(embeddingsRaw.provider).toBe("local");
   });
 
@@ -231,10 +225,9 @@ describe("deployment-context embedding-provider default (via getConfig)", () => 
     // migration 105 can record the initial choice: 105 bails on any value
     // already present, and this seed runs before workspace migrations.
     const raw = readConfig();
-    const v3Raw = ((raw.memory as Record<string, unknown>).v3 ?? {}) as Record<
-      string,
-      unknown
-    >;
+    const v3Raw = jsonObjectSchema.parse(
+      jsonObjectSchema.parse(raw.memory).v3 ?? {},
+    );
     expect(Object.keys(v3Raw)).toEqual([]);
     expect(v3Raw.gate).toBeUndefined();
     expect(v3Raw.needleK).toBeUndefined();
@@ -252,10 +245,9 @@ describe("deployment-context embedding-provider default (via getConfig)", () => 
     });
 
     const raw = readConfig();
-    const v3Raw = ((raw.memory as Record<string, unknown>).v3 ?? {}) as Record<
-      string,
-      unknown
-    >;
+    const v3Raw = jsonObjectSchema.parse(
+      jsonObjectSchema.parse(raw.memory).v3 ?? {},
+    );
     expect(v3Raw.live).toBe(true);
   });
 
@@ -270,10 +262,9 @@ describe("deployment-context embedding-provider default (via getConfig)", () => 
 
     function readV3Raw(): Record<string, unknown> {
       const raw = readConfig();
-      return ((raw.memory as Record<string, unknown>).v3 ?? {}) as Record<
-        string,
-        unknown
-      >;
+      return jsonObjectSchema.parse(
+        jsonObjectSchema.parse(raw.memory).v3 ?? {},
+      );
     }
 
     afterEach(() => {

@@ -1,3 +1,4 @@
+import type { SQLQueryBindings } from "bun:sqlite";
 import { Database } from "bun:sqlite";
 
 import { getTableName } from "drizzle-orm";
@@ -188,13 +189,12 @@ function assertLegacyRelocationsComplete(mainRaw: Database): void {
     spec.table,
     `${spec.table}${RELOCATING_SUFFIX}`,
   ]);
-  const pending = (
-    mainRaw
-      .query(
-        /*sql*/ `SELECT name FROM main.sqlite_master WHERE type='table' AND name IN (${names.map(() => "?").join(", ")})`,
-      )
-      .all(...names) as Array<{ name: string }>
-  ).map((row) => row.name);
+  const pending = mainRaw
+    .query<{ name: string }, SQLQueryBindings[]>(
+      /*sql*/ `SELECT name FROM main.sqlite_master WHERE type='table' AND name IN (${names.map(() => "?").join(", ")})`,
+    )
+    .all(...names)
+    .map((row) => row.name);
   if (pending.length > 0) {
     throw new Error(
       `legacy telemetry relocations incomplete (${pending.join(", ")}) — deferring outbox backfill`,
@@ -280,10 +280,11 @@ function dropRedactedConversationRows(
   for (let i = 0; i < ids.length; i += INSERT_CHUNK_SIZE) {
     const chunk = ids.slice(i, i + INSERT_CHUNK_SIZE);
     const found = mainRaw
-      .query(
-        /*sql*/ `SELECT id FROM conversations WHERE id IN (${chunk.map(() => "?").join(", ")})`,
-      )
-      .all(...chunk) as Array<{ id: string }>;
+      .query<
+        { id: string },
+        SQLQueryBindings[]
+      >(/*sql*/ `SELECT id FROM conversations WHERE id IN (${chunk.map(() => "?").join(", ")})`)
+      .all(...chunk);
     for (const row of found) {
       live.add(row.id);
     }

@@ -303,9 +303,9 @@ describe("resolveSlash /model — inference profile switcher", () => {
       "Switched to profile `cost-optimized` (Cost-optimized).",
     );
 
-    const persisted = loadRawConfig() as {
+    const persisted: {
       llm?: { activeProfile?: string };
-    };
+    } = loadRawConfig();
     expect(persisted.llm?.activeProfile).toBe("cost-optimized");
   });
 
@@ -330,9 +330,9 @@ describe("resolveSlash /model — inference profile switcher", () => {
       "Profile `short-context` is disabled. Enable it in **Settings → Models & Services** first.",
     );
     // Disk should NOT have been written.
-    const persisted = loadRawConfig() as {
+    const persisted: {
       llm?: { activeProfile?: string };
-    };
+    } = loadRawConfig();
     expect(persisted.llm?.activeProfile).toBe("balanced");
   });
 

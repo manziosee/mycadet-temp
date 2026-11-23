@@ -1803,10 +1803,10 @@ describe("wakeAgentForOpportunity", () => {
 
     // The tool executor reads these fields off the conversation at tool-call
     // time, so they must reflect the wake's resolved turn while the loop runs.
-    const ctx = conversation as unknown as {
+    const ctx: {
       currentCallSite?: unknown;
       currentTurnOverrideProfile?: unknown;
-    };
+    } = conversation;
     let observedCallSite: unknown;
     let observedOverrideProfile: unknown;
     const originalRun = conversation.agentLoop.run;
@@ -3614,7 +3614,7 @@ describe("wakeAgentForOpportunity", () => {
         const blocks = Array.isArray(persistedFirst!.content)
           ? persistedFirst!.content
           : [];
-        const firstBlock = blocks[0] as { type?: string } | undefined;
+        const firstBlock: { type?: string } | undefined = blocks[0];
         expect(firstBlock?.type).not.toBe("ui_surface");
         const uiBlock = blocks.find(
           (b: { type?: string }) => b.type === "ui_surface",

@@ -301,9 +301,8 @@ describe("activity version ordering", () => {
       anchor: "global",
     });
 
-    const activityMsgs = emitted.filter(
-      (m) => m.type === "assistant_activity_state",
-    ) as Array<AssistantEvent & { activityVersion: number }>;
+    const activityMsgs: Array<AssistantEvent & { activityVersion: number }> =
+      emitted.filter((m) => m.type === "assistant_activity_state");
 
     expect(activityMsgs).toHaveLength(4);
 
@@ -334,9 +333,9 @@ describe("activity version ordering", () => {
     seedPendingConfirmation(conversation, "req-version-1");
     conversation.handleConfirmationResponse("req-version-1", "allow");
 
-    const activityMsgs = emitted.filter(
-      (m) => m.type === "assistant_activity_state",
-    ) as Array<AssistantEvent & { activityVersion: number; reason: string }>;
+    const activityMsgs: Array<
+      AssistantEvent & { activityVersion: number; reason: string }
+    > = emitted.filter((m) => m.type === "assistant_activity_state");
 
     // The confirmation_resolved activity message should have a higher version
     const resolvedMsg = activityMsgs.find(

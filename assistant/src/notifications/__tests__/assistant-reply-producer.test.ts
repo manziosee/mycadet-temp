@@ -239,7 +239,7 @@ function makeMessage(overrides: Partial<MessageRow> = {}): MessageRow {
     id: USER_MESSAGE_ID,
     conversationId: CONVERSATION_ID,
     role: "user",
-    content: [{ type: "text", text: "hello" }] as ContentBlock[],
+    content: [{ type: "text", text: "hello" }],
     createdAt: 1700000000100,
     metadata: null,
     clientMessageId: null,
@@ -379,7 +379,7 @@ beforeEach(() => {
   conversationRow = makeConversation();
   assistantRow = makeAssistantRow([
     { type: "text", text: "Sure, here is the plan." },
-  ] as ContentBlock[]);
+  ]);
   initiatingRow = makeMessage();
   attentionState = makeAttentionState();
 });
@@ -881,9 +881,7 @@ describe("emitAssistantReplyNotification", () => {
   });
 
   test("caps the preview at 200 chars", async () => {
-    assistantRow = makeAssistantRow([
-      { type: "text", text: "a".repeat(300) },
-    ] as ContentBlock[]);
+    assistantRow = makeAssistantRow([{ type: "text", text: "a".repeat(300) }]);
 
     await run();
 
@@ -895,9 +893,7 @@ describe("emitAssistantReplyNotification", () => {
   // Control characters would otherwise ride into the APNs payload verbatim.
   // Newlines stay: iOS (and other lock screens) render them as line breaks.
   test("strips control characters and keeps line breaks in the preview", async () => {
-    assistantRow = makeAssistantRow([
-      { type: "text", text: "Hello\n\tthere" },
-    ] as ContentBlock[]);
+    assistantRow = makeAssistantRow([{ type: "text", text: "Hello\n\tthere" }]);
 
     await run();
 
@@ -911,7 +907,7 @@ describe("emitAssistantReplyNotification", () => {
   test("keeps paragraph breaks after collapsing horizontal whitespace", async () => {
     assistantRow = makeAssistantRow([
       { type: "text", text: "  Here:\n\n  - item\n  - other  " },
-    ] as ContentBlock[]);
+    ]);
 
     await run();
 
@@ -932,7 +928,7 @@ describe("emitAssistantReplyNotification", () => {
             "![hero animation](cadet://workspace/repos/hero.mp4)",
           ].join(" "),
         },
-      ] as ContentBlock[]);
+      ]);
       assistantAttachments = [
         { originalFilename: "cut.mp4" },
         { originalFilename: "hero.mp4" },
@@ -951,7 +947,7 @@ describe("emitAssistantReplyNotification", () => {
           type: "text",
           text: "Here is the scene: ![cadet scene](cadet://workspace/a.mp4)",
         },
-      ] as ContentBlock[]);
+      ]);
 
       await run();
 
@@ -965,7 +961,7 @@ describe("emitAssistantReplyNotification", () => {
     test("previews a fenced code reply as its code", async () => {
       assistantRow = makeAssistantRow([
         { type: "text", text: "Fixed it:\n```ts\nconst a = 1;\n```" },
-      ] as ContentBlock[]);
+      ]);
 
       await run();
 
@@ -980,7 +976,7 @@ describe("emitAssistantReplyNotification", () => {
           type: "text",
           text: "## Keys\n\n| Env | Key |\n|---|---|\n| dev | 4Y4L |",
         },
-      ] as ContentBlock[]);
+      ]);
 
       await run();
 
@@ -999,7 +995,7 @@ describe("emitAssistantReplyNotification", () => {
           type: "text",
           text: "![the Q3 chart](https://cdn.example.com/q3.png)",
         },
-      ] as ContentBlock[]);
+      ]);
 
       await run();
 
@@ -1015,7 +1011,7 @@ describe("emitAssistantReplyNotification", () => {
           type: "text",
           text: "![one](https://e.com/1.png) ![two](https://e.com/2.png)",
         },
-      ] as ContentBlock[]);
+      ]);
 
       await run();
 
@@ -1027,7 +1023,7 @@ describe("emitAssistantReplyNotification", () => {
     test("falls back to generic copy for a remote embed with no alt", async () => {
       assistantRow = makeAssistantRow([
         { type: "text", text: "![](https://cdn.example.com/q3.png)" },
-      ] as ContentBlock[]);
+      ]);
 
       await run();
 
@@ -1045,7 +1041,7 @@ describe("emitAssistantReplyNotification", () => {
           type: "text",
           text: "![local](cadet://workspace/a.mp4) ![remote](https://e.com/b.png)",
         },
-      ] as ContentBlock[]);
+      ]);
       assistantAttachments = [{ originalFilename: "a.mp4" }];
 
       await run();
@@ -1061,7 +1057,7 @@ describe("emitAssistantReplyNotification", () => {
     test("names a tracked embed whose attachment never resolved", async () => {
       assistantRow = makeAssistantRow([
         { type: "text", text: "![the diagram](cadet://workspace/gone.png)" },
-      ] as ContentBlock[]);
+      ]);
       assistantAttachments = [];
 
       await run();
@@ -1078,7 +1074,7 @@ describe("emitAssistantReplyNotification", () => {
           type: "text",
           text: "![one](cadet://workspace/1.png) ![two](cadet://workspace/2.png)",
         },
-      ] as ContentBlock[]);
+      ]);
       assistantAttachments = [{ originalFilename: "1.png" }];
 
       await run();
@@ -1091,7 +1087,7 @@ describe("emitAssistantReplyNotification", () => {
     test("does not double count an embed that became an attachment", async () => {
       assistantRow = makeAssistantRow([
         { type: "text", text: "![local](cadet://workspace/a.mp4)" },
-      ] as ContentBlock[]);
+      ]);
       assistantAttachments = [{ originalFilename: "a.mp4" }];
 
       await run();
@@ -1102,7 +1098,7 @@ describe("emitAssistantReplyNotification", () => {
     test("prefers the attachment row over the alt text when both exist", async () => {
       assistantRow = makeAssistantRow([
         { type: "text", text: "![scene](cadet://workspace/cut.mp4)" },
-      ] as ContentBlock[]);
+      ]);
       assistantAttachments = [{ originalFilename: "cut.mp4" }];
 
       await run();
@@ -1111,9 +1107,7 @@ describe("emitAssistantReplyNotification", () => {
     });
 
     test("stays silent when a reply has no text, attachments, or embeds", async () => {
-      assistantRow = makeAssistantRow([
-        { type: "text", text: "## \n\n---" },
-      ] as ContentBlock[]);
+      assistantRow = makeAssistantRow([{ type: "text", text: "## \n\n---" }]);
 
       await run();
 
@@ -1430,7 +1424,7 @@ describe("emitAssistantReplyNotification", () => {
   test("stays silent when the reply has no user-visible text", async () => {
     assistantRow = makeAssistantRow([
       { type: "tool_use", id: "t1", name: "bash", input: {} },
-    ] as ContentBlock[]);
+    ]);
 
     await run();
 
@@ -1444,7 +1438,7 @@ describe("emitAssistantReplyNotification", () => {
     beforeEach(() => {
       assistantRow = makeAssistantRow([
         { type: "tool_use", id: "t1", name: "write_file", input: {} },
-      ] as ContentBlock[]);
+      ]);
     });
 
     test("names the single attachment it generated", async () => {

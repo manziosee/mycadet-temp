@@ -98,11 +98,15 @@ export function migrateDropAssistantIdColumns(database: DrizzleDb): void {
   // Verify all existing assistant_id values are 'self' or NULL before dropping.
   for (const table of tables) {
     const cols = new Set(
-      (
-        raw.query(`PRAGMA table_info(${table})`).all() as Array<{
-          name: string;
-        }>
-      ).map((c) => c.name),
+      raw
+        .query<
+          {
+            name: string;
+          },
+          []
+        >(`PRAGMA table_info(${table})`)
+        .all()
+        .map((c) => c.name),
     );
 
     if (!cols.has("assistant_id")) {
@@ -111,10 +115,11 @@ export function migrateDropAssistantIdColumns(database: DrizzleDb): void {
     }
 
     const unexpected = raw
-      .query(
-        `SELECT DISTINCT assistant_id FROM ${table} WHERE assistant_id IS NOT NULL AND assistant_id != 'self'`,
-      )
-      .all() as Array<{ assistant_id: string }>;
+      .query<
+        { assistant_id: string },
+        []
+      >(`SELECT DISTINCT assistant_id FROM ${table} WHERE assistant_id IS NOT NULL AND assistant_id != 'self'`)
+      .all();
 
     if (unexpected.length > 0) {
       log.warn(
@@ -193,11 +198,15 @@ export function migrateDropAssistantIdColumns(database: DrizzleDb): void {
   // --- Drop assistant_id column from each table ---
   for (const table of tables) {
     const cols = new Set(
-      (
-        raw.query(`PRAGMA table_info(${table})`).all() as Array<{
-          name: string;
-        }>
-      ).map((c) => c.name),
+      raw
+        .query<
+          {
+            name: string;
+          },
+          []
+        >(`PRAGMA table_info(${table})`)
+        .all()
+        .map((c) => c.name),
     );
 
     if (!cols.has("assistant_id")) {
@@ -206,10 +215,11 @@ export function migrateDropAssistantIdColumns(database: DrizzleDb): void {
 
     // Re-verify safety before each drop
     const unexpected = raw
-      .query(
-        `SELECT DISTINCT assistant_id FROM ${table} WHERE assistant_id IS NOT NULL AND assistant_id != 'self'`,
-      )
-      .all() as Array<{ assistant_id: string }>;
+      .query<
+        { assistant_id: string },
+        []
+      >(`SELECT DISTINCT assistant_id FROM ${table} WHERE assistant_id IS NOT NULL AND assistant_id != 'self'`)
+      .all();
 
     if (unexpected.length > 0) {
       log.warn(

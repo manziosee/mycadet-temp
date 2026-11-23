@@ -1,3 +1,5 @@
+import type { SQLQueryBindings } from "bun:sqlite";
+
 import { normalizePhoneNumber } from "../../util/phone.js";
 import { type DrizzleDb, getSqliteFrom } from "../db-connection.js";
 
@@ -115,10 +117,11 @@ export function migrateNormalizePhoneIdentities(database: DrizzleDb): void {
     }
 
     const rows = raw
-      .query(
-        `SELECT ${selectColumns.join(", ")} FROM ${table} WHERE ${channelColumn} IN (${PHONE_CHANNELS.map(() => "?").join(",")}) AND ${column} IS NOT NULL ORDER BY ${orderBy}`,
-      )
-      .all(...PHONE_CHANNELS) as Array<{ id: string; [key: string]: string }>;
+      .query<
+        { id: string; [key: string]: string },
+        SQLQueryBindings[]
+      >(`SELECT ${selectColumns.join(", ")} FROM ${table} WHERE ${channelColumn} IN (${PHONE_CHANNELS.map(() => "?").join(",")}) AND ${column} IS NOT NULL ORDER BY ${orderBy}`)
+      .all(...PHONE_CHANNELS);
 
     if (rows.length === 0) {
       return;
@@ -217,10 +220,11 @@ export function migrateNormalizePhoneIdentities(database: DrizzleDb): void {
     }
 
     const rows = raw
-      .query(
-        `SELECT ${selectColumns.join(", ")} FROM ${table} WHERE ${column} IS NOT NULL ORDER BY ${orderBy}`,
-      )
-      .all() as Array<{ id: string; [key: string]: string }>;
+      .query<
+        { id: string; [key: string]: string },
+        []
+      >(`SELECT ${selectColumns.join(", ")} FROM ${table} WHERE ${column} IS NOT NULL ORDER BY ${orderBy}`)
+      .all();
 
     if (rows.length === 0) {
       return;

@@ -20,10 +20,11 @@ export function migrateConversationsTotalInputTokensNullable(
   const raw = getSqliteFrom(database);
 
   const ddl = raw
-    .query(
-      /*sql*/ `SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'conversations'`,
-    )
-    .get() as { sql: string } | null;
+    .query<
+      { sql: string },
+      []
+    >(/*sql*/ `SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'conversations'`)
+    .get();
   if (!ddl) {
     return;
   }
@@ -46,10 +47,11 @@ export function migrateConversationsTotalInputTokensNullable(
   // Indexes/triggers die with DROP TABLE; capture their DDL to recreate them.
   // Autoindexes (sql IS NULL) are rebuilt implicitly from table constraints.
   const dependentDdls = raw
-    .query(
-      /*sql*/ `SELECT sql FROM sqlite_master WHERE type IN ('index', 'trigger') AND tbl_name = 'conversations' AND sql IS NOT NULL`,
-    )
-    .all() as Array<{ sql: string }>;
+    .query<
+      { sql: string },
+      []
+    >(/*sql*/ `SELECT sql FROM sqlite_master WHERE type IN ('index', 'trigger') AND tbl_name = 'conversations' AND sql IS NOT NULL`)
+    .all();
 
   raw.exec("PRAGMA foreign_keys = OFF");
   try {

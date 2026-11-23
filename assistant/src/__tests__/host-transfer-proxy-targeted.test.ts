@@ -394,9 +394,8 @@ describe("HostTransferProxy — targetClientId", () => {
       expect(cancelMsg.type).toBe("host_transfer_cancel");
       expect(cancelMsg.targetClientId).toBe("client-abc");
 
-      const cancelOpts = sentMessageOptions[1] as
-        | Record<string, unknown>
-        | undefined;
+      const cancelOpts: Record<string, unknown> | undefined =
+        sentMessageOptions[1];
       expect(cancelOpts?.targetClientId).toBe("client-abc");
     });
   });
@@ -434,9 +433,8 @@ describe("HostTransferProxy — targetClientId", () => {
       expect(cancelMsg.type).toBe("host_transfer_cancel");
       expect(cancelMsg.targetClientId).toBe("client-xyz");
 
-      const cancelOpts = sentMessageOptions[1] as
-        | Record<string, unknown>
-        | undefined;
+      const cancelOpts: Record<string, unknown> | undefined =
+        sentMessageOptions[1];
       expect(cancelOpts?.targetClientId).toBe("client-xyz");
     });
   });

@@ -447,7 +447,7 @@ describe("non-decision messages during pending approval (no conversational engin
         (call[1] as { chatId?: string }).chatId === "chat-123",
     );
     expect(statusCall).toBeDefined();
-    const statusPayload = statusCall![1] as { text?: string };
+    const statusPayload: { text?: string } = statusCall![1];
     // The status text mentions a pending approval
     expect(statusPayload.text).toContain("pending approval request");
 
@@ -972,10 +972,10 @@ describe("plain-text channel approval decisions", () => {
         (call[1] as { chatId?: string }).chatId === "chat-123",
     );
     expect(statusCall).toBeDefined();
-    const statusPayload = statusCall![1] as {
+    const statusPayload: {
       text?: string;
       approval?: unknown;
-    };
+    } = statusCall![1];
     const deliveredText = statusPayload.text ?? "";
     expect(deliveredText).toContain("pending approval request");
     expect(statusPayload.approval).toBeUndefined();
@@ -1444,7 +1444,7 @@ describe("non-decision status reply for different channels", () => {
         (call[1] as { chatId?: string }).chatId === "chat-123",
     );
     expect(statusCall).toBeDefined();
-    const statusPayload = statusCall![1] as { text?: string };
+    const statusPayload: { text?: string } = statusCall![1];
     expect(statusPayload.text).toContain("pending approval request");
 
     deliverSpy.mockRestore();
@@ -1488,7 +1488,7 @@ describe("non-decision status reply for different channels", () => {
         (call[1] as { chatId?: string }).chatId === "chat-123",
     );
     expect(statusCall).toBeDefined();
-    const statusPayload = statusCall![1] as { text?: string };
+    const statusPayload: { text?: string } = statusCall![1];
     expect(statusPayload.text).toContain("pending approval request");
 
     replySpy.mockRestore();
@@ -1551,9 +1551,8 @@ describe("background channel processing approval prompts", () => {
     expect(processCalls[0].options?.isInteractive).toBe(true);
 
     expect(deliverPromptSpy).toHaveBeenCalled();
-    const approvalMeta = deliverPromptSpy.mock.calls[0]?.[3] as
-      | { requestId?: string }
-      | undefined;
+    const approvalMeta: { requestId?: string } | undefined =
+      deliverPromptSpy.mock.calls[0]?.[3];
     expect(approvalMeta?.requestId).toBe("req-bg-1");
     // Telegram's chat is already one-to-one, so the prompt stays where the
     // turn is. Slack, where it does not, is covered in

@@ -107,8 +107,28 @@ const sampleTools: ToolDefinition[] = [
 // Mock OpenAI SDK
 // ---------------------------------------------------------------------------
 
-let lastOpenAIResponsesParams: Record<string, unknown> | null = null;
-let lastOpenAIChatParams: Record<string, unknown> | null = null;
+interface TextPart {
+  type: string;
+  text?: string;
+}
+interface CapturedResponsesParams {
+  input: Array<{ type: string; role?: string; content?: TextPart[] }>;
+  tools?: Record<string, unknown>[];
+}
+interface CapturedChatParams {
+  messages: Array<{
+    role: string;
+    content?: string | TextPart[] | null;
+    tool_calls?: unknown[];
+  }>;
+  tools?: Array<{
+    type: string;
+    function: { name: string; description?: string };
+  }>;
+}
+
+let lastOpenAIResponsesParams: CapturedResponsesParams | null = null;
+let lastOpenAIChatParams: CapturedChatParams | null = null;
 
 mock.module("openai", () => {
   class FakeAPIError extends Error {
@@ -128,7 +148,7 @@ mock.module("openai", () => {
       constructor(_args: Record<string, unknown>) {}
       chat = {
         completions: {
-          create: (params: Record<string, unknown>) => {
+          create: (params: CapturedChatParams) => {
             lastOpenAIChatParams = JSON.parse(JSON.stringify(params));
             return (async function* () {
               yield {
@@ -146,7 +166,7 @@ mock.module("openai", () => {
         },
       };
       responses = {
-        create: async (params: Record<string, unknown>) => {
+        create: async (params: CapturedResponsesParams) => {
           lastOpenAIResponsesParams = JSON.parse(JSON.stringify(params));
           return (async function* () {
             yield {
@@ -175,7 +195,14 @@ mock.module("openai", () => {
 // Mock Gemini SDK
 // ---------------------------------------------------------------------------
 
-let lastGeminiParams: Record<string, unknown> | null = null;
+interface CapturedGeminiParams {
+  contents: Array<{
+    role: string;
+    parts: Array<{ text?: string; functionCall?: unknown }>;
+  }>;
+}
+
+let lastGeminiParams: CapturedGeminiParams | null = null;
 
 mock.module("@google/genai", () => {
   class FakeApiError extends Error {
@@ -192,7 +219,7 @@ mock.module("@google/genai", () => {
     GoogleGenAI: class MockGoogleGenAI {
       constructor(_args: Record<string, unknown>) {}
       models = {
-        generateContentStream: (params: Record<string, unknown>) => {
+        generateContentStream: (params: CapturedGeminiParams) => {
           lastGeminiParams = JSON.parse(JSON.stringify(params));
           return (async function* () {
             yield {
@@ -283,11 +310,7 @@ describe("Cross-Provider Web Search — OpenAI (Responses API)", () => {
     const provider = new OpenAIResponsesProvider("sk-test", "gpt-4o");
     await provider.sendMessage(webSearchConversation());
 
-    const input = lastOpenAIResponsesParams!.input as Array<{
-      type: string;
-      role?: string;
-      content?: Array<{ type: string; text?: string }>;
-    }>;
+    const input = lastOpenAIResponsesParams!.input;
 
     const assistantItems = input.filter(
       (item) => item.type === "message" && item.role === "assistant",
@@ -315,11 +338,7 @@ describe("Cross-Provider Web Search — OpenAI (Responses API)", () => {
     const provider = new OpenAIResponsesProvider("sk-test", "gpt-4o");
     await provider.sendMessage(webSearchConversation());
 
-    const input = lastOpenAIResponsesParams!.input as Array<{
-      type: string;
-      role?: string;
-      content?: Array<{ type: string; text?: string }>;
-    }>;
+    const input = lastOpenAIResponsesParams!.input;
 
     const userItems = input.filter(
       (item) => item.type === "message" && item.role === "user",
@@ -337,11 +356,7 @@ describe("Cross-Provider Web Search — OpenAI (Responses API)", () => {
     const provider = new OpenAIResponsesProvider("sk-test", "gpt-4o");
     await provider.sendMessage(webSearchResultOnlyMessage());
 
-    const input = lastOpenAIResponsesParams!.input as Array<{
-      type: string;
-      role?: string;
-      content?: Array<{ type: string; text?: string }>;
-    }>;
+    const input = lastOpenAIResponsesParams!.input;
 
     const assistantItems = input.filter(
       (item) => item.type === "message" && item.role === "assistant",
@@ -371,9 +386,7 @@ describe("Cross-Provider Web Search — OpenAI (Responses API)", () => {
     const provider = new OpenAIResponsesProvider("sk-test", "gpt-4o");
     await provider.sendMessage(webSearchConversation());
 
-    const input = lastOpenAIResponsesParams!.input as Array<{
-      type: string;
-    }>;
+    const input = lastOpenAIResponsesParams!.input;
 
     const functionCallItems = input.filter(
       (item) => item.type === "function_call",
@@ -419,9 +432,7 @@ describe("Cross-Provider Web Search — OpenAI (Responses API, native mode)", ()
       tools,
     });
 
-    const sentTools = lastOpenAIResponsesParams!.tools as Array<
-      Record<string, unknown>
-    >;
+    const sentTools = lastOpenAIResponsesParams!.tools!;
     expect(sentTools).toHaveLength(2);
     // Non-web-search tools stay as function tools
     expect(sentTools[0]).toMatchObject({ type: "function", name: "file_read" });
@@ -435,11 +446,7 @@ describe("Cross-Provider Web Search — OpenAI (Responses API, native mode)", ()
     });
     await provider.sendMessage(webSearchConversation());
 
-    const input = lastOpenAIResponsesParams!.input as Array<{
-      type: string;
-      role?: string;
-      content?: Array<{ type: string; text?: string }>;
-    }>;
+    const input = lastOpenAIResponsesParams!.input;
 
     // server_tool_use in assistant history is still degraded to text placeholder
     const assistantItems = input.filter(
@@ -481,10 +488,7 @@ describe("Cross-Provider Web Search — OpenAI Chat Completions (compatibility)"
     const provider = new OpenAIChatCompletionsProvider("sk-test", "gpt-4o");
     await provider.sendMessage(webSearchConversation());
 
-    const messages = lastOpenAIChatParams!.messages as Array<{
-      role: string;
-      content: unknown;
-    }>;
+    const messages = lastOpenAIChatParams!.messages;
 
     const assistantMsg = messages.find((m) => m.role === "assistant");
     expect(assistantMsg).toBeDefined();
@@ -496,10 +500,7 @@ describe("Cross-Provider Web Search — OpenAI Chat Completions (compatibility)"
     const provider = new OpenAIChatCompletionsProvider("sk-test", "gpt-4o");
     await provider.sendMessage(webSearchConversation());
 
-    const messages = lastOpenAIChatParams!.messages as Array<{
-      role: string;
-      content: unknown;
-    }>;
+    const messages = lastOpenAIChatParams!.messages;
 
     const userMsgs = messages.filter((m) => m.role === "user");
     const hasWebSearchResult = userMsgs.some((m) => {
@@ -507,7 +508,7 @@ describe("Cross-Provider Web Search — OpenAI Chat Completions (compatibility)"
         return false;
       }
       if (Array.isArray(m.content)) {
-        return (m.content as Array<{ type: string; text?: string }>).some(
+        return m.content.some(
           (part) =>
             part.type === "text" && part.text === "[Web search results]",
         );
@@ -521,10 +522,7 @@ describe("Cross-Provider Web Search — OpenAI Chat Completions (compatibility)"
     const provider = new OpenAIChatCompletionsProvider("sk-test", "gpt-4o");
     await provider.sendMessage(webSearchConversation());
 
-    const messages = lastOpenAIChatParams!.messages as Array<{
-      role: string;
-      tool_calls?: unknown[];
-    }>;
+    const messages = lastOpenAIChatParams!.messages;
 
     const assistantMsg = messages.find((m) => m.role === "assistant");
     expect(assistantMsg).toBeDefined();
@@ -551,10 +549,7 @@ describe("Cross-Provider Web Search — Fireworks", () => {
       tools: sampleTools,
     });
 
-    const tools = lastOpenAIChatParams!.tools as Array<{
-      type: string;
-      function: { name: string; description?: string };
-    }>;
+    const tools = lastOpenAIChatParams!.tools!;
 
     expect(tools).toHaveLength(2);
     expect(tools[1]).toMatchObject({
@@ -580,10 +575,7 @@ describe("Cross-Provider Web Search — Gemini", () => {
     const provider = new GeminiProvider("key-test", "gemini-2.0-flash");
     await provider.sendMessage(webSearchConversation());
 
-    const contents = lastGeminiParams!.contents as Array<{
-      role: string;
-      parts: Array<{ text?: string; functionCall?: unknown }>;
-    }>;
+    const contents = lastGeminiParams!.contents;
 
     const modelContent = contents.find((c) => c.role === "model");
     expect(modelContent).toBeDefined();
@@ -603,10 +595,7 @@ describe("Cross-Provider Web Search — Gemini", () => {
     const provider = new GeminiProvider("key-test", "gemini-2.0-flash");
     await provider.sendMessage(webSearchConversation());
 
-    const contents = lastGeminiParams!.contents as Array<{
-      role: string;
-      parts: Array<{ text?: string }>;
-    }>;
+    const contents = lastGeminiParams!.contents;
 
     const userContents = contents.filter((c) => c.role === "user");
     const hasWebSearchResult = userContents.some((c) =>
@@ -619,10 +608,7 @@ describe("Cross-Provider Web Search — Gemini", () => {
     const provider = new GeminiProvider("key-test", "gemini-2.0-flash");
     await provider.sendMessage(webSearchResultOnlyMessage());
 
-    const contents = lastGeminiParams!.contents as Array<{
-      role: string;
-      parts: Array<{ text?: string; functionCall?: unknown }>;
-    }>;
+    const contents = lastGeminiParams!.contents;
 
     const modelContent = contents.find((c) => c.role === "model");
     expect(modelContent).toBeDefined();
@@ -642,10 +628,7 @@ describe("Cross-Provider Web Search — Gemini", () => {
     const provider = new GeminiProvider("key-test", "gemini-2.0-flash");
     await provider.sendMessage(webSearchConversation());
 
-    const contents = lastGeminiParams!.contents as Array<{
-      role: string;
-      parts: Array<{ text?: string; functionCall?: unknown }>;
-    }>;
+    const contents = lastGeminiParams!.contents;
 
     const modelContent = contents.find((c) => c.role === "model");
     expect(modelContent).toBeDefined();

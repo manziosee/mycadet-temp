@@ -3,12 +3,12 @@
  * IPC routes. Exercises input validation + error handling on the route
  * handlers directly (Codex review feedback on PR #30262).
  */
-
 import { utimesSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, mock, spyOn, test } from "bun:test";
 
 import * as allowlistModule from "../security/secret-allowlist.js";
+import { jsonObjectSchema } from "./helpers/json-object-schema.js";
 
 // ---------------------------------------------------------------------------
 // Mocks for handleSetConfig's transitive deps
@@ -90,7 +90,7 @@ describe("config_set route - request validation", () => {
       body: { path: "heartbeat.timezone", value: null },
     });
     expect(result).toEqual({ ok: true });
-    const heartbeat = loadRawConfig().heartbeat as Record<string, unknown>;
+    const heartbeat = jsonObjectSchema.parse(loadRawConfig().heartbeat);
     expect(heartbeat.timezone).toBeNull();
   });
 
@@ -122,7 +122,7 @@ describe("config_set route - request validation", () => {
       body: { path: "calls.enabled", value: true },
     });
     expect(result).toEqual({ ok: true });
-    const calls = loadRawConfig().calls as Record<string, unknown>;
+    const calls = jsonObjectSchema.parse(loadRawConfig().calls);
     expect(calls.enabled).toBe(true);
   });
 
@@ -155,7 +155,7 @@ describe("config_set route - request validation", () => {
     expect(result).toEqual({ ok: true });
 
     const saved = loadRawConfig();
-    const llm = saved.llm as Record<string, unknown>;
+    const llm = jsonObjectSchema.parse(saved.llm);
     expect(llm.activeProfile).toBe("my-custom-profile");
 
     const profiles = llm.profiles as Record<string, Record<string, unknown>>;
@@ -169,12 +169,10 @@ describe("config_set route - request validation", () => {
       model: "claude-sonnet-4-6",
     });
 
-    const memory = saved.memory as Record<string, unknown>;
-    expect((memory.embeddings as Record<string, unknown>).provider).toBe(
-      "openai",
-    );
+    const memory = jsonObjectSchema.parse(saved.memory);
+    expect(jsonObjectSchema.parse(memory.embeddings).provider).toBe("openai");
     expect(
-      (memory.cleanup as Record<string, unknown>).llmRequestLogRetentionMs,
+      jsonObjectSchema.parse(memory.cleanup).llmRequestLogRetentionMs,
     ).toBe(86400000);
   });
 
@@ -191,11 +189,11 @@ describe("config_set route - request validation", () => {
     // The write is schema-canonical: the parse materializes section defaults
     // around what the user set. The contract under test — a nested set may
     // not drop or mangle unrelated top-level keys — is asserted leaf-wise.
-    expect((saved.llm as Record<string, unknown>).default).toEqual({
+    expect(jsonObjectSchema.parse(saved.llm).default).toEqual({
       provider: "anthropic",
     });
-    expect((saved.calls as Record<string, unknown>).enabled).toBe(true);
-    const heartbeat = saved.heartbeat as Record<string, unknown>;
+    expect(jsonObjectSchema.parse(saved.calls).enabled).toBe(true);
+    const heartbeat = jsonObjectSchema.parse(saved.heartbeat);
     expect(heartbeat.activeHoursStart).toBe(9);
     expect(heartbeat.activeHoursEnd).toBe(22);
   });

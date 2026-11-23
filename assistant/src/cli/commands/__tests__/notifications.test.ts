@@ -1,5 +1,7 @@
 import { afterAll, beforeEach, describe, expect, mock, test } from "bun:test";
 
+import { jsonObjectSchema } from "../../../__tests__/helpers/json-object-schema.js";
+
 // ---------------------------------------------------------------------------
 // Test isolation: mock logger and IPC client
 // ---------------------------------------------------------------------------
@@ -78,9 +80,7 @@ async function runCommand(args: string[]): Promise<CommandResult> {
   const raw = await runRawCommand(["notifications", "--json", ...args]);
 
   const firstLine = raw.stdout.trim().split("\n")[0];
-  const parsed = firstLine
-    ? (JSON.parse(firstLine) as Record<string, unknown>)
-    : {};
+  const parsed = firstLine ? jsonObjectSchema.parse(JSON.parse(firstLine)) : {};
 
   return { parsed, stderr: raw.stderr, exitCode: raw.exitCode };
 }
@@ -128,7 +128,7 @@ async function runRawCommand(args: string[]): Promise<RawCommandResult> {
 function lastSendBody(): Record<string, unknown> {
   expect(ipcCalls).toHaveLength(1);
   expect(ipcCalls[0].method).toBe("emit_notification_signal");
-  return ipcCalls[0].params?.body as Record<string, unknown>;
+  return jsonObjectSchema.parse(ipcCalls[0].params?.body);
 }
 
 // ---------------------------------------------------------------------------
@@ -176,7 +176,7 @@ describe("notifications send", () => {
     const body = lastSendBody();
     expect(body.sourceChannel).toBe("assistant_tool");
     expect(body.sourceEventName).toBe("schedule.notify");
-    const payload = body.contextPayload as Record<string, unknown>;
+    const payload = jsonObjectSchema.parse(body.contextPayload);
     expect(payload.requestedMessage).toBe("Hello");
   });
 
@@ -198,7 +198,7 @@ describe("notifications send", () => {
     expect(exitCode).toBe(0);
     expect(parsed.ok).toBe(true);
 
-    const hints = lastSendBody().attentionHints as Record<string, unknown>;
+    const hints = jsonObjectSchema.parse(lastSendBody().attentionHints);
     expect(hints.urgency).toBe("high");
     expect(hints.requiresAction).toBe(true);
     expect(hints.isAsyncBackground).toBe(true);
@@ -220,7 +220,7 @@ describe("notifications send", () => {
     expect(exitCode).toBe(0);
     expect(parsed.ok).toBe(true);
 
-    const payload = lastSendBody().contextPayload as Record<string, unknown>;
+    const payload = jsonObjectSchema.parse(lastSendBody().contextPayload);
     expect(payload.preferredChannels).toEqual(["telegram", "slack"]);
   });
 
@@ -244,7 +244,7 @@ describe("notifications send", () => {
     expect(parsed.deliveryResults).toEqual([]);
     expect(parsed.receiptClass).toBe("unknown");
 
-    const payload = lastSendBody().contextPayload as Record<string, unknown>;
+    const payload = jsonObjectSchema.parse(lastSendBody().contextPayload);
     expect(payload.channelAllowlist).toEqual(["telegram"]);
     expect(payload.preferredChannels).toBeUndefined();
   });
@@ -423,7 +423,7 @@ describe("notifications send — minimal-surface ergonomics", () => {
     ]);
 
     expect(exitCode).toBe(0);
-    const hints = lastSendBody().attentionHints as Record<string, unknown>;
+    const hints = jsonObjectSchema.parse(lastSendBody().attentionHints);
     expect(hints.urgency).toBe("critical");
     expect(hints.requiresAction).toBe(true);
   });
@@ -435,7 +435,7 @@ describe("notifications send — minimal-surface ergonomics", () => {
     const body = lastSendBody();
     expect(body.sourceChannel).toBe("assistant_tool");
     // The context payload echoes the source channel via requestedBySource.
-    const payload = body.contextPayload as Record<string, unknown>;
+    const payload = jsonObjectSchema.parse(body.contextPayload);
     expect(payload.requestedBySource).toBe("assistant_tool");
   });
 
@@ -456,7 +456,7 @@ describe("notifications send — minimal-surface ergonomics", () => {
     ]);
 
     expect(exitCode).toBe(0);
-    const hints = lastSendBody().attentionHints as Record<string, unknown>;
+    const hints = jsonObjectSchema.parse(lastSendBody().attentionHints);
     expect(hints.urgency).toBe("high");
     // Without --urgent or --requires-action, requiresAction stays at the new
     // default of false.
@@ -474,7 +474,7 @@ describe("notifications send — minimal-surface ergonomics", () => {
     ]);
 
     expect(exitCode).toBe(0);
-    const hints = lastSendBody().attentionHints as Record<string, unknown>;
+    const hints = jsonObjectSchema.parse(lastSendBody().attentionHints);
     expect(hints.urgency).toBe("medium");
     // --urgent still flips requiresAction since no explicit flag was passed.
     expect(hints.requiresAction).toBe(true);
@@ -490,7 +490,7 @@ describe("notifications send — minimal-surface ergonomics", () => {
     ]);
 
     expect(exitCode).toBe(0);
-    const hints = lastSendBody().attentionHints as Record<string, unknown>;
+    const hints = jsonObjectSchema.parse(lastSendBody().attentionHints);
     expect(hints.urgency).toBe("critical");
     expect(hints.requiresAction).toBe(false);
   });
@@ -578,7 +578,7 @@ describe("notifications list", () => {
 
     await runCommand(["list"]);
 
-    const body = ipcCalls[0].params?.body as Record<string, unknown>;
+    const body = jsonObjectSchema.parse(ipcCalls[0].params?.body);
     expect(body.includeDismissed).toBeUndefined();
     expect(body.statuses).toBeUndefined();
   });
@@ -588,7 +588,7 @@ describe("notifications list", () => {
 
     await runCommand(["list", "--all"]);
 
-    const body = ipcCalls[0].params?.body as Record<string, unknown>;
+    const body = jsonObjectSchema.parse(ipcCalls[0].params?.body);
     expect(body.includeDismissed).toBe(true);
   });
 
@@ -597,7 +597,7 @@ describe("notifications list", () => {
 
     await runCommand(["list", "--status", "new", "--status", "acted_on"]);
 
-    const body = ipcCalls[0].params?.body as Record<string, unknown>;
+    const body = jsonObjectSchema.parse(ipcCalls[0].params?.body);
     expect(body.statuses).toEqual(["new", "acted_on"]);
   });
 
@@ -625,7 +625,7 @@ describe("notifications list", () => {
       "2026-05-29T00:00:00Z",
     ]);
 
-    const body = ipcCalls[0].params?.body as Record<string, unknown>;
+    const body = jsonObjectSchema.parse(ipcCalls[0].params?.body);
     expect(body.after).toBe("2026-05-28T00:00:00Z");
     expect(body.before).toBe("2026-05-29T00:00:00Z");
   });
@@ -635,7 +635,7 @@ describe("notifications list", () => {
 
     await runCommand(["list", "--urgency", "high", "--urgency", "critical"]);
 
-    const body = ipcCalls[0].params?.body as Record<string, unknown>;
+    const body = jsonObjectSchema.parse(ipcCalls[0].params?.body);
     expect(body.urgencies).toEqual(["high", "critical"]);
   });
 
@@ -663,7 +663,7 @@ describe("notifications list", () => {
       "scheduling",
     ]);
 
-    const body = ipcCalls[0].params?.body as Record<string, unknown>;
+    const body = jsonObjectSchema.parse(ipcCalls[0].params?.body);
     expect(body.categories).toEqual(["email", "scheduling"]);
   });
 
@@ -678,7 +678,7 @@ describe("notifications list", () => {
       "--noteworthy",
     ]);
 
-    const body = ipcCalls[0].params?.body as Record<string, unknown>;
+    const body = jsonObjectSchema.parse(ipcCalls[0].params?.body);
     expect(body.conversationId).toBe("conv-abc");
     expect(body.fromAssistant).toBe(true);
     expect(body.noteworthy).toBe(true);
@@ -689,7 +689,7 @@ describe("notifications list", () => {
 
     await runCommand(["list", "--limit", "5", "--offset", "10"]);
 
-    const body = ipcCalls[0].params?.body as Record<string, unknown>;
+    const body = jsonObjectSchema.parse(ipcCalls[0].params?.body);
     expect(body.limit).toBe(5);
     expect(body.offset).toBe(10);
   });

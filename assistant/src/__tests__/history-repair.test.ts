@@ -954,9 +954,9 @@ describe("repairHistory", () => {
     ];
 
     const { messages: repaired } = repairHistory(messages);
-    const downgraded = repaired[1].content.find((b) => b.type === "text") as
-      | { text: string }
-      | undefined;
+    const downgraded: { text: string } | undefined = repaired[1].content.find(
+      (b) => b.type === "text",
+    );
     expect(downgraded).toBeDefined();
     expect(downgraded!.text).toContain("Alpha");
     expect(downgraded!.text).toContain("https://alpha.test");
@@ -985,9 +985,9 @@ describe("repairHistory", () => {
     ];
 
     const { messages: repaired } = repairHistory(messages);
-    const downgraded = repaired[1].content.find((b) => b.type === "text") as
-      | { text: string }
-      | undefined;
+    const downgraded: { text: string } | undefined = repaired[1].content.find(
+      (b) => b.type === "text",
+    );
     expect(downgraded).toBeDefined();
     expect(downgraded!.text).toContain("srvtoolu_err");
     expect(downgraded!.text).toContain("results unavailable");

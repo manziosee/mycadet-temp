@@ -56,17 +56,21 @@ export function migrateMemoryV2InjectionEvents(database: DrizzleDb): void {
   // exist, do not append duplicates. The step runner normally skips
   // already-applied migrations; this guards the manual-clear path.
   const existing = raw
-    .query(`SELECT COUNT(*) as n FROM memory_v2_injection_events`)
-    .get() as { n: number };
+    .query<
+      { n: number },
+      []
+    >(`SELECT COUNT(*) as n FROM memory_v2_injection_events`)
+    .get()!;
   if (existing.n > 0) {
     return;
   }
 
   const rows = raw
-    .query(
-      `SELECT concepts_json, created_at FROM memory_v2_activation_logs ORDER BY created_at ASC`,
-    )
-    .all() as Array<{ concepts_json: string; created_at: number }>;
+    .query<
+      { concepts_json: string; created_at: number },
+      []
+    >(`SELECT concepts_json, created_at FROM memory_v2_activation_logs ORDER BY created_at ASC`)
+    .all();
   if (rows.length === 0) {
     return;
   }

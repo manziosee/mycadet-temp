@@ -251,10 +251,10 @@ describe("resolveUserSlug (guardian trust, no requester identity)", () => {
   test("guardian trust context without requesterExternalUserId resolves the guardian user file", () => {
     seedCadetGuardian("alice.md");
 
-    const trustContext = {
+    const trustContext: TrustContext = {
       sourceChannel: "cadet",
       trustClass: "guardian",
-    } as TrustContext;
+    };
 
     expect(resolveUserSlug(trustContext)).toBe("alice");
   });
@@ -262,10 +262,10 @@ describe("resolveUserSlug (guardian trust, no requester identity)", () => {
   test("non-guardian trust context without requesterExternalUserId does not borrow the guardian persona", () => {
     seedCadetGuardian("alice.md");
 
-    const trustContext = {
+    const trustContext: TrustContext = {
       sourceChannel: "cadet",
       trustClass: "trusted_contact",
-    } as TrustContext;
+    };
 
     expect(resolveUserSlug(trustContext)).toBeNull();
   });
@@ -279,11 +279,11 @@ describe("resolveUserSlug (guardian trust, no requester identity)", () => {
       userFile: "alice.md",
     };
 
-    const trustContext = {
+    const trustContext: TrustContext = {
       sourceChannel: "telegram",
       trustClass: "guardian",
       guardianExternalUserId: "guardian-tg",
-    } as TrustContext;
+    };
 
     expect(resolveUserSlug(trustContext)).toBe("alice");
   });
@@ -291,10 +291,10 @@ describe("resolveUserSlug (guardian trust, no requester identity)", () => {
   test("falls back to the channel guardian when the verdict carries no guardian identity", () => {
     seedCadetGuardian("alice.md");
 
-    const trustContext = {
+    const trustContext: TrustContext = {
       sourceChannel: "cadet",
       trustClass: "guardian",
-    } as TrustContext;
+    };
 
     expect(resolveUserSlug(trustContext)).toBe("alice");
   });
@@ -317,12 +317,12 @@ describe("resolveUserSlug (guardian trust WITH requester identity)", () => {
     // The requester principal id resolves to that same null-userFile contact.
     mockContactsByAddress["cadet:principal-123"] = { userFile: null };
 
-    const trustContext = {
+    const trustContext: TrustContext = {
       sourceChannel: "cadet",
       trustClass: "guardian",
       requesterExternalUserId: "principal-123",
       guardianExternalUserId: "cadet:self",
-    } as TrustContext;
+    };
 
     expect(resolveUserSlug(trustContext)).toBe("guardian");
   });
@@ -331,12 +331,12 @@ describe("resolveUserSlug (guardian trust WITH requester identity)", () => {
     seedCadetGuardian(null);
     mockContactsByAddress["cadet:principal-123"] = { userFile: "alice.md" };
 
-    const trustContext = {
+    const trustContext: TrustContext = {
       sourceChannel: "cadet",
       trustClass: "guardian",
       requesterExternalUserId: "principal-123",
       guardianExternalUserId: "cadet:self",
-    } as TrustContext;
+    };
 
     expect(resolveUserSlug(trustContext)).toBe("alice");
   });
@@ -345,12 +345,12 @@ describe("resolveUserSlug (guardian trust WITH requester identity)", () => {
     seedCadetGuardian(null);
     mockContactsByAddress["cadet:principal-123"] = { userFile: null };
 
-    const trustContext = {
+    const trustContext: TrustContext = {
       sourceChannel: "cadet",
       trustClass: "trusted_contact",
       requesterExternalUserId: "principal-123",
       guardianExternalUserId: "cadet:self",
-    } as TrustContext;
+    };
 
     expect(resolveUserSlug(trustContext)).toBeNull();
   });
@@ -370,10 +370,10 @@ describe("resolveUserSlug (guardian bound on a non-cadet channel)", () => {
     ];
     mockContactsByAddress["telegram:guardian-tg"] = { userFile: "alice.md" };
 
-    const trustContext = {
+    const trustContext: TrustContext = {
       sourceChannel: "cadet",
       trustClass: "guardian",
-    } as TrustContext;
+    };
 
     expect(resolveUserSlug(trustContext)).toBe("alice");
   });
@@ -384,10 +384,10 @@ describe("resolveUserSlug (guardian bound on a non-cadet channel)", () => {
     ];
     mockContactsByAddress["telegram:guardian-tg"] = { userFile: null };
 
-    const trustContext = {
+    const trustContext: TrustContext = {
       sourceChannel: "cadet",
       trustClass: "guardian",
-    } as TrustContext;
+    };
 
     expect(resolveUserSlug(trustContext)).toBe("guardian");
   });
@@ -406,10 +406,10 @@ describe("resolveUserSlug (cold cache, background shape)", () => {
     ];
     mockContactsByAddress["cadet:cadet:self"] = { userFile: "alice.md" };
 
-    const trustContext = {
+    const trustContext: TrustContext = {
       sourceChannel: "cadet",
       trustClass: "guardian",
-    } as TrustContext;
+    };
 
     // Cold: the sync peek finds nothing and the slug falls back to default.
     expect(resolveUserSlug(trustContext)).toBeNull();

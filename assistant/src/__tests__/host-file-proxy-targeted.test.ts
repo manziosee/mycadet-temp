@@ -291,9 +291,7 @@ describe("HostFileProxy — targetClientId (Phase 2)", () => {
 
     const sent = sentMessages[0];
     expect(sent.targetClientId).toBe("client-1");
-    const options = sentMessageOptions[0] as
-      | Record<string, unknown>
-      | undefined;
+    const options: Record<string, unknown> | undefined = sentMessageOptions[0];
     expect(options?.targetClientId).toBe("client-1");
 
     proxy.resolve(messageIdSchema.parse(sent.requestId), {
@@ -333,9 +331,8 @@ describe("HostFileProxy — targetClientId (Phase 2)", () => {
       expect(cancelMsg.requestId).toBe(requestId);
       expect(cancelMsg.targetClientId).toBe("client-abc");
 
-      const cancelOpts = sentMessageOptions[1] as
-        | Record<string, unknown>
-        | undefined;
+      const cancelOpts: Record<string, unknown> | undefined =
+        sentMessageOptions[1];
       expect(cancelOpts?.targetClientId).toBe("client-abc");
     });
   });

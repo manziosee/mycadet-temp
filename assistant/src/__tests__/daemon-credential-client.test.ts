@@ -30,6 +30,10 @@ import { credentialKey } from "../security/credential-key.js";
 import { getSecureKeyAsync } from "../security/secure-keys.js";
 import { useMemorySecureKeys } from "./helpers/secure-keys.js";
 
+function capturedIpcCall() {
+  return _lastIpcCall;
+}
+
 describe("daemon credential client", () => {
   beforeEach(() => {
     // The daemon-unreachable fallback writes through secure-keys.js, which
@@ -198,10 +202,7 @@ describe("daemon credential client", () => {
         "secret-pem-value",
       );
 
-      const captured = _lastIpcCall as {
-        method: string;
-        params: unknown;
-      } | null;
+      const captured = capturedIpcCall();
       expect(captured).not.toBeNull();
       expect(captured?.method).toBe("secrets_add");
       expect(captured?.params).toEqual({
@@ -219,10 +220,7 @@ describe("daemon credential client", () => {
 
       await deleteSecureKeyViaDaemon("credential", "github-app:pem");
 
-      const captured = _lastIpcCall as {
-        method: string;
-        params: unknown;
-      } | null;
+      const captured = capturedIpcCall();
       expect(captured).not.toBeNull();
       expect(captured?.method).toBe("secrets_delete");
       expect(captured?.params).toEqual({
@@ -239,10 +237,7 @@ describe("daemon credential client", () => {
       await deleteSecureKeyViaDaemon("api_key", "agentrouter", true);
 
       // THEN `force` rides along in the request body
-      const captured = _lastIpcCall as {
-        method: string;
-        params: unknown;
-      } | null;
+      const captured = capturedIpcCall();
       expect(captured?.params).toEqual({
         body: { type: "api_key", name: "agentrouter", force: true },
       });

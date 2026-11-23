@@ -429,7 +429,7 @@ describe("GET /v1/suggestion", () => {
     await handleGetSuggestion(args, deps);
 
     expect(provider.sendMessage).toHaveBeenCalledTimes(1);
-    const callArgs = provider.sendMessage.mock.calls[0] as unknown[];
+    const callArgs: unknown[] = provider.sendMessage.mock.calls[0];
     const messages = callArgs[0] as Array<{
       role: string;
       content: Array<{ type: string; text: string }>;
@@ -482,7 +482,7 @@ describe("GET /v1/suggestion", () => {
     const deps = makeDeps();
     await handleGetSuggestion(args, deps);
 
-    const callArgs = provider.sendMessage.mock.calls[0] as unknown[];
+    const callArgs: unknown[] = provider.sendMessage.mock.calls[0];
     const messages = callArgs[0] as Array<{
       content: Array<{ text: string }>;
     }>;
@@ -516,7 +516,7 @@ describe("GET /v1/suggestion", () => {
     const deps = makeDeps();
     await handleGetSuggestion(args, deps);
 
-    const callArgs = provider.sendMessage.mock.calls[0] as unknown[];
+    const callArgs: unknown[] = provider.sendMessage.mock.calls[0];
     const messages = callArgs[0] as Array<{
       content: Array<{ text: string }>;
     }>;
@@ -548,7 +548,7 @@ describe("GET /v1/suggestion", () => {
     await handleGetSuggestion(args, deps);
 
     expect(provider.sendMessage).toHaveBeenCalledTimes(1);
-    const callArgs = provider.sendMessage.mock.calls[0] as unknown[];
+    const callArgs: unknown[] = provider.sendMessage.mock.calls[0];
     const options = callArgs[1] as
       | { config?: { callSite?: string } }
       | undefined;
@@ -586,7 +586,7 @@ describe("GET /v1/suggestion", () => {
     await handleGetSuggestion(args, deps);
 
     expect(provider.sendMessage).toHaveBeenCalledTimes(1);
-    const callArgs = provider.sendMessage.mock.calls[0] as unknown[];
+    const callArgs: unknown[] = provider.sendMessage.mock.calls[0];
     const options = callArgs[1] as
       | {
           config?: {
@@ -628,7 +628,7 @@ describe("GET /v1/suggestion", () => {
     const response = await handleGetSuggestion(args, deps);
 
     expect(provider.sendMessage).toHaveBeenCalledTimes(1);
-    const callArgs = provider.sendMessage.mock.calls[0] as unknown[];
+    const callArgs: unknown[] = provider.sendMessage.mock.calls[0];
     const messages = callArgs[0] as Array<{ role: string }>;
     expect(messages).toHaveLength(1);
     expect(messages[0].role).toBe("user");

@@ -123,7 +123,7 @@ function makeToolCallRow(
   input: Record<string, unknown>,
 ): MessageRow {
   return makeAssistantRow(
-    [{ type: "tool_use", id: `tu-${name}`, name, input }] as ContentBlock[],
+    [{ type: "tool_use", id: `tu-${name}`, name, input }],
     { id: `msg-${name}`, createdAt: RUN_STARTED_AT + 100 },
   );
 }
@@ -138,7 +138,7 @@ function makeToolResultRow(name: string, isError = false): MessageRow {
         content: isError ? "failed" : "ok",
         ...(isError ? { is_error: true } : {}),
       },
-    ] as ContentBlock[],
+    ],
     {
       id: `res-${name}`,
       role: "user",
@@ -226,7 +226,7 @@ beforeEach(() => {
   attentionState = makeAttentionState();
   assistantRow = makeAssistantRow([
     { type: "text", text: "**3 new emails** and one calendar change." },
-  ] as ContentBlock[]);
+  ]);
 });
 
 describe("emitScheduleResultNotification", () => {
@@ -251,7 +251,7 @@ describe("emitScheduleResultNotification", () => {
         type: "text",
         text: "Inbox pass:**\\n\\n•** First item worth review.",
       },
-    ] as ContentBlock[]);
+    ]);
 
     await run();
 
@@ -290,7 +290,7 @@ describe("emitScheduleResultNotification", () => {
     toolResultRows = [makeToolResultRow("messaging_send")];
     assistantRow = makeAssistantRow([
       { type: "text", text: "Sent the digest to your inbox." },
-    ] as ContentBlock[]);
+    ]);
 
     await run();
 
@@ -308,7 +308,7 @@ describe("emitScheduleResultNotification", () => {
     toolResultRows = [makeToolResultRow("messaging_send")];
     assistantRow = makeAssistantRow([
       { type: "text", text: "Posted the digest to #general." },
-    ] as ContentBlock[]);
+    ]);
 
     await run();
 
@@ -329,7 +329,7 @@ describe("emitScheduleResultNotification", () => {
     toolResultRows = [makeToolResultRow("messaging_send", true)];
     assistantRow = makeAssistantRow([
       { type: "text", text: "I could not post the digest to #general." },
-    ] as ContentBlock[]);
+    ]);
 
     await run();
 
@@ -352,7 +352,7 @@ describe("emitScheduleResultNotification", () => {
     toolResultRows = [];
     assistantRow = makeAssistantRow([
       { type: "text", text: "Here is the digest." },
-    ] as ContentBlock[]);
+    ]);
 
     await run();
 
@@ -372,7 +372,7 @@ describe("emitScheduleResultNotification", () => {
     toolResultRows = [makeToolResultRow("bash")];
     assistantRow = makeAssistantRow([
       { type: "text", text: "Posted the digest to #general." },
-    ] as ContentBlock[]);
+    ]);
 
     await run();
 
@@ -398,7 +398,7 @@ describe("emitScheduleResultNotification", () => {
     // A reused conversation whose current run wrote no reply: the attention
     // state still points at yesterday's, which must not be re-sent as today's.
     assistantRow = makeAssistantRow(
-      [{ type: "text", text: "Yesterday's briefing." }] as ContentBlock[],
+      [{ type: "text", text: "Yesterday's briefing." }],
       { createdAt: RUN_STARTED_AT - 1 },
     );
 
@@ -418,9 +418,7 @@ describe("emitScheduleResultNotification", () => {
   test("stays silent when the reply flattens to nothing", async () => {
     // A run that ended on tool calls with no closing prose: whitespace and
     // markdown scaffolding only. Nothing to say, so nothing is said.
-    assistantRow = makeAssistantRow([
-      { type: "text", text: "   \n\n  \n" },
-    ] as ContentBlock[]);
+    assistantRow = makeAssistantRow([{ type: "text", text: "   \n\n  \n" }]);
 
     await run();
 
@@ -432,7 +430,7 @@ describe("emitScheduleResultNotification", () => {
     // user picked this cadence; a run with a real finding still reports.
     assistantRow = makeAssistantRow([
       { type: "text", text: "No new mail since yesterday." },
-    ] as ContentBlock[]);
+    ]);
 
     await run();
 
@@ -445,7 +443,7 @@ describe("emitScheduleResultNotification", () => {
   test("keeps markdown in the body so the detail panel renders it", async () => {
     assistantRow = makeAssistantRow([
       { type: "text", text: "- **PR #12** merged\n- `deploy.sh` failed" },
-    ] as ContentBlock[]);
+    ]);
 
     await run();
 
@@ -482,9 +480,7 @@ describe("emitScheduleResultNotification", () => {
   });
 
   test("truncates a runaway reply rather than carrying it whole", async () => {
-    assistantRow = makeAssistantRow([
-      { type: "text", text: "y".repeat(5000) },
-    ] as ContentBlock[]);
+    assistantRow = makeAssistantRow([{ type: "text", text: "y".repeat(5000) }]);
 
     await run();
 

@@ -1261,7 +1261,7 @@ describeWithApi("Token estimator accuracy (requires ANTHROPIC_API_KEY)", () => {
   test("estimation gap with tools: old vs new estimator", async () => {
     const systemPrompt = makeSystemPrompt();
     const messages = makeConversationMessages();
-    const tools = makeToolDefinitions() as ToolDefinition[];
+    const tools: ToolDefinition[] = makeToolDefinitions();
 
     const toolTokenBudget = estimateToolsTokens(tools);
 
@@ -1369,8 +1369,8 @@ describeWithApi("Token estimator accuracy (requires ANTHROPIC_API_KEY)", () => {
   test("production-scale scenario: old vs new estimator with 160 tools", async () => {
     const systemPrompt = makeSystemPrompt("production");
     const messages = makeConversationMessages();
-    const baseTools = makeToolDefinitions() as ToolDefinition[];
-    const extraTools = generateBundledSkillTools(123) as ToolDefinition[];
+    const baseTools: ToolDefinition[] = makeToolDefinitions();
+    const extraTools: ToolDefinition[] = generateBundledSkillTools(123);
     const tools = [...baseTools, ...extraTools];
 
     const toolTokenBudget = estimateToolsTokens(tools);

@@ -722,8 +722,8 @@ describe("markSurfaceCompleted in-memory patching", () => {
 
   test("marks only the newest in-memory copy of a duplicated surfaceId", () => {
     const surfaceId = "surface-duplicated-1";
-    const older = { type: "ui_surface", surfaceId } as Record<string, unknown>;
-    const newer = { type: "ui_surface", surfaceId } as Record<string, unknown>;
+    const older: Record<string, unknown> = { type: "ui_surface", surfaceId };
+    const newer: Record<string, unknown> = { type: "ui_surface", surfaceId };
     const messages = [{ content: [older] }, { content: [newer] }];
 
     markSurfaceCompleted(
@@ -742,7 +742,7 @@ describe("markSurfaceCompleted in-memory patching", () => {
   test("leaves in-memory messages pending when the persisted write throws", () => {
     const surfaceId = "surface-rollback-1";
     seedSurfaceRow(surfaceId, "choice");
-    const block = { type: "ui_surface", surfaceId } as Record<string, unknown>;
+    const block: Record<string, unknown> = { type: "ui_surface", surfaceId };
     persistError = new Error("database is locked");
 
     expect(
@@ -762,7 +762,7 @@ describe("markSurfaceCompleted in-memory patching", () => {
 
   test("patches in-memory messages when there is no persisted block to write", () => {
     const surfaceId = "surface-memory-only-1";
-    const block = { type: "ui_surface", surfaceId } as Record<string, unknown>;
+    const block: Record<string, unknown> = { type: "ui_surface", surfaceId };
 
     expect(
       markSurfaceCompleted(

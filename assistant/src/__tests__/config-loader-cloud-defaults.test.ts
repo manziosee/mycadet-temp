@@ -138,7 +138,7 @@ describe("cloud-managed config defaults", () => {
     getConfig();
 
     expect(existsSync(CONFIG_PATH)).toBe(true);
-    const written = readConfig() as { services?: Record<string, unknown> };
+    const written: { services?: Record<string, unknown> } = readConfig();
     expect(written.services).toBeDefined();
     const services = written.services!;
     for (const svc of MANAGED_SERVICES) {
@@ -164,7 +164,7 @@ describe("cloud-managed config defaults", () => {
     getConfig();
 
     expect(existsSync(CONFIG_PATH)).toBe(true);
-    const written = readConfig() as { services?: Record<string, unknown> };
+    const written: { services?: Record<string, unknown> } = readConfig();
     expect(written.services).toBeDefined();
     const services = written.services!;
     for (const svc of SCHEMA_YOUR_OWN_DEFAULT_SERVICES) {
@@ -181,7 +181,7 @@ describe("cloud-managed config defaults", () => {
     getConfig();
 
     expect(existsSync(CONFIG_PATH)).toBe(true);
-    const written = readConfig() as { services?: Record<string, unknown> };
+    const written: { services?: Record<string, unknown> } = readConfig();
     expect(written.services).toBeDefined();
     const services = written.services!;
     for (const svc of SCHEMA_YOUR_OWN_DEFAULT_SERVICES) {
@@ -211,7 +211,7 @@ describe("cloud-managed config defaults", () => {
 
     const config = getConfig();
 
-    const written = readConfig() as { services?: Record<string, unknown> };
+    const written: { services?: Record<string, unknown> } = readConfig();
     expect(written.services).toBeDefined();
     // The raw value must be preserved — backfill path, not fresh-write path.
     // (Migration 134 rewrites this legacy shape at daemon startup; the loader
@@ -248,7 +248,7 @@ describe("cloud-managed config defaults", () => {
 
     const config = getConfig();
 
-    const written = readConfig() as { services?: Record<string, unknown> };
+    const written: { services?: Record<string, unknown> } = readConfig();
     expect(written.services).toBeDefined();
     expect((written.services!["notion-oauth"] as { mode?: string })?.mode).toBe(
       "your-own",
