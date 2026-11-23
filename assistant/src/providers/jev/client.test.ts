@@ -1,3 +1,4 @@
+import assert from "node:assert/strict";
 import { afterEach, describe, expect, test } from "bun:test";
 
 import { ProviderError } from "../../util/errors.js";
@@ -260,8 +261,8 @@ describe("JevProvider.sendMessage", () => {
       ]);
       throw new Error("expected sendMessage to throw");
     } catch (error) {
-      expect(error).toBeInstanceOf(ProviderError);
-      const providerError = error as ProviderError;
+      assert(error instanceof ProviderError, "Expected ProviderError");
+      const providerError = error;
       expect(providerError.statusCode).toBe(401);
       expect(providerError.reason).toBe("invalid_credentials");
       expect(providerError.message).toBe("bad key");

@@ -66,11 +66,7 @@ interface RelayTtsFrame {
  * daemon-minted gateway service token), so no headers are needed.
  */
 function createWebSocket(url: string): WsLike {
-  const WebSocketCtor = (
-    globalThis as unknown as {
-      WebSocket: new (url: string) => WsLike;
-    }
-  ).WebSocket;
+  const WebSocketCtor = globalThis.WebSocket;
   if (typeof WebSocketCtor !== "function") {
     throw new Error("global WebSocket is not available in this runtime");
   }
@@ -284,7 +280,7 @@ export function synthesizeOverCadetTtsSocket(
         return;
       }
       if (ArrayBuffer.isView(ev.data)) {
-        const view = ev.data as ArrayBufferView;
+        const view = ev.data;
         const chunk = Buffer.from(
           view.buffer,
           view.byteOffset,

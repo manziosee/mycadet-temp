@@ -91,7 +91,7 @@ function handleConfirm({ body }: RouteHandlerArgs) {
       requestId,
       effectiveDecision === "allow" ? "approved" : "rejected",
     );
-    interaction.directResolve(effectiveDecision as UserDecision);
+    interaction.directResolve(effectiveDecision);
     // When a guardian request was promoted for this confirmation, bring its
     // row to the matching terminal status and withdraw its cards; with no
     // such row the CAS misses and this is a no-op.
@@ -110,13 +110,9 @@ function handleConfirm({ body }: RouteHandlerArgs) {
     );
   }
 
-  conversation.handleConfirmationResponse(
-    requestId,
-    effectiveDecision as UserDecision,
-    {
-      emissionContext: { source: "button" },
-    },
-  );
+  conversation.handleConfirmationResponse(requestId, effectiveDecision, {
+    emissionContext: { source: "button" },
+  });
 
   return { accepted: true };
 }
@@ -164,9 +160,7 @@ function handleSecret({ body }: RouteHandlerArgs) {
   }
 
   const effectiveDelivery =
-    isCancel || delivery === undefined
-      ? undefined
-      : (delivery as "store" | "transient_send");
+    isCancel || delivery === undefined ? undefined : delivery;
 
   const interaction = pendingInteractions.get(requestId);
   if (!interaction) {

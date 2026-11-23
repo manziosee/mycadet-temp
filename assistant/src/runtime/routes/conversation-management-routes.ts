@@ -213,7 +213,7 @@ async function handleForkConversation({
   try {
     const forkedConversation = forkConversationInStore({
       conversationId: resolvedConversationId,
-      throughMessageId: body.throughMessageId as string | undefined,
+      throughMessageId: body.throughMessageId,
     });
     const detail = buildConversationDetailResponse(forkedConversation.id);
     if (!detail) {
@@ -264,14 +264,14 @@ async function handleSetInferenceProfile({
 }: RouteHandlerArgs) {
   if (
     body.profile !== null &&
-    (typeof body.profile !== "string" || (body.profile as string).length === 0)
+    (typeof body.profile !== "string" || body.profile.length === 0)
   ) {
     throw new BadRequestError("profile must be a non-empty string or null");
   }
 
   return setInferenceProfileSession({
     conversationId: pathParams.id!,
-    profile: body.profile as string | null,
+    profile: body.profile,
     ttlSeconds: body.ttlSeconds as number | null | undefined,
     sessionId: body.sessionId as string | undefined,
     originClientId: headers?.["x-cadet-client-id"]?.trim() || undefined,

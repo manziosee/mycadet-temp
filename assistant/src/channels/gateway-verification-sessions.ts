@@ -113,7 +113,7 @@ export async function createOutboundSession(
 ): Promise<CreateOutboundSessionResult> {
   return callGateway(
     VERIFICATION_SESSIONS_IPC_METHODS.createOutbound,
-    params as unknown as Record<string, unknown>,
+    params,
     CreateOutboundSessionIpcResponseSchema,
   );
 }
@@ -131,7 +131,7 @@ export async function createOutboundSessionConditional(
 ): Promise<CreateOutboundSessionResult | CreateOutboundSessionConflict> {
   return callGateway(
     VERIFICATION_SESSIONS_IPC_METHODS.createOutbound,
-    params as unknown as Record<string, unknown>,
+    params,
     CreateOutboundSessionConditionalIpcResponseSchema,
   );
 }

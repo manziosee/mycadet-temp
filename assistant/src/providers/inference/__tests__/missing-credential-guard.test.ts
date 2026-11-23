@@ -1,9 +1,9 @@
+import assert from "node:assert/strict";
 /**
  * A connection whose credential was force-deleted must fail its next send with
  * an actionable configuration error. Upstreams that answer an unusable key with
  * `200` and empty content otherwise reach the user as a blank assistant turn.
  */
-
 import { beforeEach, describe, expect, test } from "bun:test";
 
 import { useMemorySecureKeys } from "../../../__tests__/helpers/secure-keys.js";
@@ -72,8 +72,11 @@ describe("missing credential guard", () => {
       () => null,
       (err: unknown) => err,
     );
-    expect(error).toBeInstanceOf(ConnectionResolutionError);
-    const resolution = error as ConnectionResolutionError;
+    assert(
+      error instanceof ConnectionResolutionError,
+      "Expected ConnectionResolutionError",
+    );
+    const resolution = error;
     expect(resolution.reason).toBe("missing_credential");
     expect(resolution.connectionName).toBe(CONNECTION_NAME);
 

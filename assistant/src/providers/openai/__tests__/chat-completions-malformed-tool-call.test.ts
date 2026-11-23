@@ -1,3 +1,4 @@
+import assert from "node:assert/strict";
 import { describe, expect, test } from "bun:test";
 
 import { ProviderError } from "../../../util/errors.js";
@@ -77,8 +78,8 @@ describe("OpenAIChatCompletionsProvider malformed tool-call finish", () => {
       (e: unknown) => e,
     );
 
-    expect(error).toBeInstanceOf(ProviderError);
-    const providerError = error as ProviderError;
+    assert(error instanceof ProviderError, "Expected ProviderError");
+    const providerError = error;
     expect(providerError.statusCode).toBeUndefined();
     expect(providerError.message).toContain(MALFORMED_TOOL_CALL_MESSAGE);
     expect(providerError.message).toContain("MALFORMED_FUNCTION_CALL");

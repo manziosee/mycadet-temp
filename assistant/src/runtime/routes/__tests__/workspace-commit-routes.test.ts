@@ -6,9 +6,9 @@
  * (→ 400) without running any git operation. The handlers are async,
  * hence the `.rejects` form.
  */
-
 import { describe, expect, test } from "bun:test";
 
+import { jsonObjectSchema } from "../../../__tests__/helpers/json-object-schema.js";
 import { BadRequestError } from "../errors.js";
 import { ROUTES } from "../workspace-commit-routes.js";
 
@@ -24,7 +24,7 @@ describe("workspace git route body validation", () => {
   test("workspace_commit rejects a missing message", async () => {
     await expect(
       routeFor("workspace_commit").handler({
-        body: {} as Record<string, unknown>,
+        body: jsonObjectSchema.parse({}),
       }),
     ).rejects.toThrow(BadRequestError);
   });
@@ -32,7 +32,7 @@ describe("workspace git route body validation", () => {
   test("workspace_commit rejects an empty message", async () => {
     await expect(
       routeFor("workspace_commit").handler({
-        body: { message: "" } as Record<string, unknown>,
+        body: jsonObjectSchema.parse({ message: "" }),
       }),
     ).rejects.toThrow(BadRequestError);
   });
@@ -40,7 +40,7 @@ describe("workspace git route body validation", () => {
   test("workspace_compact_history rejects a non-boolean force", async () => {
     await expect(
       routeFor("workspace_compact_history").handler({
-        body: { force: "yes" } as Record<string, unknown>,
+        body: jsonObjectSchema.parse({ force: "yes" }),
       }),
     ).rejects.toThrow(BadRequestError);
   });
@@ -48,7 +48,7 @@ describe("workspace git route body validation", () => {
   test("workspace_compact_history rejects a non-integer retentionDays", async () => {
     await expect(
       routeFor("workspace_compact_history").handler({
-        body: { retentionDays: 1.5 } as Record<string, unknown>,
+        body: jsonObjectSchema.parse({ retentionDays: 1.5 }),
       }),
     ).rejects.toThrow(BadRequestError);
   });
@@ -56,7 +56,7 @@ describe("workspace git route body validation", () => {
   test("workspace_compact_history rejects a non-positive retentionDays", async () => {
     await expect(
       routeFor("workspace_compact_history").handler({
-        body: { retentionDays: 0 } as Record<string, unknown>,
+        body: jsonObjectSchema.parse({ retentionDays: 0 }),
       }),
     ).rejects.toThrow(BadRequestError);
   });

@@ -289,8 +289,8 @@ export class HeartbeatService {
   private startIntervalMode(config: HeartbeatConfig): void {
     this.cronMode = false;
     if (this.timer) {
-      clearTimeout(this.timer as ReturnType<typeof setTimeout>);
-      clearInterval(this.timer as ReturnType<typeof setInterval>);
+      clearTimeout(this.timer);
+      clearInterval(this.timer);
       this.timer = null;
     }
     log.info(
@@ -317,8 +317,8 @@ export class HeartbeatService {
       });
       this._nextRunAt = nextRunAt;
       if (this.timer) {
-        clearTimeout(this.timer as ReturnType<typeof setTimeout>);
-        clearInterval(this.timer as ReturnType<typeof setInterval>);
+        clearTimeout(this.timer);
+        clearInterval(this.timer);
         this.timer = null;
       }
       const MAX_TIMEOUT_MS = 24 * 60 * 60 * 1000; // 24 hours
@@ -342,7 +342,7 @@ export class HeartbeatService {
             });
         }, delayMs);
       }
-      (this.timer as ReturnType<typeof setTimeout>).unref();
+      this.timer.unref();
       log.info(
         { nextRunAt: new Date(nextRunAt).toISOString(), delayMs },
         "Heartbeat cron run scheduled",
@@ -366,8 +366,8 @@ export class HeartbeatService {
       this._pendingRunId = null;
     }
     if (this.timer) {
-      clearTimeout(this.timer as ReturnType<typeof setTimeout>);
-      clearInterval(this.timer as ReturnType<typeof setInterval>);
+      clearTimeout(this.timer);
+      clearInterval(this.timer);
       this.timer = null;
     }
     this._nextRunAt = null;
@@ -393,14 +393,14 @@ export class HeartbeatService {
       return;
     }
     if (this.cronMode) {
-      clearTimeout(this.timer as ReturnType<typeof setTimeout>);
-      clearInterval(this.timer as ReturnType<typeof setInterval>);
+      clearTimeout(this.timer);
+      clearInterval(this.timer);
       this.timer = null;
       this.scheduleNextCronRun(getConfig().heartbeat);
       return;
     }
     const config = getConfig().heartbeat;
-    clearInterval(this.timer as ReturnType<typeof setInterval>);
+    clearInterval(this.timer);
     this.scheduleNextRun(config.intervalMs);
     this.timer = setInterval(() => {
       this.runOnce().catch((err) => {
@@ -414,8 +414,8 @@ export class HeartbeatService {
     this._resetGeneration++;
     this.stopped = true;
     if (this.timer) {
-      clearTimeout(this.timer as ReturnType<typeof setTimeout>);
-      clearInterval(this.timer as ReturnType<typeof setInterval>);
+      clearTimeout(this.timer);
+      clearInterval(this.timer);
       this.timer = null;
     }
     if (this._pendingRunId) {

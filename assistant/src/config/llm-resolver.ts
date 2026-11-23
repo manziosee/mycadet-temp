@@ -447,11 +447,7 @@ function resolveOverrideOrDefault(
     }
   }
 
-  const merged = deepMerge(
-    CODE_DEFAULT_BASE as unknown as Mergeable,
-    winnerFragment,
-    tweak,
-  );
+  const merged = deepMerge(CODE_DEFAULT_BASE, winnerFragment, tweak);
   // A cadet winner's managed routing survives a concrete-provider tweak:
   // call-site fragments carry no connection, so a tweak pinning e.g.
   // anthropic over a cloud default would otherwise resolve to a
@@ -751,5 +747,5 @@ function deepMerge(...sources: Mergeable[]): Mergeable {
  * still present, so the result satisfies `LLMConfigBase`.
  */
 function finalize(merged: Mergeable): z.infer<typeof LLMConfigBase> {
-  return merged as unknown as z.infer<typeof LLMConfigBase>;
+  return merged as z.infer<typeof LLMConfigBase>;
 }

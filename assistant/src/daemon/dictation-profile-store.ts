@@ -196,8 +196,8 @@ function validateAndClampConfig(raw: unknown): DictationProfilesConfig {
     }
 
     validProfiles.push({
-      id: profile.id as string,
-      name: profile.name as string,
+      id: profile.id,
+      name: profile.name,
       enabled:
         typeof profile.enabled === "boolean" ? profile.enabled : undefined,
       stylePrompt,

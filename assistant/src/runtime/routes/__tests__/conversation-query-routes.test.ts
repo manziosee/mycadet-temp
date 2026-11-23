@@ -2,6 +2,7 @@ import { readFileSync, utimesSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 
+import { jsonObjectSchema } from "../../../__tests__/helpers/json-object-schema.js";
 import { waitFor } from "../../../__tests__/helpers/wait-for.js";
 import {
   sampleConcepts as sharedSampleConcepts,
@@ -491,9 +492,11 @@ describe("GET /v1/llm-request-logs/:id/context", () => {
     });
     seedRequestLogWithSections("msg-1", "log-detail");
 
-    const body = (await logContextRoute.handler({
-      pathParams: { id: "log-detail" },
-    })) as Record<string, unknown>;
+    const body = jsonObjectSchema.parse(
+      await logContextRoute.handler({
+        pathParams: { id: "log-detail" },
+      }),
+    );
 
     expect(body.id).toBe("log-detail");
     expect(body.requestPayload).toBeNull();
@@ -1686,7 +1689,7 @@ describe("ingress URL writes through the generic config routes", () => {
   const LAST_TUNNEL = { provider: "tailscale", publicBaseUrl: TUNNEL_URL };
 
   const savedIngress = () =>
-    (loadRawConfig().ingress ?? {}) as Record<string, unknown>;
+    jsonObjectSchema.parse(loadRawConfig().ingress ?? {});
 
   beforeEach(() => {
     // `assistant config set ingress.publicBaseUrl <url>` is what the webhook
@@ -1774,7 +1777,7 @@ describe("config writes to a per-agent acp entry", () => {
     raw: Record<string, unknown>,
     id = "claude",
   ): Record<string, unknown> {
-    const acp = raw.acp as Record<string, unknown>;
+    const acp = jsonObjectSchema.parse(raw.acp);
     const agents = acp.agents as Record<string, Record<string, unknown>>;
     return agents[id]!;
   }
@@ -2057,8 +2060,7 @@ describe("persisted chat settings", () => {
     // save; the unknown sibling key (futureOption) doesn't persist.
     expect(getConfig().notifications.newMessageEnabled).toBe(true);
     expect(
-      "futureOption" in
-        (loadRawConfig().conversations as Record<string, unknown>),
+      "futureOption" in jsonObjectSchema.parse(loadRawConfig().conversations),
     ).toBe(false);
   });
 
@@ -2151,8 +2153,7 @@ describe("persisted chat settings", () => {
     expect(getConfig().notifications.newMessageEnabled).toBe(true);
     // Schema-canonical saves strip keys the schema doesn't know.
     expect(
-      "futureOption" in
-        (loadRawConfig().notifications as Record<string, unknown>),
+      "futureOption" in jsonObjectSchema.parse(loadRawConfig().notifications),
     ).toBe(false);
   });
 

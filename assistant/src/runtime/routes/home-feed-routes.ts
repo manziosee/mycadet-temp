@@ -244,9 +244,7 @@ export async function handlePatchFeedItem({
   return updated as unknown as Record<string, unknown>;
 }
 
-export function handleListHomeFeed({
-  body = {},
-}: RouteHandlerArgs): Record<string, unknown> {
+export function handleListHomeFeed({ body = {} }: RouteHandlerArgs) {
   const parsed = listHomeFeedRequestSchema.safeParse(body);
   if (!parsed.success) {
     throw new BadRequestError(
@@ -352,9 +350,7 @@ export function handleListHomeFeed({
   };
 }
 
-export async function handleBulkSetFeedItemStatus({
-  body,
-}: RouteHandlerArgs): Promise<Record<string, unknown>> {
+export async function handleBulkSetFeedItemStatus({ body }: RouteHandlerArgs) {
   const parsed = bulkStatusRequestSchema.safeParse(body);
   if (!parsed.success) {
     throw new BadRequestError(

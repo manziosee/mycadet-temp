@@ -1,7 +1,6 @@
 import type {
   ContentBlock,
   Message,
-  ServerToolUseContent,
   TextContent,
   WebSearchToolResultContent,
 } from "../providers/types.js";
@@ -55,9 +54,7 @@ export function stripHistoricalWebSearchResults(
   for (const msg of messages) {
     for (const block of msg.content) {
       if (block.type === "web_search_tool_result") {
-        strippedToolUseIds.add(
-          (block as WebSearchToolResultContent).tool_use_id,
-        );
+        strippedToolUseIds.add(block.tool_use_id);
       }
     }
   }
@@ -68,7 +65,7 @@ export function stripHistoricalWebSearchResults(
 
     for (const block of msg.content) {
       if (block.type === "server_tool_use") {
-        const stu = block as ServerToolUseContent;
+        const stu = block;
         if (strippedToolUseIds.has(stu.id)) {
           stats.serverToolUsesDropped++;
           modified = true;
@@ -76,7 +73,7 @@ export function stripHistoricalWebSearchResults(
         }
         rewritten.push(block);
       } else if (block.type === "web_search_tool_result") {
-        const wsr = block as WebSearchToolResultContent;
+        const wsr = block;
         rewritten.push(
           formatAsText(wsr, findQueryForToolUseId(messages, wsr.tool_use_id)),
         );
@@ -106,7 +103,7 @@ function findQueryForToolUseId(
       if (b.type !== "server_tool_use") {
         continue;
       }
-      const stu = b as ServerToolUseContent;
+      const stu = b;
       if (stu.id !== toolUseId) {
         continue;
       }

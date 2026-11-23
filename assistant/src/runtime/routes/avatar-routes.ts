@@ -114,7 +114,7 @@ function handleGetAvatarState() {
  * second read.
  */
 async function handleSetAvatarAccent({ body, headers }: RouteHandlerArgs) {
-  const payload = body as Record<string, unknown> | undefined;
+  const payload = body;
   const raw = payload?.hex;
   let hex: string | null = null;
   if (raw !== null && raw !== undefined) {
@@ -187,7 +187,7 @@ async function handleGenerateAvatar({ body, headers }: RouteHandlerArgs) {
  * clears the character sidecars, and records an `image` manifest.
  */
 async function handleUploadAvatarImage({ body, headers }: RouteHandlerArgs) {
-  const payload = body as Record<string, unknown> | undefined;
+  const payload = body;
   const content = payload?.content;
   const encoding = payload?.encoding;
 

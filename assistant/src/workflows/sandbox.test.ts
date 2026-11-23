@@ -1,3 +1,4 @@
+import assert from "node:assert/strict";
 import { describe, expect, test } from "bun:test";
 
 import {
@@ -93,8 +94,11 @@ describe("createWorkflowSandbox — functional", () => {
     } catch (e) {
       caught = e;
     }
-    expect(caught).toBeInstanceOf(WorkflowScriptError);
-    const err = caught as WorkflowScriptError;
+    assert(
+      caught instanceof WorkflowScriptError,
+      "Expected WorkflowScriptError",
+    );
+    const err = caught;
     expect(err.message).toContain("kaboom");
     expect(err.scriptStack).toBeDefined();
     expect(err.scriptStack).toContain("boom");

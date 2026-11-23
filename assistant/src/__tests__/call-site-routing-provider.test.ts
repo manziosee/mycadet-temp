@@ -1,3 +1,4 @@
+import assert from "node:assert/strict";
 /**
  * Verifies that `CallSiteRoutingProvider` selects the right underlying
  * provider transport per call based on `options.config.callSite`.
@@ -14,7 +15,6 @@
  * `(connectionName, expectedProvider) => Promise<Provider | null>`.
  * Call-site profiles without a connection throw `ConnectionResolutionError`.
  */
-
 import { beforeEach, describe, expect, test } from "bun:test";
 
 import { CallSiteRoutingProvider } from "../providers/call-site-routing.js";
@@ -253,10 +253,11 @@ describe("CallSiteRoutingProvider", () => {
       caught = err;
     }
 
-    expect(caught).toBeInstanceOf(ConnectionResolutionError);
-    expect((caught as ConnectionResolutionError).reason).toBe(
-      "missing_connection",
+    assert(
+      caught instanceof ConnectionResolutionError,
+      "Expected ConnectionResolutionError",
     );
+    expect(caught.reason).toBe("missing_connection");
   });
 
   test("stamps actualProvider when routing to an alternative provider", async () => {

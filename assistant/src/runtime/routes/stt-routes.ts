@@ -324,7 +324,7 @@ async function handleTranscribe({ body }: RouteHandlerArgs) {
   }
 
   // -- Decode audio ---------------------------------------------------------
-  const base64Str = body.audioBase64 as string;
+  const base64Str = body.audioBase64;
   if (
     !/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(
       base64Str,
@@ -357,7 +357,7 @@ async function handleTranscribe({ body }: RouteHandlerArgs) {
   try {
     const result = await transcriber.transcribe({
       audio: audioBuffer,
-      mimeType: body.mimeType as string,
+      mimeType: body.mimeType,
       signal: abortController.signal,
     });
 

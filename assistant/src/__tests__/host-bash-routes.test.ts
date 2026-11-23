@@ -1,3 +1,4 @@
+import assert from "node:assert/strict";
 /**
  * Unit tests for the /v1/host-bash-result route handler.
  *
@@ -489,8 +490,8 @@ describe("handleHostBashResult", () => {
         caught = e;
       });
 
-      expect(caught).toBeInstanceOf(ForbiddenError);
-      const msg = (caught as ForbiddenError).message;
+      assert(caught instanceof ForbiddenError, "Expected ForbiddenError");
+      const msg = caught.message;
       expect(msg).toContain("client-xyz");
       expect(msg).toContain("client-abc");
     });

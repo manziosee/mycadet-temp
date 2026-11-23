@@ -946,9 +946,8 @@ function hostCuRequestCapability(
 }
 
 function extractConversationId(msg: AssistantEvent): string | undefined {
-  const record = msg as unknown as Record<string, unknown>;
-  if ("conversationId" in msg && typeof record.conversationId === "string") {
-    return record.conversationId as string;
+  if ("conversationId" in msg && typeof msg.conversationId === "string") {
+    return msg.conversationId;
   }
   return undefined;
 }

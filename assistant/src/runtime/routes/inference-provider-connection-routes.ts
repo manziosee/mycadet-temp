@@ -25,7 +25,6 @@ import {
   CHATGPT_SUBSCRIPTION_CONNECTION_NAME,
   type ConnectionModel,
   ConnectionModelSchema,
-  type ConnectionProvider,
   ConnectionProviderSchema,
   deriveAuthForProvider,
   normalizeConnectionProvider,
@@ -384,7 +383,7 @@ async function handleCreateConnection({ body = {} }: RouteHandlerArgs) {
   const resolvedProvider = normalizeConnectionProvider(
     providerResult.data,
     body.base_url,
-  ) as ConnectionProvider;
+  );
   const authResult = AuthSchema.safeParse(
     auth ?? deriveConnectionAuth(resolvedProvider, body.credential),
   );
@@ -417,7 +416,7 @@ async function handleCreateConnection({ body = {} }: RouteHandlerArgs) {
     name,
     provider: resolvedProvider,
     auth: authResult.data,
-    ...(labelRaw !== undefined ? { label: labelRaw as string | null } : {}),
+    ...(labelRaw !== undefined ? { label: labelRaw } : {}),
     ...customFields,
   });
 
@@ -557,7 +556,7 @@ async function handleUpdateConnection({
   const result = updateConnection(getDb(), name, {
     auth: authResult.data,
     ...(chatgptIdentityStamp ? { provider: "chatgpt" } : {}),
-    ...(labelRaw !== undefined ? { label: labelRaw as string | null } : {}),
+    ...(labelRaw !== undefined ? { label: labelRaw } : {}),
     ...customFields,
   });
 

@@ -20,7 +20,6 @@ import { analyzeServerToolPairing } from "../../providers/server-tool-pairing.js
 import type {
   ContentBlock,
   Message,
-  ServerToolUseContent,
   ToolResultContent,
   ToolUseContent,
 } from "../../providers/types.js";
@@ -98,7 +97,7 @@ export function repairHistory(messages: Message[]): RepairResult {
       for (const block of msg.content) {
         if (block.type === "tool_result") {
           // guard:allow-tool-result-only — only client-side tool_result belongs in recovered; web_search_tool_result stays in the assistant message
-          const tr = block as ToolResultContent;
+          const tr = block;
           newRecovered.set(tr.tool_use_id, tr);
           stats.assistantToolResultsMigrated++;
         } else {
@@ -119,7 +118,7 @@ export function repairHistory(messages: Message[]): RepairResult {
       const orphanedWebSearchResultIds = new Set<string>();
       for (const b of cleanedContent) {
         if (b.type === "server_tool_use") {
-          const id = (b as ServerToolUseContent).id;
+          const id = b.id;
           if (
             !serverToolPairing.resolvedPairIds.has(id) &&
             !serverToolPairing.deferredUseIds.has(id)
@@ -193,7 +192,7 @@ export function repairHistory(messages: Message[]): RepairResult {
         for (const block of msg.content) {
           if (block.type === "tool_result") {
             // guard:allow-tool-result-only — matches client-side tool_use; web_search_tool_result is handled separately below
-            const tr = block as ToolResultContent;
+            const tr = block;
             if (pendingToolUseIds.has(tr.tool_use_id)) {
               matchedIds.add(tr.tool_use_id);
               newContent.push(block);
@@ -247,7 +246,7 @@ export function repairHistory(messages: Message[]): RepairResult {
         const newContent: ContentBlock[] = msg.content.map((block) => {
           if (block.type === "tool_result") {
             stats.orphanToolResultsDowngraded++;
-            return downgradeResult(block as ToolResultContent);
+            return downgradeResult(block);
           }
           if (block.type === "web_search_tool_result") {
             stats.orphanToolResultsDowngraded++;

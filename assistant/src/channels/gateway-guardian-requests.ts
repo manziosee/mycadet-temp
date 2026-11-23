@@ -103,7 +103,7 @@ export async function createGuardianRequest(
 ): Promise<GuardianRequestWire> {
   return callGateway(
     GUARDIAN_REQUESTS_IPC_METHODS.create,
-    params as unknown as Record<string, unknown>,
+    params,
     CreateGuardianRequestIpcResponseSchema,
   );
 }
@@ -151,7 +151,7 @@ export async function listGuardianRequests(
 ): Promise<GuardianRequestWire[]> {
   return callGateway(
     GUARDIAN_REQUESTS_IPC_METHODS.list,
-    filters as unknown as Record<string, unknown>,
+    filters,
     GuardianRequestListIpcResponseSchema,
   );
 }
@@ -183,7 +183,7 @@ export async function decideGuardianRequest(
 ): Promise<DecideGuardianRequestIpcResponse> {
   return callGateway(
     GUARDIAN_REQUESTS_IPC_METHODS.decide,
-    params as unknown as Record<string, unknown>,
+    params,
     DecideGuardianRequestIpcResponseSchema,
   );
 }
@@ -239,7 +239,7 @@ export async function createGuardianRequestDelivery(
 ): Promise<GuardianRequestDeliveryWire> {
   return callGateway(
     GUARDIAN_REQUESTS_IPC_METHODS.createDelivery,
-    params as unknown as Record<string, unknown>,
+    params,
     CreateGuardianRequestDeliveryIpcResponseSchema,
   );
 }
@@ -300,7 +300,7 @@ async function listPendingRequestsByDestination(
 ): Promise<GuardianRequestWire[]> {
   return callGateway(
     GUARDIAN_REQUESTS_IPC_METHODS.listPendingByDestination,
-    params as unknown as Record<string, unknown>,
+    params,
     GuardianRequestListIpcResponseSchema,
   );
 }

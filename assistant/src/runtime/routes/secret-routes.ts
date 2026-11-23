@@ -213,9 +213,7 @@ async function handleAddSecret({ body }: RouteHandlerArgs) {
 
   try {
     if (type === "api_key") {
-      if (
-        !API_KEY_PROVIDERS.includes(name as (typeof API_KEY_PROVIDERS)[number])
-      ) {
+      if (!API_KEY_PROVIDERS.includes(name)) {
         throw new BadRequestError(
           `Unknown API key provider: ${name}. Valid providers: ${API_KEY_PROVIDERS.join(", ")}`,
         );
@@ -421,9 +419,7 @@ async function handleReadSecret({ body }: RouteHandlerArgs) {
       | undefined;
 
     if (type === "api_key") {
-      if (
-        !API_KEY_PROVIDERS.includes(name as (typeof API_KEY_PROVIDERS)[number])
-      ) {
+      if (!API_KEY_PROVIDERS.includes(name)) {
         throw new BadRequestError(
           `Unknown API key provider: ${name}. Valid providers: ${API_KEY_PROVIDERS.join(", ")}`,
         );
@@ -505,9 +501,7 @@ async function handleDeleteSecret({ body }: RouteHandlerArgs) {
 
   try {
     if (type === "api_key") {
-      if (
-        !API_KEY_PROVIDERS.includes(name as (typeof API_KEY_PROVIDERS)[number])
-      ) {
+      if (!API_KEY_PROVIDERS.includes(name)) {
         throw new BadRequestError(
           `Unknown API key provider: ${name}. Valid providers: ${API_KEY_PROVIDERS.join(", ")}`,
         );
@@ -629,12 +623,7 @@ async function handleListSecrets() {
         }
         const service = rest.slice(0, slashIdx);
         const field = rest.slice(slashIdx + 1);
-        if (
-          field === "api_key" &&
-          API_KEY_PROVIDERS.includes(
-            service as (typeof API_KEY_PROVIDERS)[number],
-          )
-        ) {
+        if (field === "api_key" && API_KEY_PROVIDERS.includes(service)) {
           return [service];
         }
         return [];
@@ -661,12 +650,7 @@ async function handleListSecrets() {
             const service = rest.slice(0, slashIdx);
             const field = rest.slice(slashIdx + 1);
             // api_key entries are stored as credential/{provider}/api_key
-            if (
-              field === "api_key" &&
-              API_KEY_PROVIDERS.includes(
-                service as (typeof API_KEY_PROVIDERS)[number],
-              )
-            ) {
+            if (field === "api_key" && API_KEY_PROVIDERS.includes(service)) {
               return { type: "api_key" as const, name: service };
             }
             return {

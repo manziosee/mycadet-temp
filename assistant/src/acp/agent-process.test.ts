@@ -1,3 +1,4 @@
+import assert from "node:assert/strict";
 import { describe, expect, test } from "bun:test";
 
 import { AcpAgentProcess } from "./agent-process.js";
@@ -169,8 +170,11 @@ describe("AcpAgentProcess.createSession auth_required handling", () => {
       (e: unknown) => e,
     );
 
-    expect(err).toBeInstanceOf(AcpAuthRequiredError);
-    expect((err as AcpAuthRequiredError).agentId).toBe("test-agent");
+    assert(
+      err instanceof AcpAuthRequiredError,
+      "Expected AcpAuthRequiredError",
+    );
+    expect(err.agentId).toBe("test-agent");
     expect(isAcpAuthRequired(err)).toBe(true);
   });
 

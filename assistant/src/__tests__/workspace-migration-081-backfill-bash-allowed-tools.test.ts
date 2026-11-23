@@ -20,7 +20,6 @@
  *   9. Unrecognized future schema version -> no-op.
  *  10. Non-object root -> no-op.
  */
-
 import {
   existsSync,
   mkdirSync,

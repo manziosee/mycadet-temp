@@ -28,7 +28,11 @@ import {
   MEMORY_RETROSPECTIVE_FORK_SOURCE,
   MEMORY_RETROSPECTIVE_SOURCE,
 } from "../../../plugins/defaults/memory/memory-retrospective-constants.js";
-import { ROUTES } from "../retrospective-routes.js";
+import {
+  retrospectiveConfigResponseSchema,
+  retrospectiveRunsResponseSchema,
+  ROUTES,
+} from "../retrospective-routes.js";
 import type { RouteDefinition } from "../types.js";
 
 await initializeDb();
@@ -109,35 +113,6 @@ function recordUsageCostAt(
   );
 }
 
-interface RunRecord {
-  id: string;
-  scheduledFor: number;
-  startedAt: number | null;
-  finishedAt: number | null;
-  durationMs: number | null;
-  status: "ok" | "running";
-  skipReason: string | null;
-  error: string | null;
-  conversationId: string | null;
-  estimatedCostUsd: number;
-  createdAt: number;
-  kind: "legacy" | "fork";
-  title: string | null;
-}
-
-interface ListRunsResponse {
-  runs: RunRecord[];
-}
-
-interface ConfigResponse {
-  available: boolean;
-  enabled: boolean;
-  intervalMs: number;
-  nextRunAt: number | null;
-  lastRunAt: number | null;
-  success: boolean;
-}
-
 beforeEach(() => {
   workspaceDir = mkdtempSync(join(tmpdir(), "cadet-retrospective-routes-"));
   origWorkspaceDir = process.env.CADET_WORKSPACE_DIR;
@@ -174,7 +149,7 @@ describe("listRetrospectiveRuns handler", () => {
     setCreatedAt(fork.id, 2000);
 
     const handler = findHandler("listRetrospectiveRuns");
-    const result = (await handler({})) as ListRunsResponse;
+    const result = retrospectiveRunsResponseSchema.parse(await handler({}));
 
     expect(result.runs).toHaveLength(2);
     expect(result.runs.map((r) => [r.id, r.kind, r.title])).toEqual([
@@ -201,7 +176,7 @@ describe("listRetrospectiveRuns handler", () => {
     setCreatedAt(c.id, 2000);
 
     const handler = findHandler("listRetrospectiveRuns");
-    const result = (await handler({})) as ListRunsResponse;
+    const result = retrospectiveRunsResponseSchema.parse(await handler({}));
 
     expect(result.runs.map((r) => r.id)).toEqual([b.id, c.id, a.id]);
   });
@@ -217,7 +192,7 @@ describe("listRetrospectiveRuns handler", () => {
     insertMessage(conv.id, "assistant", 2500);
 
     const handler = findHandler("listRetrospectiveRuns");
-    const result = (await handler({})) as ListRunsResponse;
+    const result = retrospectiveRunsResponseSchema.parse(await handler({}));
 
     const run = result.runs[0]!;
     expect(run.id).toBe(conv.id);
@@ -247,14 +222,14 @@ describe("listRetrospectiveRuns handler", () => {
     insertMessage(conv.id, "assistant", 3000);
 
     const handler = findHandler("listRetrospectiveRuns");
-    const running = (await handler({})) as ListRunsResponse;
+    const running = retrospectiveRunsResponseSchema.parse(await handler({}));
     expect(running.runs[0]!.status).toBe("running");
     expect(running.runs[0]!.finishedAt).toBeNull();
     expect(running.runs[0]!.durationMs).toBeNull();
 
     // Retrospective agent replies after the fork was created.
     insertMessage(conv.id, "assistant", 6000);
-    const done = (await handler({})) as ListRunsResponse;
+    const done = retrospectiveRunsResponseSchema.parse(await handler({}));
     expect(done.runs[0]!.status).toBe("ok");
     expect(done.runs[0]!.finishedAt).toBe(6000);
     expect(done.runs[0]!.durationMs).toBe(1000);
@@ -285,7 +260,7 @@ describe("listRetrospectiveRuns handler", () => {
     recordUsageCostAt(withWindow.id, "retro-after", 2001, 0.5);
 
     const handler = findHandler("listRetrospectiveRuns");
-    const result = (await handler({})) as ListRunsResponse;
+    const result = retrospectiveRunsResponseSchema.parse(await handler({}));
 
     const byId = new Map(result.runs.map((r) => [r.id, r]));
     expect(byId.get(withTotal.id)!.estimatedCostUsd).toBeCloseTo(0.42);
@@ -320,27 +295,35 @@ describe("listRetrospectiveRuns handler", () => {
 
     const handler = findHandler("listRetrospectiveRuns");
 
-    const def = (await handler({})) as ListRunsResponse;
+    const def = retrospectiveRunsResponseSchema.parse(await handler({}));
     expect(def.runs).toHaveLength(6);
 
-    const lim4 = (await handler({
-      queryParams: { limit: "4" },
-    })) as ListRunsResponse;
+    const lim4 = retrospectiveRunsResponseSchema.parse(
+      await handler({
+        queryParams: { limit: "4" },
+      }),
+    );
     expect(lim4.runs.map((r) => r.id)).toEqual(expectedTop4);
 
-    const neg = (await handler({
-      queryParams: { limit: "-5" },
-    })) as ListRunsResponse;
+    const neg = retrospectiveRunsResponseSchema.parse(
+      await handler({
+        queryParams: { limit: "-5" },
+      }),
+    );
     expect(neg.runs).toHaveLength(1);
 
-    const huge = (await handler({
-      queryParams: { limit: "5000" },
-    })) as ListRunsResponse;
+    const huge = retrospectiveRunsResponseSchema.parse(
+      await handler({
+        queryParams: { limit: "5000" },
+      }),
+    );
     expect(huge.runs).toHaveLength(6);
 
-    const bad = (await handler({
-      queryParams: { limit: "garbage" },
-    })) as ListRunsResponse;
+    const bad = retrospectiveRunsResponseSchema.parse(
+      await handler({
+        queryParams: { limit: "garbage" },
+      }),
+    );
     expect(bad.runs).toHaveLength(6);
   });
 });
@@ -366,7 +349,7 @@ describe("getRetrospectiveConfig handler", () => {
     setCreatedAt(conv.id, 123_456);
 
     const handler = findHandler("getRetrospectiveConfig");
-    const result = (await handler({})) as ConfigResponse;
+    const result = retrospectiveConfigResponseSchema.parse(await handler({}));
 
     expect(result).toEqual({
       available: true,
@@ -380,7 +363,7 @@ describe("getRetrospectiveConfig handler", () => {
 
   test("lastRunAt is the newest run across both sources, null when none exist", async () => {
     const handler = findHandler("getRetrospectiveConfig");
-    const empty = (await handler({})) as ConfigResponse;
+    const empty = retrospectiveConfigResponseSchema.parse(await handler({}));
     expect(empty.lastRunAt).toBeNull();
 
     const legacy = createConversation({
@@ -394,7 +377,7 @@ describe("getRetrospectiveConfig handler", () => {
     setCreatedAt(legacy.id, 9000);
     setCreatedAt(fork.id, 4000);
 
-    const result = (await handler({})) as ConfigResponse;
+    const result = retrospectiveConfigResponseSchema.parse(await handler({}));
     expect(result.lastRunAt).toBe(9000);
   });
 
@@ -405,7 +388,7 @@ describe("getRetrospectiveConfig handler", () => {
     );
 
     const handler = findHandler("getRetrospectiveConfig");
-    const result = (await handler({})) as ConfigResponse;
+    const result = retrospectiveConfigResponseSchema.parse(await handler({}));
 
     expect(result.available).toBe(false);
     expect(result.enabled).toBe(false);
@@ -424,7 +407,7 @@ describe("getRetrospectiveConfig handler", () => {
     );
 
     const handler = findHandler("getRetrospectiveConfig");
-    const result = (await handler({})) as ConfigResponse;
+    const result = retrospectiveConfigResponseSchema.parse(await handler({}));
 
     // `available` stays true so the Settings row still renders. It reads
     // "Paused" rather than disappearing as it would with memory off.
@@ -440,7 +423,7 @@ describe("getRetrospectiveConfig handler", () => {
     );
 
     const handler = findHandler("getRetrospectiveConfig");
-    const result = (await handler({})) as ConfigResponse;
+    const result = retrospectiveConfigResponseSchema.parse(await handler({}));
 
     expect(result.available).toBe(true);
     expect(result.enabled).toBe(true);

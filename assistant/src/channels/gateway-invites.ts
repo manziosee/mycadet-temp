@@ -120,7 +120,7 @@ export async function redeemInviteByToken(
 ): Promise<RedeemInviteTokenIpcResponse> {
   return callGateway(
     INVITES_IPC_METHODS.redeem,
-    params as unknown as Record<string, unknown>,
+    params,
     RedeemInviteTokenIpcResponseSchema,
   );
 }
@@ -134,7 +134,7 @@ export async function redeemInviteByVoiceCode(
 ): Promise<RedeemInviteVoiceIpcResponse> {
   return callGateway(
     INVITES_IPC_METHODS.redeem,
-    params as unknown as Record<string, unknown>,
+    params,
     RedeemInviteVoiceIpcResponseSchema,
   );
 }

@@ -264,7 +264,7 @@ export const hostShellTool = {
         const proxyPromise = HostBashProxy.instance.request(
           {
             command,
-            working_dir: rawWorkingDir as string | undefined,
+            working_dir: rawWorkingDir,
             timeout_seconds: normalizedTimeout,
             env: proxyEnv,
             targetClientId,
@@ -420,7 +420,7 @@ export const hostShellTool = {
       return HostBashProxy.instance.request(
         {
           command,
-          working_dir: rawWorkingDir as string | undefined,
+          working_dir: rawWorkingDir,
           timeout_seconds: normalizedTimeout,
           env: proxyEnv,
           targetClientId,

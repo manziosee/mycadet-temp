@@ -1,7 +1,7 @@
+import assert from "node:assert/strict";
 /**
  * Tests for ipcCallPersistentValidated connect-failure mapping.
  */
-
 import { beforeEach, describe, expect, mock, test } from "bun:test";
 
 import { IpcCallError } from "@mycadet/gateway-client/ipc-client";
@@ -60,8 +60,8 @@ describe("ipcCallPersistentValidated", () => {
       await ipcCallPersistentValidated("ping", {}, OkSchema);
       throw new Error("expected throw");
     } catch (err) {
-      expect(err).toBeInstanceOf(IpcCallError);
-      expect((err as IpcCallError).statusCode).toBe(404);
+      assert(err instanceof IpcCallError, "Expected IpcCallError");
+      expect(err.statusCode).toBe(404);
     }
   });
 });

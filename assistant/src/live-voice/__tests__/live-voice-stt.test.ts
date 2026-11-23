@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, mock, test } from "bun:test";
 
+import { jsonObjectSchema } from "../../__tests__/helpers/json-object-schema.js";
 import type { VoiceTurnOptions } from "../../calls/voice-session-bridge.js";
 import { loadRawConfig, saveRawConfig } from "../../config/loader.js";
 import type {
@@ -839,16 +840,13 @@ describe("LiveVoiceSession STT", () => {
 
       // The voice-room gear patches services.stt.language while the session
       // idles between turns; no session protocol message is involved.
-      const rawServices = (originalRaw.services ?? {}) as Record<
-        string,
-        unknown
-      >;
+      const rawServices = jsonObjectSchema.parse(originalRaw.services ?? {});
       saveRawConfig({
         ...originalRaw,
         services: {
           ...rawServices,
           stt: {
-            ...((rawServices.stt ?? {}) as Record<string, unknown>),
+            ...jsonObjectSchema.parse(rawServices.stt ?? {}),
             language: "hi",
           },
         },
@@ -940,16 +938,13 @@ describe("LiveVoiceSession STT", () => {
         () => frames.filter((frame) => frame.type === "tts_done").length === 1,
       );
 
-      const rawServices = (originalRaw.services ?? {}) as Record<
-        string,
-        unknown
-      >;
+      const rawServices = jsonObjectSchema.parse(originalRaw.services ?? {});
       saveRawConfig({
         ...originalRaw,
         services: {
           ...rawServices,
           stt: {
-            ...((rawServices.stt ?? {}) as Record<string, unknown>),
+            ...jsonObjectSchema.parse(rawServices.stt ?? {}),
             language: "hi",
           },
         },
@@ -1034,16 +1029,13 @@ describe("LiveVoiceSession STT", () => {
         ),
       );
 
-      const rawServices = (originalRaw.services ?? {}) as Record<
-        string,
-        unknown
-      >;
+      const rawServices = jsonObjectSchema.parse(originalRaw.services ?? {});
       saveRawConfig({
         ...originalRaw,
         services: {
           ...rawServices,
           stt: {
-            ...((rawServices.stt ?? {}) as Record<string, unknown>),
+            ...jsonObjectSchema.parse(rawServices.stt ?? {}),
             language: "hi",
           },
         },
@@ -1079,13 +1071,13 @@ describe("LiveVoiceSession STT", () => {
 
   test("keeps the zero-round-trip re-arm when the configured language is unchanged", async () => {
     const originalRaw = loadRawConfig();
-    const rawServices = (originalRaw.services ?? {}) as Record<string, unknown>;
+    const rawServices = jsonObjectSchema.parse(originalRaw.services ?? {});
     saveRawConfig({
       ...originalRaw,
       services: {
         ...rawServices,
         stt: {
-          ...((rawServices.stt ?? {}) as Record<string, unknown>),
+          ...jsonObjectSchema.parse(rawServices.stt ?? {}),
           language: "en-US",
         },
       },
@@ -1516,13 +1508,13 @@ describe("LiveVoiceSession STT", () => {
 
   test("a monolingual services.stt.language pin is the turn language when finals carry no tags", async () => {
     const originalRaw = loadRawConfig();
-    const rawServices = (originalRaw.services ?? {}) as Record<string, unknown>;
+    const rawServices = jsonObjectSchema.parse(originalRaw.services ?? {});
     saveRawConfig({
       ...originalRaw,
       services: {
         ...rawServices,
         stt: {
-          ...((rawServices.stt ?? {}) as Record<string, unknown>),
+          ...jsonObjectSchema.parse(rawServices.stt ?? {}),
           language: "ja",
         },
       },
@@ -1557,13 +1549,13 @@ describe("LiveVoiceSession STT", () => {
     // google-gemini and openai-whisper ignore services.stt.language, so a
     // stale persisted pin must not force every turn into that language.
     const originalRaw = loadRawConfig();
-    const rawServices = (originalRaw.services ?? {}) as Record<string, unknown>;
+    const rawServices = jsonObjectSchema.parse(originalRaw.services ?? {});
     saveRawConfig({
       ...originalRaw,
       services: {
         ...rawServices,
         stt: {
-          ...((rawServices.stt ?? {}) as Record<string, unknown>),
+          ...jsonObjectSchema.parse(rawServices.stt ?? {}),
           provider: "google-gemini",
           language: "es",
         },
@@ -1597,13 +1589,13 @@ describe("LiveVoiceSession STT", () => {
     // cadet transcriber, which DOES honor the pin; the gate must follow
     // what was dialed, not what was configured.
     const originalRaw = loadRawConfig();
-    const rawServices = (originalRaw.services ?? {}) as Record<string, unknown>;
+    const rawServices = jsonObjectSchema.parse(originalRaw.services ?? {});
     saveRawConfig({
       ...originalRaw,
       services: {
         ...rawServices,
         stt: {
-          ...((rawServices.stt ?? {}) as Record<string, unknown>),
+          ...jsonObjectSchema.parse(rawServices.stt ?? {}),
           provider: "google-gemini",
           language: "es",
         },

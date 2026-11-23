@@ -85,7 +85,7 @@ function fakeResponse(body: unknown, status = 200) {
 }
 
 async function handleRedeemInvite(req: Request) {
-  const body = (await req.json()) as Record<string, unknown>;
+  const body = jsonObjectSchema.parse(await req.json());
   try {
     const result = await _handleRedeemInvite({ body });
     return fakeResponse(result);
@@ -119,13 +119,13 @@ await initializeDb();
 // generation falls back to the deterministic copy these tests assert.
 {
   const raw = loadRawConfig();
-  const llm = (raw.llm ?? {}) as Record<string, unknown>;
+  const llm = jsonObjectSchema.parse(raw.llm ?? {});
   llm.profiles = {
-    ...((llm.profiles ?? {}) as Record<string, unknown>),
+    ...jsonObjectSchema.parse(llm.profiles ?? {}),
     "test-local": { provider: "anthropic", model: "claude-opus-4-7" },
   };
   llm.callSites = {
-    ...((llm.callSites ?? {}) as Record<string, unknown>),
+    ...jsonObjectSchema.parse(llm.callSites ?? {}),
     inviteInstructionGenerator: { profile: "test-local" },
   };
   raw.llm = llm;
@@ -190,7 +190,7 @@ describe("invite redeem relay routes", () => {
 
     expect(res.status).toBe(200);
     expect(body.ok).toBe(true);
-    expect((body.invite as Record<string, unknown>).id).toBe("inv-gw-1");
+    expect(jsonObjectSchema.parse(body.invite).id).toBe("inv-gw-1");
     expect(body.type).toBe("redeemed");
     // The relay forwards every shared-contract field — including the sender
     // identity fields (displayName/username) the gateway engine stamps onto
@@ -372,7 +372,7 @@ describe("composeInvitePresentation", () => {
         rawToken,
       });
 
-      const share = invite.share as Record<string, unknown>;
+      const share = jsonObjectSchema.parse(invite.share);
       expect(share).toBeDefined();
       expect(share.url).toBe(
         `https://t.me/test_invite_bot?start=iv_${rawToken}`,

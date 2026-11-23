@@ -95,6 +95,40 @@ function readRetrospectiveConfigResponse() {
 // Shared ROUTES
 // ---------------------------------------------------------------------------
 
+export const retrospectiveConfigResponseSchema = z.object({
+  available: z.boolean(),
+  enabled: z.boolean(),
+  intervalMs: z.number(),
+  nextRunAt: z.number().nullable(),
+  lastRunAt: z.number().nullable(),
+  success: z.boolean(),
+});
+
+export const retrospectiveRunsResponseSchema = z.object({
+  runs: z
+    .array(
+      z.object({
+        id: z.string(),
+        scheduledFor: z.number(),
+        startedAt: z.number().nullable(),
+        finishedAt: z.number().nullable(),
+        durationMs: z.number().nullable(),
+        status: z.enum(["ok", "running"]),
+        skipReason: z.string().nullable(),
+        error: z.string().nullable(),
+        conversationId: z.string().nullable(),
+        conversationExists: z.boolean(),
+        conversationArchivedAt: z.number().nullable(),
+        estimatedCostUsd: z.number(),
+        createdAt: z.number(),
+        kind: z.enum(["legacy", "fork"]),
+        title: z.string().nullable(),
+      }),
+    )
+    .describe("Retrospective run records"),
+  nextCursor: RUNS_NEXT_CURSOR_SCHEMA,
+});
+
 export const ROUTES: RouteDefinition[] = [
   {
     operationId: "getRetrospectiveConfig",
@@ -118,14 +152,7 @@ export const ROUTES: RouteDefinition[] = [
       "`memory.retrospective.enabled`, the per-pass kill switch that stops " +
       "retrospectives without disabling the rest of memory.",
     tags: ["retrospective"],
-    responseBody: z.object({
-      available: z.boolean(),
-      enabled: z.boolean(),
-      intervalMs: z.number(),
-      nextRunAt: z.number().nullable(),
-      lastRunAt: z.number().nullable(),
-      success: z.boolean(),
-    }),
+    responseBody: retrospectiveConfigResponseSchema,
     handler: async (_args: RouteHandlerArgs) => {
       return readRetrospectiveConfigResponse();
     },
@@ -159,30 +186,7 @@ export const ROUTES: RouteDefinition[] = [
       "operator retains history.",
     tags: ["retrospective"],
     queryParams: RUNS_PAGINATION_QUERY_PARAMS(20),
-    responseBody: z.object({
-      runs: z
-        .array(
-          z.object({
-            id: z.string(),
-            scheduledFor: z.number(),
-            startedAt: z.number().nullable(),
-            finishedAt: z.number().nullable(),
-            durationMs: z.number().nullable(),
-            status: z.enum(["ok", "running"]),
-            skipReason: z.string().nullable(),
-            error: z.string().nullable(),
-            conversationId: z.string().nullable(),
-            conversationExists: z.boolean(),
-            conversationArchivedAt: z.number().nullable(),
-            estimatedCostUsd: z.number(),
-            createdAt: z.number(),
-            kind: z.enum(["legacy", "fork"]),
-            title: z.string().nullable(),
-          }),
-        )
-        .describe("Retrospective run records"),
-      nextCursor: RUNS_NEXT_CURSOR_SCHEMA,
-    }),
+    responseBody: retrospectiveRunsResponseSchema,
     handler: async ({ queryParams }: RouteHandlerArgs) => {
       const params = queryParams ?? {};
       const limit = parseRunsLimit(params, 20);

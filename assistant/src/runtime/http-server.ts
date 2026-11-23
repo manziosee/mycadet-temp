@@ -294,7 +294,7 @@ export class RuntimeHttpServer {
       fetch: (req, server) => this.handleRequest(req, server),
       websocket: {
         open: (ws) => {
-          const data = ws.data as AllWebSocketData;
+          const data = ws.data;
           if (data.wsType === "media-stream") {
             const msData = data;
             log.info(
@@ -459,7 +459,7 @@ export class RuntimeHttpServer {
           ws.close(1008, "Unknown WebSocket type");
         },
         message: (ws, message) => {
-          const data = ws.data as AllWebSocketData;
+          const data = ws.data;
           if (data.wsType === "media-stream") {
             const raw =
               typeof message === "string"
@@ -513,7 +513,7 @@ export class RuntimeHttpServer {
           ws.close(1008, "Unknown WebSocket type");
         },
         close: (ws, code, reason) => {
-          const data = ws.data as AllWebSocketData;
+          const data = ws.data;
           if (data.wsType === "media-stream") {
             const msData = data;
             log.info(

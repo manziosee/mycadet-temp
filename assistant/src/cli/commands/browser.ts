@@ -117,13 +117,7 @@ function attachOperationAction(
   const subcmd = subcommand(browser, toKebab(meta.operation));
 
   subcmd.action(async (opts: Record<string, unknown>) => {
-    const parentOpts = browser.opts() as {
-      desktop?: boolean;
-      session?: string;
-      json?: boolean;
-      browserMode?: string;
-      targetClientId?: string;
-    };
+    const parentOpts = browser.opts();
     const sessionId = parentOpts.session ?? "default";
     const jsonMode = parentOpts.json ?? false;
     const conversationId = resolveContextConversationId();
@@ -356,13 +350,7 @@ export function registerBrowserCommand(program: Command): void {
       const tabs = subcommand(browser, "tabs");
 
       subcommand(tabs, "list").action(async (opts: { pretty?: boolean }) => {
-        const parentOpts = browser.opts() as {
-          desktop?: boolean;
-          browserMode?: string;
-          session?: string;
-          json?: boolean;
-          targetClientId?: string;
-        };
+        const parentOpts = browser.opts();
         const sessionId = parentOpts.session ?? "default";
         const jsonMode = parentOpts.json ?? false;
         const conversationId = resolveContextConversationId();
@@ -432,13 +420,7 @@ export function registerBrowserCommand(program: Command): void {
       });
 
       subcommand(tabs, "select").action(async (opts: { tabId: string }) => {
-        const parentOpts = browser.opts() as {
-          desktop?: boolean;
-          browserMode?: string;
-          session?: string;
-          json?: boolean;
-          targetClientId?: string;
-        };
+        const parentOpts = browser.opts();
         const sessionId = parentOpts.session ?? "default";
         const jsonMode = parentOpts.json ?? false;
         const conversationId = resolveContextConversationId();
@@ -485,13 +467,7 @@ export function registerBrowserCommand(program: Command): void {
       });
 
       subcommand(tabs, "new").action(async (opts: { url?: string }) => {
-        const parentOpts = browser.opts() as {
-          desktop?: boolean;
-          browserMode?: string;
-          session?: string;
-          json?: boolean;
-          targetClientId?: string;
-        };
+        const parentOpts = browser.opts();
         const sessionId = parentOpts.session ?? "default";
         const jsonMode = parentOpts.json ?? false;
         const conversationId = resolveContextConversationId();
@@ -547,13 +523,7 @@ export function registerBrowserCommand(program: Command): void {
       });
 
       subcommand(tabs, "close").action(async (opts: { tabId: string }) => {
-        const parentOpts = browser.opts() as {
-          desktop?: boolean;
-          browserMode?: string;
-          session?: string;
-          json?: boolean;
-          targetClientId?: string;
-        };
+        const parentOpts = browser.opts();
         const sessionId = parentOpts.session ?? "default";
         const jsonMode = parentOpts.json ?? false;
         const conversationId = resolveContextConversationId();

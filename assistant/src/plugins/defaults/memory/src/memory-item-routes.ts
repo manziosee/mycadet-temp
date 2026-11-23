@@ -289,7 +289,7 @@ function rowToNode(row: typeof memoryGraphNodes.$inferSelect): MemoryNode {
       | "inferred"
       | "observed"
       | "told-by-other",
-    narrativeRole: row.narrativeRole as MemoryNode["narrativeRole"],
+    narrativeRole: row.narrativeRole,
     partOfStory: row.partOfStory,
     imageRefs: row.imageRefs ? (JSON.parse(row.imageRefs) as ImageRef[]) : null,
   };
@@ -594,7 +594,7 @@ async function handleCreateMemoryItem(body: Record<string, unknown>) {
   const now = Date.now();
   const newNode: NewNode = {
     content,
-    type: kind as MemoryType,
+    type: kind,
     created: now,
     lastAccessed: now,
     lastConsolidated: now,
@@ -672,7 +672,7 @@ async function handleUpdateMemoryItem(
         `Invalid kind "${kind}". Must be one of: ${VALID_TYPES.join(", ")}`,
       );
     }
-    changes.type = kind as MemoryType;
+    changes.type = kind;
   }
 
   if (status !== undefined) {

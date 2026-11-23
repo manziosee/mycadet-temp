@@ -1,3 +1,4 @@
+import assert from "node:assert/strict";
 /**
  * Unit tests for the `/v1/home/feed` HTTP route handlers.
  *
@@ -6,12 +7,16 @@
  * 404 vs 500 distinction, and context-banner computation — without
  * needing a live HTTP server.
  */
-
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 
+import {
+  type FeedItem,
+  FeedItemSchema,
+  HomeFeedResponseSchema,
+} from "../../../api/responses/home.js";
 import {
   setBroadcastOverrideForTesting,
   setHubPublishOverrideForTesting,
@@ -160,27 +165,7 @@ function homeFeedRouteDefinitions() {
 
 // ─── Fixtures ──────────────────────────────────────────────────────────────
 
-type FeedItemFixture = {
-  id: string;
-  type: "notification";
-  priority: number;
-  title: string;
-  summary: string;
-  timestamp: string;
-  status: "new" | "seen" | "acted_on" | "dismissed";
-  expiresAt?: string;
-  actions?: Array<{ id: string; label: string; prompt: string }>;
-  urgency?: "low" | "medium" | "high" | "critical";
-  category?: "security" | "scheduling" | "background" | "email" | "system";
-  conversationId?: string;
-  fromAssistant?: boolean;
-  noteworthy?: boolean;
-  createdAt: string;
-};
-
-function makeItem(
-  overrides: Partial<FeedItemFixture> & { id: string },
-): FeedItemFixture {
+function makeItem(overrides: Partial<FeedItem> & { id: string }): FeedItem {
   return {
     type: "notification",
     priority: 50,
@@ -193,7 +178,7 @@ function makeItem(
   };
 }
 
-function writeFeedFile(items: FeedItemFixture[]): void {
+function writeFeedFile(items: FeedItem[]): void {
   const path = getHomeFeedPath();
   mkdirSync(join(workspaceDir, "data"), { recursive: true });
   writeFileSync(
@@ -360,15 +345,7 @@ describe("handleGetHomeFeed", () => {
       new Request("http://localhost/v1/home/feed?timeAwaySeconds=0"),
     );
     expect(res.status).toBe(200);
-    const body = (await res.json()) as {
-      items: unknown[];
-      updatedAt: string;
-      contextBanner: {
-        greeting: string;
-        timeAwayLabel: string;
-        newCount: number;
-      };
-    };
+    const body = HomeFeedResponseSchema.parse(await res.json());
     expect(body.items).toEqual([]);
     expect(typeof body.updatedAt).toBe("string");
     expect(body.contextBanner.newCount).toBe(0);
@@ -387,10 +364,7 @@ describe("handleGetHomeFeed", () => {
       new Request("http://localhost/v1/home/feed?timeAwaySeconds=60"),
     );
     expect(res.status).toBe(200);
-    const body = (await res.json()) as {
-      items: Array<{ id: string }>;
-      contextBanner: { newCount: number };
-    };
+    const body = HomeFeedResponseSchema.parse(await res.json());
     const ids = body.items.map((i) => i.id).sort();
     expect(ids).toEqual(["a", "b"]);
     expect(body.contextBanner.newCount).toBe(2);
@@ -403,10 +377,7 @@ describe("handleGetHomeFeed", () => {
       new Request("http://localhost/v1/home/feed?timeAwaySeconds=7200"),
     );
     expect(res.status).toBe(200);
-    const body = (await res.json()) as {
-      items: Array<{ id: string }>;
-      contextBanner: { newCount: number; timeAwayLabel: string };
-    };
+    const body = HomeFeedResponseSchema.parse(await res.json());
     expect(body.items).toHaveLength(1);
     expect(body.items[0]!.id).toBe("any");
     expect(body.contextBanner.newCount).toBe(1);
@@ -425,9 +396,7 @@ describe("handleGetHomeFeed", () => {
       new Request("http://localhost/v1/home/feed?timeAwaySeconds=0"),
     );
     expect(res.status).toBe(200);
-    const body = (await res.json()) as {
-      contextBanner: { newCount: number };
-    };
+    const body = HomeFeedResponseSchema.parse(await res.json());
     expect(body.contextBanner.newCount).toBe(2);
   });
 });
@@ -436,7 +405,7 @@ describe("handleGetHomeFeed", () => {
 
 describe("handlePatchFeedItem", () => {
   test("200 with updated item when id exists", async () => {
-    await appendFeedItem(makeItem({ id: "p1", status: "new" }) as never);
+    await appendFeedItem(makeItem({ id: "p1", status: "new" }));
 
     const res = await handlePatchFeedItem(
       new Request("http://localhost/v1/home/feed/p1", {
@@ -446,7 +415,7 @@ describe("handlePatchFeedItem", () => {
       "p1",
     );
     expect(res.status).toBe(200);
-    const body = (await res.json()) as { id: string; status: string };
+    const body = FeedItemSchema.parse(await res.json());
     expect(body.id).toBe("p1");
     expect(body.status).toBe("seen");
   });
@@ -463,7 +432,7 @@ describe("handlePatchFeedItem", () => {
   });
 
   test("400 on invalid status value", async () => {
-    await appendFeedItem(makeItem({ id: "p2", status: "new" }) as never);
+    await appendFeedItem(makeItem({ id: "p2", status: "new" }));
 
     const res = await handlePatchFeedItem(
       new Request("http://localhost/v1/home/feed/p2", {
@@ -476,7 +445,7 @@ describe("handlePatchFeedItem", () => {
   });
 
   test("400 on missing status field", async () => {
-    await appendFeedItem(makeItem({ id: "p3", status: "new" }) as never);
+    await appendFeedItem(makeItem({ id: "p3", status: "new" }));
 
     const res = await handlePatchFeedItem(
       new Request("http://localhost/v1/home/feed/p3", {
@@ -489,7 +458,7 @@ describe("handlePatchFeedItem", () => {
   });
 
   test("400 on invalid JSON body", async () => {
-    await appendFeedItem(makeItem({ id: "p4", status: "new" }) as never);
+    await appendFeedItem(makeItem({ id: "p4", status: "new" }));
 
     const res = await handlePatchFeedItem(
       new Request("http://localhost/v1/home/feed/p4", {
@@ -597,13 +566,6 @@ describe("handlePostFeedAction", () => {
 // ─── handleListHomeFeed ────────────────────────────────────────────────────
 
 describe("handleListHomeFeed", () => {
-  type ListResult = {
-    items: Array<{ id: string; status: string }>;
-    total: number;
-    returned: number;
-    hasMore: boolean;
-  };
-
   test("excludes dismissed items by default", () => {
     writeFeedFile([
       makeItem({ id: "a", status: "new" }),
@@ -612,7 +574,7 @@ describe("handleListHomeFeed", () => {
       makeItem({ id: "d", status: "dismissed" }),
     ]);
 
-    const result = handleListHomeFeed({ body: {} }) as ListResult;
+    const result = handleListHomeFeed({ body: {} });
     expect(result.items.map((i) => i.id).sort()).toEqual(["a", "b", "c"]);
     expect(result.total).toBe(3);
     expect(result.hasMore).toBe(false);
@@ -626,7 +588,7 @@ describe("handleListHomeFeed", () => {
 
     const result = handleListHomeFeed({
       body: { includeDismissed: true },
-    }) as ListResult;
+    });
     expect(result.items.map((i) => i.id).sort()).toEqual(["a", "d"]);
   });
 
@@ -639,7 +601,7 @@ describe("handleListHomeFeed", () => {
 
     const result = handleListHomeFeed({
       body: { statuses: ["dismissed"] },
-    }) as ListResult;
+    });
     expect(result.items.map((i) => i.id)).toEqual(["d"]);
   });
 
@@ -652,7 +614,7 @@ describe("handleListHomeFeed", () => {
 
     const result = handleListHomeFeed({
       body: { urgencies: ["high"] },
-    }) as ListResult;
+    });
     expect(result.items.map((i) => i.id)).toEqual(["a"]);
   });
 
@@ -664,7 +626,7 @@ describe("handleListHomeFeed", () => {
 
     const result = handleListHomeFeed({
       body: { categories: ["email"] },
-    }) as ListResult;
+    });
     expect(result.items.map((i) => i.id)).toEqual(["a"]);
   });
 
@@ -677,7 +639,7 @@ describe("handleListHomeFeed", () => {
 
     const result = handleListHomeFeed({
       body: { conversationId: "conv-1" },
-    }) as ListResult;
+    });
     expect(result.items.map((i) => i.id)).toEqual(["a"]);
   });
 
@@ -690,7 +652,7 @@ describe("handleListHomeFeed", () => {
 
     const result = handleListHomeFeed({
       body: { fromAssistant: true },
-    }) as ListResult;
+    });
     expect(result.items.map((i) => i.id)).toEqual(["a"]);
   });
 
@@ -702,7 +664,7 @@ describe("handleListHomeFeed", () => {
 
     const result = handleListHomeFeed({
       body: { noteworthy: true },
-    }) as ListResult;
+    });
     expect(result.items.map((i) => i.id)).toEqual(["a"]);
   });
 
@@ -715,7 +677,7 @@ describe("handleListHomeFeed", () => {
 
     const result = handleListHomeFeed({
       body: { before: "2026-05-15T00:00:00.000Z" },
-    }) as ListResult;
+    });
     expect(result.items.map((i) => i.id)).toEqual(["old"]);
   });
 
@@ -728,7 +690,7 @@ describe("handleListHomeFeed", () => {
 
     const result = handleListHomeFeed({
       body: { after: "2026-05-15T00:00:00.000Z" },
-    }) as ListResult;
+    });
     expect(result.items.map((i) => i.id)).toEqual(["new"]);
   });
 
@@ -745,7 +707,7 @@ describe("handleListHomeFeed", () => {
 
     const page1 = handleListHomeFeed({
       body: { limit: 10, offset: 0 },
-    }) as ListResult;
+    });
     expect(page1.items).toHaveLength(10);
     expect(page1.total).toBe(25);
     expect(page1.returned).toBe(10);
@@ -753,7 +715,7 @@ describe("handleListHomeFeed", () => {
 
     const page3 = handleListHomeFeed({
       body: { limit: 10, offset: 20 },
-    }) as ListResult;
+    });
     expect(page3.items).toHaveLength(5);
     expect(page3.hasMore).toBe(false);
   });
@@ -766,8 +728,8 @@ describe("handleListHomeFeed", () => {
     } catch (err) {
       caught = err;
     }
-    expect(caught).toBeInstanceOf(RouteError);
-    expect((caught as { statusCode: number }).statusCode).toBe(400);
+    assert(caught instanceof RouteError, "Expected a route error");
+    expect(caught.statusCode).toBe(400);
   });
 
   test("invalid filter shape throws 400", () => {
@@ -778,8 +740,8 @@ describe("handleListHomeFeed", () => {
     } catch (err) {
       caught = err;
     }
-    expect(caught).toBeInstanceOf(RouteError);
-    expect((caught as { statusCode: number }).statusCode).toBe(400);
+    assert(caught instanceof RouteError, "Expected a route error");
+    expect(caught.statusCode).toBe(400);
   });
 
   test("expired items are excluded (matches readHomeFeed TTL behavior)", () => {
@@ -789,7 +751,7 @@ describe("handleListHomeFeed", () => {
       makeItem({ id: "dead", expiresAt: past }),
     ]);
 
-    const result = handleListHomeFeed({ body: {} }) as ListResult;
+    const result = handleListHomeFeed({ body: {} });
     expect(result.items.map((i) => i.id)).toEqual(["alive"]);
   });
 });
@@ -797,28 +759,26 @@ describe("handleListHomeFeed", () => {
 // ─── handleBulkSetFeedItemStatus ───────────────────────────────────────────
 
 describe("handleBulkSetFeedItemStatus", () => {
-  type BulkResult = { updatedCount: number; updatedAt: string };
-
   test("200 with count and updatedAt when items are flipped", async () => {
-    await appendFeedItem(makeItem({ id: "n1", status: "new" }) as never);
+    await appendFeedItem(makeItem({ id: "n1", status: "new" }));
     await appendFeedItem(
       makeItem({
         id: "n2",
         status: "new",
         createdAt: "2026-04-14T12:00:01.000Z",
-      }) as never,
+      }),
     );
     await appendFeedItem(
       makeItem({
         id: "s1",
         status: "seen",
         createdAt: "2026-04-14T12:00:02.000Z",
-      }) as never,
+      }),
     );
 
-    const result = (await _handleBulkSetFeedItemStatus({
+    const result = await _handleBulkSetFeedItemStatus({
       body: { from: ["new"], to: "seen" },
-    })) as BulkResult;
+    });
 
     expect(result.updatedCount).toBe(2);
     expect(typeof result.updatedAt).toBe("string");
@@ -826,35 +786,35 @@ describe("handleBulkSetFeedItemStatus", () => {
   });
 
   test("200 with updatedCount 0 when nothing matches", async () => {
-    await appendFeedItem(makeItem({ id: "s1", status: "seen" }) as never);
+    await appendFeedItem(makeItem({ id: "s1", status: "seen" }));
     await appendFeedItem(
       makeItem({
         id: "s2",
         status: "seen",
         createdAt: "2026-04-14T12:00:01.000Z",
-      }) as never,
+      }),
     );
 
-    const result = (await _handleBulkSetFeedItemStatus({
+    const result = await _handleBulkSetFeedItemStatus({
       body: { from: ["new"], to: "seen" },
-    })) as BulkResult;
+    });
 
     expect(result.updatedCount).toBe(0);
   });
 
   test("ids scope limits update to specified items only", async () => {
-    await appendFeedItem(makeItem({ id: "n1", status: "new" }) as never);
+    await appendFeedItem(makeItem({ id: "n1", status: "new" }));
     await appendFeedItem(
       makeItem({
         id: "n2",
         status: "new",
         createdAt: "2026-04-14T12:00:01.000Z",
-      }) as never,
+      }),
     );
 
-    const result = (await _handleBulkSetFeedItemStatus({
+    const result = await _handleBulkSetFeedItemStatus({
       body: { from: ["new"], to: "seen", ids: ["n1"] },
-    })) as BulkResult;
+    });
 
     expect(result.updatedCount).toBe(1);
   });
@@ -868,8 +828,8 @@ describe("handleBulkSetFeedItemStatus", () => {
     } catch (err) {
       caught = err;
     }
-    expect(caught).toBeInstanceOf(RouteError);
-    expect((caught as { statusCode: number }).statusCode).toBe(400);
+    assert(caught instanceof RouteError, "Expected a route error");
+    expect(caught.statusCode).toBe(400);
   });
 
   test("400 on invalid to value", async () => {
@@ -881,8 +841,8 @@ describe("handleBulkSetFeedItemStatus", () => {
     } catch (err) {
       caught = err;
     }
-    expect(caught).toBeInstanceOf(RouteError);
-    expect((caught as { statusCode: number }).statusCode).toBe(400);
+    assert(caught instanceof RouteError, "Expected a route error");
+    expect(caught.statusCode).toBe(400);
   });
 
   test("400 on missing body fields", async () => {
@@ -894,8 +854,8 @@ describe("handleBulkSetFeedItemStatus", () => {
     } catch (err) {
       caught = err;
     }
-    expect(caught).toBeInstanceOf(RouteError);
-    expect((caught as { statusCode: number }).statusCode).toBe(400);
+    assert(caught instanceof RouteError, "Expected a route error");
+    expect(caught.statusCode).toBe(400);
   });
 
   test("500 when the underlying write fails", async () => {
@@ -928,7 +888,7 @@ describe("handleBulkSetFeedItemStatus", () => {
     } catch (err) {
       caught = err;
     }
-    expect(caught).toBeInstanceOf(RouteError);
-    expect((caught as { statusCode: number }).statusCode).toBe(500);
+    assert(caught instanceof RouteError, "Expected a route error");
+    expect(caught.statusCode).toBe(500);
   });
 });

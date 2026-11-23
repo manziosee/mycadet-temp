@@ -76,7 +76,7 @@ function describeOwner(owner: OwnerInfo | undefined): string {
     case "workspace":
       return `workspace tool override`;
     default:
-      return `${(owner as OwnerInfo).kind}-origin tool`;
+      return `${owner.kind}-origin tool`;
   }
 }
 
@@ -757,7 +757,7 @@ export function registerWorkspaceTools(
   // `ownersByName` in lockstep with `tools`.
   const stamped: Array<{ tool: Tool; workspacePath: string }> = newTools.map(
     ({ tool: workspaceTool, workspacePath }) => ({
-      tool: withProviderSafeToolName(workspaceTool as Tool),
+      tool: withProviderSafeToolName(workspaceTool),
       workspacePath,
     }),
   );

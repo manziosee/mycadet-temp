@@ -31,8 +31,7 @@ export function installWhichStub(): {
   const originalWhich = Bun.which;
   let whichStub: WhichStub = () => null;
 
-  (Bun as unknown as { which: WhichStub }).which = (cmd, options) =>
-    whichStub(cmd, options);
+  Bun.which = (cmd, options) => whichStub(cmd, options);
 
   function setWhich(arg: Record<string, string | null> | WhichStub): void {
     whichStub = typeof arg === "function" ? arg : (cmd) => arg[cmd] ?? null;
@@ -41,7 +40,7 @@ export function installWhichStub(): {
   return {
     setWhich,
     restore(): void {
-      (Bun as unknown as { which: typeof originalWhich }).which = originalWhich;
+      Bun.which = originalWhich;
     },
   };
 }

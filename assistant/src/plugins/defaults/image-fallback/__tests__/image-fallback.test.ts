@@ -1,3 +1,4 @@
+import assert from "node:assert/strict";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -188,6 +189,11 @@ function makeCtx(
   } as UserPromptSubmitContext;
 }
 
+function textOf(block: ContentBlock | undefined): string {
+  assert(block?.type === "text", "Expected a text content block");
+  return block.text;
+}
+
 function toolResult(contentBlocks?: ContentBlock[]): ToolResultContent {
   return {
     type: "tool_result",
@@ -287,9 +293,9 @@ describe("image-fallback user-prompt-submit hook", () => {
     const ctx = makeCtx({ latestMessages: messages, isNonInteractive: true });
     await userPromptSubmit(ctx);
     expect(ctx.latestMessages[0].content[0].type).toBe("text");
-    expect(
-      (ctx.latestMessages[0].content[0] as { text: string }).text,
-    ).toContain("[Image auto-described");
+    expect(textOf(ctx.latestMessages[0].content[0])).toContain(
+      "[Image auto-described",
+    );
   });
 
   test("replaces image blocks with captions when active model is text-only", async () => {
@@ -297,7 +303,7 @@ describe("image-fallback user-prompt-submit hook", () => {
     const ctx = makeCtx({ latestMessages: messages });
     await userPromptSubmit(ctx);
     expect(ctx.latestMessages[0].content[0].type).toBe("text");
-    expect((ctx.latestMessages[0].content[0] as { text: string }).text).toBe(
+    expect(textOf(ctx.latestMessages[0].content[0])).toBe(
       "[Image auto-described for text-only model: A red chart showing Q3 revenue.]",
     );
   });
@@ -306,7 +312,7 @@ describe("image-fallback user-prompt-submit hook", () => {
     const messages = [imageMsg("img1")];
     const ctx = makeCtx({ latestMessages: messages });
     await userPromptSubmit(ctx);
-    const text = (ctx.latestMessages[0].content[0] as { text: string }).text;
+    const text = textOf(ctx.latestMessages[0].content[0]);
     expect(text).toContain("text-only model");
     expect(text).toContain("auto-described");
   });
@@ -315,7 +321,7 @@ describe("image-fallback user-prompt-submit hook", () => {
     const messages = [imageMsg("img1")];
     const ctx = makeCtx({ latestMessages: messages });
     await userPromptSubmit(ctx);
-    const text = (ctx.latestMessages[0].content[0] as { text: string }).text;
+    const text = textOf(ctx.latestMessages[0].content[0]);
     expect(text).not.toContain("saved to");
     expect(text).not.toContain("/workspace/data/attachments/");
   });
@@ -346,7 +352,7 @@ describe("image-fallback user-prompt-submit hook", () => {
     // the now text-only content is merged into the single block providers
     // serialize as a plain string
     expect(ctx.latestMessages[0].content).toHaveLength(1);
-    expect((ctx.latestMessages[0].content[0] as { text: string }).text).toBe(
+    expect(textOf(ctx.latestMessages[0].content[0])).toBe(
       "Look at this:\n\n[Image auto-described for text-only model: A red chart showing Q3 revenue.]\n\nWhat do you see?",
     );
   });
@@ -357,9 +363,9 @@ describe("image-fallback user-prompt-submit hook", () => {
     const ctx = makeCtx({ latestMessages: messages });
     await userPromptSubmit(ctx);
     expect(ctx.latestMessages[0].content[0].type).toBe("text");
-    expect(
-      (ctx.latestMessages[0].content[0] as { text: string }).text,
-    ).toContain("no vision-capable model");
+    expect(textOf(ctx.latestMessages[0].content[0])).toContain(
+      "no vision-capable model",
+    );
   });
 
   test("uses fail-open placeholder when provider resolution returns null", async () => {
@@ -368,9 +374,9 @@ describe("image-fallback user-prompt-submit hook", () => {
     const ctx = makeCtx({ latestMessages: messages });
     await userPromptSubmit(ctx);
     expect(ctx.latestMessages[0].content[0].type).toBe("text");
-    expect(
-      (ctx.latestMessages[0].content[0] as { text: string }).text,
-    ).toContain("auto-description failed");
+    expect(textOf(ctx.latestMessages[0].content[0])).toContain(
+      "auto-description failed",
+    );
   });
 
   test("the vision request time-box finishes inside the hook time-box", () => {
@@ -406,7 +412,7 @@ describe("image-fallback user-prompt-submit hook", () => {
     await userPromptSubmit(ctx);
 
     // THEN the image is replaced with timeout prompt text naming the vision model
-    const text = (ctx.latestMessages[0].content[0] as { text: string }).text;
+    const text = textOf(ctx.latestMessages[0].content[0]);
     expect(ctx.latestMessages[0].content[0].type).toBe("text");
     expect(text).toBe(
       '[Image: the vision model "Vision" timed out reading it. Consider using a different vision-capable model.]',
@@ -426,9 +432,9 @@ describe("image-fallback user-prompt-submit hook", () => {
 
     const ctx = makeCtx({ latestMessages: [imageMsg()] });
     await userPromptSubmit(ctx);
-    expect(
-      (ctx.latestMessages[0].content[0] as { text: string }).text,
-    ).toContain("timed out reading it");
+    expect(textOf(ctx.latestMessages[0].content[0])).toContain(
+      "timed out reading it",
+    );
   });
 
   test("uses fail-open placeholder when the vision request fails for a non-timeout reason", async () => {
@@ -444,12 +450,10 @@ describe("image-fallback user-prompt-submit hook", () => {
 
     const ctx = makeCtx({ latestMessages: [imageMsg()] });
     await userPromptSubmit(ctx);
-    expect(
-      (ctx.latestMessages[0].content[0] as { text: string }).text,
-    ).toContain("auto-description failed");
-    expect(
-      (ctx.latestMessages[0].content[0] as { text: string }).text,
-    ).not.toContain("timed out");
+    expect(textOf(ctx.latestMessages[0].content[0])).toContain(
+      "auto-description failed",
+    );
+    expect(textOf(ctx.latestMessages[0].content[0])).not.toContain("timed out");
   });
 
   test("does not cache a timed-out caption; a later turn retries the vision call", async () => {
@@ -470,17 +474,17 @@ describe("image-fallback user-prompt-submit hook", () => {
 
     const ctx1 = makeCtx({ latestMessages: [imageMsg("timeout-then-ok")] });
     await userPromptSubmit(ctx1);
-    expect(
-      (ctx1.latestMessages[0].content[0] as { text: string }).text,
-    ).toContain("timed out reading it");
+    expect(textOf(ctx1.latestMessages[0].content[0])).toContain(
+      "timed out reading it",
+    );
     expect(callCount).toBe(1);
 
     const ctx2 = makeCtx({ latestMessages: [imageMsg("timeout-then-ok")] });
     await userPromptSubmit(ctx2);
     expect(callCount).toBe(2);
-    expect(
-      (ctx2.latestMessages[0].content[0] as { text: string }).text,
-    ).toContain("[Image auto-described");
+    expect(textOf(ctx2.latestMessages[0].content[0])).toContain(
+      "[Image auto-described",
+    );
   });
 
   test("passes an abort signal so the vision request is time-boxed", async () => {
@@ -533,9 +537,9 @@ describe("image-fallback user-prompt-submit hook", () => {
     try {
       const ctx = makeCtx({ latestMessages: [imageMsg("hung")] });
       await userPromptSubmit(ctx);
-      expect(
-        (ctx.latestMessages[0].content[0] as { text: string }).text,
-      ).toContain("timed out reading it");
+      expect(textOf(ctx.latestMessages[0].content[0])).toContain(
+        "timed out reading it",
+      );
       expect(timeoutSpy).toHaveBeenCalled();
     } finally {
       abortSignal.timeout = originalTimeout;
@@ -577,12 +581,11 @@ describe("image-fallback user-prompt-submit hook", () => {
     ];
     const ctx = makeCtx({ latestMessages: messages });
     await userPromptSubmit(ctx);
-    const result = ctx.latestMessages[0].content[0] as ToolResultContent;
+    const result = ctx.latestMessages[0].content[0];
+    assert(result?.type === "tool_result", "Expected a tool result block");
     expect(result.type).toBe("tool_result");
     expect(result.contentBlocks![0].type).toBe("text");
-    expect((result.contentBlocks![0] as { text: string }).text).toContain(
-      "[Image auto-described",
-    );
+    expect(textOf(result.contentBlocks![0])).toContain("[Image auto-described");
   });
 
   test("handles multiple images across multiple messages", async () => {
@@ -597,16 +600,14 @@ describe("image-fallback user-prompt-submit hook", () => {
     const ctx = makeCtx({ latestMessages: messages });
     await userPromptSubmit(ctx);
     expect(ctx.latestMessages[0].content[0].type).toBe("text");
-    expect(
-      (ctx.latestMessages[0].content[0] as { text: string }).text,
-    ).toContain("[Image auto-described");
+    expect(textOf(ctx.latestMessages[0].content[0])).toContain(
+      "[Image auto-described",
+    );
     expect(ctx.latestMessages[2].content).toHaveLength(1);
-    expect(
-      (ctx.latestMessages[2].content[0] as { text: string }).text,
-    ).toContain("[Image auto-described");
-    expect(
-      (ctx.latestMessages[2].content[0] as { text: string }).text,
-    ).toEndWith("\n\nboth?");
+    expect(textOf(ctx.latestMessages[2].content[0])).toContain(
+      "[Image auto-described",
+    );
+    expect(textOf(ctx.latestMessages[2].content[0])).toEndWith("\n\nboth?");
   });
 });
 
@@ -633,7 +634,7 @@ describe("image-fallback dropped-image notice", () => {
     // THEN the model receives the prose and a placeholder, merged into the
     // single text block providers serialize as a plain string
     expect(ctx.latestMessages[0].content).toHaveLength(1);
-    expect((ctx.latestMessages[0].content[0] as { text: string }).text).toBe(
+    expect(textOf(ctx.latestMessages[0].content[0])).toBe(
       "look at this\n\n[Image: no vision-capable model configured to describe it]",
     );
 
@@ -725,9 +726,9 @@ describe("image-fallback dropped-image notice", () => {
     await userPromptSubmit(ctx);
 
     // THEN the image is captioned and nothing is reported to the user
-    expect(
-      (ctx.latestMessages[0].content[0] as { text: string }).text,
-    ).toContain("[Image auto-described");
+    expect(textOf(ctx.latestMessages[0].content[0])).toContain(
+      "[Image auto-described",
+    );
     expect(persistedCards).toHaveLength(0);
   });
 
@@ -749,9 +750,9 @@ describe("image-fallback dropped-image notice", () => {
     await userPromptSubmit(ctx);
 
     // THEN the older image is still replaced for the provider call
-    expect(
-      (ctx.latestMessages[0].content[0] as { text: string }).text,
-    ).toContain("no vision-capable model");
+    expect(textOf(ctx.latestMessages[0].content[0])).toContain(
+      "no vision-capable model",
+    );
 
     // AND no card repeats a notice the user already saw
     expect(persistedCards).toHaveLength(0);
@@ -777,8 +778,9 @@ describe("image-fallback dropped-image notice", () => {
     await userPromptSubmit(ctx);
 
     // THEN the nested image is replaced without notifying the user
-    const result = ctx.latestMessages[0].content[0] as ToolResultContent;
-    expect((result.contentBlocks![0] as { text: string }).text).toContain(
+    const result = ctx.latestMessages[0].content[0];
+    assert(result?.type === "tool_result", "Expected a tool result block");
+    expect(textOf(result.contentBlocks![0])).toContain(
       "no vision-capable model",
     );
     expect(persistedCards).toHaveLength(0);
@@ -800,9 +802,9 @@ describe("image-fallback dropped-image notice", () => {
     await userPromptSubmit(ctx);
 
     // THEN the substitution still reaches the provider-bound history
-    expect(
-      (ctx.latestMessages[0].content[0] as { text: string }).text,
-    ).toContain("no vision-capable model");
+    expect(textOf(ctx.latestMessages[0].content[0])).toContain(
+      "no vision-capable model",
+    );
   });
 });
 
@@ -911,7 +913,7 @@ describe("image-fallback post-tool-use hook", () => {
     await postToolUse(ctx);
     const block = ctx.toolResponse.contentBlocks![0];
     expect(block.type).toBe("text");
-    expect((block as { text: string }).text).toBe(
+    expect(textOf(block)).toBe(
       "[Image auto-described for text-only model: A red chart showing Q3 revenue.]",
     );
   });
@@ -941,11 +943,9 @@ describe("image-fallback post-tool-use hook", () => {
     });
     await postToolUse(ctx);
     const blocks = ctx.toolResponse.contentBlocks!;
-    expect((blocks[0] as { text: string }).text).toBe("page title");
+    expect(textOf(blocks[0])).toBe("page title");
     expect(blocks[1].type).toBe("text");
-    expect((blocks[1] as { text: string }).text).toContain(
-      "[Image auto-described",
-    );
+    expect(textOf(blocks[1])).toContain("[Image auto-described");
   });
 
   test("uses fail-open placeholder when no vision profile is configured", async () => {
@@ -956,9 +956,7 @@ describe("image-fallback post-tool-use hook", () => {
     await postToolUse(ctx);
     const block = ctx.toolResponse.contentBlocks![0];
     expect(block.type).toBe("text");
-    expect((block as { text: string }).text).toContain(
-      "no vision-capable model",
-    );
+    expect(textOf(block)).toContain("no vision-capable model");
   });
 
   test("substitutes timeout prompt text when the vision request times out", async () => {
@@ -975,7 +973,7 @@ describe("image-fallback post-tool-use hook", () => {
       toolResponse: toolResult([imageBlock("shot1")]),
     });
     await postToolUse(ctx);
-    expect((ctx.toolResponse.contentBlocks![0] as { text: string }).text).toBe(
+    expect(textOf(ctx.toolResponse.contentBlocks![0])).toBe(
       '[Image: the vision model "Vision" timed out reading it. Consider using a different vision-capable model.]',
     );
   });
@@ -985,7 +983,7 @@ describe("image-fallback post-tool-use hook", () => {
       toolResponse: toolResult([imageBlock("shot1")]),
     });
     await postToolUse(ctx);
-    const text = (ctx.toolResponse.contentBlocks![0] as { text: string }).text;
+    const text = textOf(ctx.toolResponse.contentBlocks![0]);
     expect(text).not.toContain("saved to");
   });
 
@@ -1040,7 +1038,7 @@ describe("image-fallback post-compact hook", () => {
     const ctx = makeCompactCtx({ history });
     await postCompact(ctx);
     expect(ctx.history[0].content).toHaveLength(1);
-    expect((ctx.history[0].content[0] as { text: string }).text).toBe(
+    expect(textOf(ctx.history[0].content[0])).toBe(
       "Images retained from the compacted portion of the conversation:\n\n[Image auto-described for text-only model: A red chart showing Q3 revenue.]",
     );
   });
@@ -1055,11 +1053,10 @@ describe("image-fallback post-compact hook", () => {
     ];
     const ctx = makeCompactCtx({ history });
     await postCompact(ctx);
-    const result = ctx.history[1].content[0] as ToolResultContent;
+    const result = ctx.history[1].content[0];
+    assert(result?.type === "tool_result", "Expected a tool result block");
     expect(result.contentBlocks![0].type).toBe("text");
-    expect((result.contentBlocks![0] as { text: string }).text).toContain(
-      "[Image auto-described",
-    );
+    expect(textOf(result.contentBlocks![0])).toContain("[Image auto-described");
   });
 
   test("reuses captions generated earlier in the conversation — no new vision call", async () => {
@@ -1093,7 +1090,7 @@ describe("image-fallback post-compact hook", () => {
     const ctx = makeCompactCtx({ history: [imageMsg("retained")] });
     await postCompact(ctx);
     expect(ctx.history[0].content[0].type).toBe("text");
-    expect((ctx.history[0].content[0] as { text: string }).text).toContain(
+    expect(textOf(ctx.history[0].content[0])).toContain(
       "no vision-capable model",
     );
   });

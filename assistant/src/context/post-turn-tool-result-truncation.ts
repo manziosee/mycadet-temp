@@ -6,7 +6,6 @@ import type {
   ContentBlock,
   Message,
   ToolResultContent,
-  ToolUseContent,
 } from "../providers/types.js";
 import {
   parseExternalContentEnvelope,
@@ -89,7 +88,7 @@ function buildToolNameById(messages: Message[]): Map<string, string> {
       if (block.type !== "tool_use") {
         continue;
       }
-      const tu = block as ToolUseContent;
+      const tu = block;
       byId.set(tu.id, tu.name);
     }
   }
@@ -290,7 +289,7 @@ export function postTurnTruncateToolResults(
       if (block.type !== "tool_result") {
         return block;
       }
-      const tr = block as ToolResultContent;
+      const tr = block;
 
       if (!isTruncationEligible(tr, toolNameById.get(tr.tool_use_id))) {
         return block;
@@ -351,7 +350,7 @@ export function derefToolResultReReads(messages: Message[]): {
       if (block.type !== "tool_use") {
         continue;
       }
-      const tu = block as ToolUseContent;
+      const tu = block;
       if (isSpooledToolResultRead(tu.name, tu.input)) {
         reReadToolUseIds.add(tu.id);
       }
@@ -374,7 +373,7 @@ export function derefToolResultReReads(messages: Message[]): {
       if (block.type !== "tool_result") {
         return block;
       }
-      const tr = block as ToolResultContent;
+      const tr = block;
       if (!reReadToolUseIds.has(tr.tool_use_id)) {
         return block;
       }

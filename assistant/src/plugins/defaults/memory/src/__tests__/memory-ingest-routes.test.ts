@@ -1,3 +1,4 @@
+import assert from "node:assert/strict";
 /**
  * Tests for the memory ingest route handler (`memory-ingest-routes.ts`).
  *
@@ -7,7 +8,6 @@
  *   - a held consolidation lock maps to Conflict (409) carrying the holder
  *   - the happy path forwards pages + flags and passes the summary through
  */
-
 import { beforeEach, describe, expect, mock, test } from "bun:test";
 
 import { AssistantConfig } from "../../../../../config/schema.js";
@@ -82,8 +82,8 @@ async function expectRouteError(
   } catch (err) {
     caught = err;
   }
-  expect(caught).toBeInstanceOf(RouteError);
-  const routeError = caught as RouteError;
+  assert(caught instanceof RouteError, "Expected RouteError");
+  const routeError = caught;
   expect(routeError.code).toBe(code);
   expect(routeError.statusCode).toBe(statusCode);
   return routeError;

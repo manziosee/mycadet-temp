@@ -1,3 +1,4 @@
+import assert from "node:assert/strict";
 import { describe, expect, test } from "bun:test";
 
 import {
@@ -52,10 +53,11 @@ describe("sandbox containment — ambient capabilities absent", () => {
     }
     // `fetch` resolves to `undefined`, so invoking it is a TypeError — the
     // network call can never be made.
-    expect(caught).toBeInstanceOf(WorkflowScriptError);
-    expect((caught as WorkflowScriptError).message).toMatch(
-      /not a function|undefined/i,
+    assert(
+      caught instanceof WorkflowScriptError,
+      "Expected WorkflowScriptError",
     );
+    expect(caught.message).toMatch(/not a function|undefined/i);
   });
 });
 
