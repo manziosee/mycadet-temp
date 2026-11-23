@@ -1053,7 +1053,7 @@ jobs:
 
   # ── Electron DMG ──────────────────────────────────────────────────────
 
-  build-electron:
+  build-macos:
     # No publish dep: the bundled CLI floats to the `dev` dist-tag at runtime.
     needs: [compute-version]
     # Dev-channel canary: runs on every dev release but never blocks the rest
@@ -1286,7 +1286,7 @@ jobs:
 
   # ── Electron Linux (dev canary) ───────────────────────────────────────
 
-  build-electron-linux:
+  build-linux:
     needs: [compute-version]
     # Dev-channel canary: runs on every dev release but never blocks the
     # rest of the train. The AppImage needs no signing; the electron-updater

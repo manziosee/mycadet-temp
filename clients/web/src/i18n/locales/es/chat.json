@@ -1385,10 +1385,6 @@
     "doneSaved": "Habilidad guardada",
     "recommended": "Recomendado"
   },
-  "sidebarExpandRow": {
-    "expand": "Expandir",
-    "collapse": "Contraer"
-  },
   "cameraFrameGrid": {
     "count": "{count, plural, one {# fotograma de cámara} other {# fotogramas de cámara}}",
     "timeRange": "Guardados de {first} a {last}",

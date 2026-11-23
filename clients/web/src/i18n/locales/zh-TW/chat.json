@@ -1400,10 +1400,6 @@
     "emptyBody": "開始新的聊天後，它會顯示在這裡。",
     "emptyTitle": "還沒有聊天。"
   },
-  "sidebarExpandRow": {
-    "expand": "展開",
-    "collapse": "收合"
-  },
   "coachmarkPress": {
     "turn": "我點擊了 {label}。接下來呢？"
   },

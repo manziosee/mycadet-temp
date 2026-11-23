@@ -162,9 +162,7 @@ export const router = createBrowserRouter(
           path: "/",
           lazy: {
             Component: () =>
-              import("@app/domains/onboarding/pages/welcome-screen").then(
-                (m) => m.WelcomeScreen,
-              ),
+              import("@app/shell/startup-page").then((m) => m.StartupPage),
           },
         },
         {
