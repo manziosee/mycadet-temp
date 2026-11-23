@@ -143,19 +143,19 @@ export async function unpairAssistant(
  * in-flight (or already-resolved) hatch instead of starting over, so HMR
  * remounts, StrictMode double-mounts, and the shell's session-driven
  * remounts never spawn duplicate hatches. A held promise answers only for
- * the SAME remote — the guard can outlive a trip through the hosting screen,
- * where the user may switch modes, and the abandoned mode's assistant must
+ * the SAME inputs — the guard can outlive a trip through the hosting screen,
+ * where the user may change their settings, and the abandoned assistant must
  * not be adopted for the new choice. The guard releases on failure (a retry
  * re-hatches) and via `releaseHatchGuard` — the caller knows when the
  * handoff is genuinely done, and a later onboarding session must hatch a
  * brand-new assistant instead of reusing a resolved one.
  */
 let hatchPromise: Promise<HatchAssistantResult> | null = null;
-let hatchRemote: string | undefined;
+let hatchInput: string | undefined;
 
 export function releaseHatchGuard(): void {
   hatchPromise = null;
-  hatchRemote = undefined;
+  hatchInput = undefined;
 }
 
 type HatchAssistantResult = {
@@ -164,15 +164,23 @@ type HatchAssistantResult = {
   error?: string;
 };
 
+export interface HatchProviderOptions {
+  provider?: string;
+  precollectedApiKey?: string;
+  configValues?: Record<string, string>;
+}
+
 export async function hatchAssistant(
   remote?: string,
+  providerOptions?: HatchProviderOptions,
 ): Promise<HatchAssistantResult> {
-  if (hatchPromise && hatchRemote !== remote) {
+  const input = JSON.stringify({ remote, ...providerOptions });
+  if (hatchPromise && hatchInput !== input) {
     releaseHatchGuard();
   }
   if (!hatchPromise) {
-    hatchRemote = remote;
-    hatchPromise = requestHatch(remote).then((result) => {
+    hatchInput = input;
+    hatchPromise = requestHatch(remote, providerOptions).then((result) => {
       if (!result.ok) {
         releaseHatchGuard();
       }
@@ -182,12 +190,15 @@ export async function hatchAssistant(
   return hatchPromise;
 }
 
-async function requestHatch(remote?: string): Promise<HatchAssistantResult> {
+async function requestHatch(
+  remote?: string,
+  providerOptions?: HatchProviderOptions,
+): Promise<HatchAssistantResult> {
   try {
     const res = await fetch("/v1/assistants/hatch", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ remote }),
+      body: JSON.stringify({ remote, ...providerOptions }),
     });
     const parsed = (await res.json().catch(() => null)) as {
       ok?: boolean;

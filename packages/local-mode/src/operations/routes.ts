@@ -275,6 +275,9 @@ async function readJsonBody(
 /** The hatch row's body: the requested remote override; junk degrades to a plain hatch. */
 const HatchBodySchema = z
   .object({
+    provider: z.string().optional(),
+    precollectedApiKey: z.string().optional(),
+    configValues: z.record(z.string(), z.string()).optional(),
     remote: z
       .string()
       .nullish()
@@ -307,9 +310,9 @@ const UpgradeBodySchema = z
  * ever invokes the CLI as a subprocess.
  */
 async function runHatchRoute(request: OperatorRequest): Promise<Response> {
-  const { remote } = HatchBodySchema.parse(await readJsonBody(request.body));
+  const params = HatchBodySchema.parse(await readJsonBody(request.body));
   try {
-    const result = await hatchAssistant({ remote });
+    const result = await hatchAssistant(params);
     if (result.ok) {
       // The leg's own lease minted the webview's credential pair. It rides
       // the response as Set-Cookie headers — for natively-jarring browser

@@ -39,6 +39,25 @@ describe("hatchAssistant — the coalesced hatch", () => {
     expect(second).toEqual(first);
   });
 
+  test("sends provider settings and coalesces only identical hatch inputs", async () => {
+    const bodies: unknown[] = [];
+    globalThis.fetch = (async (_input, init) => {
+      bodies.push(JSON.parse(String(init?.body)));
+      return Response.json({ ok: true, assistantId: "a-1" });
+    }) as typeof fetch;
+    const provider = { provider: "fireworks", precollectedApiKey: "fw_test" };
+    await operations.hatchAssistant("local", provider);
+    await operations.hatchAssistant("local", provider);
+    await operations.hatchAssistant("local", {
+      ...provider,
+      precollectedApiKey: "fw_changed",
+    });
+    expect(bodies).toEqual([
+      { remote: "local", ...provider },
+      { remote: "local", ...provider, precollectedApiKey: "fw_changed" },
+    ]);
+  });
+
   test("a held promise answers only for the same remote — a switched mode hatches fresh", async () => {
     respondWith([
       { ok: true, assistantId: "local-1" },

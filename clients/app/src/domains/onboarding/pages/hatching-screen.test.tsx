@@ -111,6 +111,7 @@ const { HatchingScreen } =
 
 describe("hatching screen", () => {
   beforeEach(() => {
+    sessionStorage.removeItem("onboarding.providerKey");
     navigateMock.mockClear();
     hatchAssistantMock.mockClear();
     resolveAssistantMock.mockClear();
@@ -161,6 +162,41 @@ describe("hatching screen", () => {
     composeSvgOverride = null;
   });
 
+  test("passes the staged provider to hatch and clears it on success", async () => {
+    sessionStorage.setItem(
+      "onboarding.providerKey",
+      JSON.stringify({
+        provider: "fireworks",
+        key: "fw_test",
+        model: "accounts/fireworks/models/minimax-m3",
+      }),
+    );
+    render(<HatchingScreen />);
+    await waitFor(() => expect(navigateMock).toHaveBeenCalled(), {
+      timeout: 5000,
+    });
+    expect(hatchAssistantMock).toHaveBeenCalledWith("local", {
+      provider: "fireworks",
+      precollectedApiKey: "fw_test",
+      configValues: {
+        "llm.default.model": "accounts/fireworks/models/minimax-m3",
+      },
+    });
+    expect(sessionStorage.getItem("onboarding.providerKey")).toBeNull();
+  });
+
+  test("retains staged provider settings when hatch fails", async () => {
+    const pending = JSON.stringify({ provider: "fireworks", key: "fw_test" });
+    sessionStorage.setItem("onboarding.providerKey", pending);
+    hatchAssistantMock.mockImplementationOnce(async () => ({
+      ok: false,
+      error: "hatch failed",
+    }));
+    render(<HatchingScreen />);
+    await waitFor(() => expect(screen.getByText("hatch failed")).toBeDefined());
+    expect(sessionStorage.getItem("onboarding.providerKey")).toBe(pending);
+  });
+
   test("the local hatch polls the resolution endpoint then hands off to the assistant page with the hatched assistant in state", async () => {
     searchParams = new URLSearchParams("hosting=local");
     resolutionReadyFromCall = 2;
@@ -169,10 +205,13 @@ describe("hatching screen", () => {
     await waitFor(() => expect(navigateMock).toHaveBeenCalled(), {
       timeout: 5000,
     });
-    expect(hatchAssistantMock).toHaveBeenCalledWith("local");
+    expect(hatchAssistantMock).toHaveBeenCalledWith("local", undefined);
     expect(writeSelectionMock).toHaveBeenCalledWith("local-1");
     // The resolution answered notReady once, so the wait loop polled again.
     expect(resolutionCallCount).toBe(2);
+    expect(resolveAssistantMock).toHaveBeenCalledWith(
+      expect.objectContaining({ assistantId: "local-1" }),
+    );
     expect(navigateMock).toHaveBeenCalledWith(routes.assistant, {
       replace: true,
       state: { assistantSelection: { id: "local-1" } },
@@ -188,7 +227,7 @@ describe("hatching screen", () => {
     render(<HatchingScreen />);
 
     await waitFor(() => expect(screen.getByRole("alert")).toBeDefined());
-    expect(hatchAssistantMock).toHaveBeenCalledWith("local");
+    expect(hatchAssistantMock).toHaveBeenCalledWith("local", undefined);
     // The 401 is fatal: one query, no polling, no handoff.
     expect(resolutionCallCount).toBe(1);
     expect(navigateMock).not.toHaveBeenCalled();
@@ -201,7 +240,7 @@ describe("hatching screen", () => {
     await waitFor(() => expect(navigateMock).toHaveBeenCalled(), {
       timeout: 5000,
     });
-    expect(hatchAssistantMock).toHaveBeenCalledWith("docker");
+    expect(hatchAssistantMock).toHaveBeenCalledWith("docker", undefined);
     expect(navigateMock).toHaveBeenCalledWith(routes.assistant, {
       replace: true,
       state: { assistantSelection: { id: "local-1" } },
@@ -215,7 +254,7 @@ describe("hatching screen", () => {
     await waitFor(() => expect(navigateMock).toHaveBeenCalled(), {
       timeout: 5000,
     });
-    expect(hatchAssistantMock).toHaveBeenCalledWith("cloud");
+    expect(hatchAssistantMock).toHaveBeenCalledWith("cloud", undefined);
     expect(writeSelectionMock).toHaveBeenCalledWith("local-1");
     // The hatch avatar re-home: the freshly hatched assistant's id seeds the
     // random traits on the scoped surface (fire-and-forget, never awaited).
