@@ -341,6 +341,16 @@ describe("the hatch row — POST /v1/assistants/hatch", () => {
     expect((await response.json()).ok).toBe(true);
   });
 
+  test("uses the operation schema's defaults and accepts operation options", async () => {
+    for (const remote of [null, 123]) {
+      await dispatchAnswered("/v1/assistants/hatch", "POST", { remote });
+      expect(hatchAssistantMock).toHaveBeenLastCalledWith({ remote: "local" });
+    }
+    const params = { remote: "local", name: "my-assistant", watch: true };
+    await dispatchAnswered("/v1/assistants/hatch", "POST", params);
+    expect(hatchAssistantMock).toHaveBeenLastCalledWith(params);
+  });
+
   test("a failed hatch resolves {ok:false, error} — never a throw", async () => {
     hatchAssistantMock.mockImplementation(async () => ({
       ok: false as const,
