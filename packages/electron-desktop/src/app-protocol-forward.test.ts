@@ -49,9 +49,13 @@ mock.module("./about", () => ({
 mock.module("./app-logger", () => ({
   default: { error: mock(), warning: mock(), info: mock(), warn: mock() },
 }));
+let servedConfig: { assistantId?: string; assistantName?: string } = {
+  assistantName: "A<ria",
+};
+
 mock.module("@mycadet/local-mode", () => ({
   readLockfile: () => ({}),
-  servedConfigFromLockfile: () => ({ assistantName: "A<ria" }),
+  servedConfigFromLockfile: () => servedConfig,
 }));
 
 const { registerAppProtocol } = await import("./app-protocol-forward");
@@ -88,6 +92,7 @@ const writeRenderer = async (root: string, body: string): Promise<void> => {
 };
 
 afterEach(async () => {
+  servedConfig = { assistantName: "A<ria" };
   forwardOperator.mockClear();
   forwardOperator.mockResolvedValue(null);
   cookieSet.mockClear();
@@ -194,6 +199,21 @@ describe("registerAppProtocol", () => {
     expect(body).toContain("\\u003c");
     const shell = await handler!(new Request("app://mycadet.ai/__config"));
     expect(shell.status).toBe(200);
+  });
+
+  test("serves the current identity after hatch and assistant switching", async () => {
+    await setupDev();
+    servedConfig = {};
+    await register();
+    for (const assistantId of ["hatched", "switched"]) {
+      servedConfig = { assistantId, assistantName: assistantId };
+      const config = await handler!(new Request("app://mycadet.ai/__config"));
+      expect(await config.json()).toMatchObject({ assistantId });
+      const document = await handler!(
+        new Request("app://mycadet.ai/web/assistant/conversations/new"),
+      );
+      expect(await document.text()).toContain(`"assistantId":"${assistantId}"`);
+    }
   });
 
   test("app-shell index html gets the config injected", async () => {
