@@ -591,10 +591,6 @@
   "cardSurface": {
     "viewDetails": "Подробности"
   },
-  "sidebarExpandRow": {
-    "expand": "Развернуть",
-    "collapse": "Свернуть"
-  },
   "cameraFrameGrid": {
     "count": "{count, plural, one {# кадр камеры} few {# кадра камеры} many {# кадров камеры} other {# кадра камеры}}",
     "timeRange": "Сохранено с {first} по {last}",

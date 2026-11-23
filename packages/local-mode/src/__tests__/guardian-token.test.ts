@@ -7,6 +7,7 @@ import { configureCliPaths } from "../cli-invocation";
 
 import {
   getGuardianAccessToken,
+  getGuardianTokenAsCookies,
   isConfidentialRefreshUrl,
   saveBasetenSandboxToken,
   saveGuardianToken,
@@ -218,4 +219,14 @@ describe("getPairedGuardianAccessToken — baseten sandboxes", () => {
     );
     expect(stat.mode & 0o777).toBe(0o600);
   });
+});
+
+test("hatch cookies persist until each credential expires", () => {
+  const accessTokenExpiresAt = "2030-01-01T00:00:00.000Z";
+  const refreshTokenExpiresAt = Date.parse("2030-02-01T00:00:00.000Z");
+  const cookies = getGuardianTokenAsCookies(
+    makeTokenData({ accessTokenExpiresAt, refreshTokenExpiresAt }),
+  );
+  expect(cookies[0]).toContain("Expires=Tue, 01 Jan 2030 00:00:00 GMT");
+  expect(cookies[1]).toContain("Expires=Fri, 01 Feb 2030 00:00:00 GMT");
 });

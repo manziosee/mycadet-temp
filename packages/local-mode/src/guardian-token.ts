@@ -355,8 +355,8 @@ export function guardianTokenDueForRenewal(token: GuardianTokenData): boolean {
  */
 export function getGuardianTokenAsCookies(token: GuardianTokenData): string[] {
   return [
-    `cadet_web_access=${encodeURIComponent(token.accessToken)}; HttpOnly; Path=/; SameSite=Strict`,
-    `cadet_web_refresh=${encodeURIComponent(token.refreshToken)}; HttpOnly; Path=/; SameSite=Strict`,
+    `cadet_web_access=${encodeURIComponent(token.accessToken)}; HttpOnly; Path=/; SameSite=Strict; Expires=${new Date(token.accessTokenExpiresAt).toUTCString()}`,
+    `cadet_web_refresh=${encodeURIComponent(token.refreshToken)}; HttpOnly; Path=/; SameSite=Strict; Expires=${new Date(token.refreshTokenExpiresAt).toUTCString()}`,
   ];
 }
 

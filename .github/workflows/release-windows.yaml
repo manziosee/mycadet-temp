@@ -43,6 +43,7 @@ jobs:
       CADET_ENVIRONMENT: ${{ inputs.environment }}
     steps:
       - name: Validate inputs and signing gate
+        working-directory: ${{ github.workspace }}
         shell: bash
         env:
           ENVIRONMENT: ${{ inputs.environment }}

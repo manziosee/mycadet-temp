@@ -1408,10 +1408,6 @@
     "summaryUnanswered": "Not set",
     "untitledTask": "What I saw"
   },
-  "sidebarExpandRow": {
-    "expand": "Expand",
-    "collapse": "Collapse"
-  },
   "cameraFrameGrid": {
     "count": "{count, plural, one {# camera frame} other {# camera frames}}",
     "timeRange": "Saved {first} to {last}",
