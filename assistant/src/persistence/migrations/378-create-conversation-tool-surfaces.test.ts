@@ -16,10 +16,11 @@ function createTestDb() {
 
 function tableDdl(sqlite: Database): string | undefined {
   const row = sqlite
-    .query(
-      `SELECT sql FROM sqlite_master WHERE type='table' AND name='conversation_tool_surfaces'`,
-    )
-    .get() as { sql: string } | null;
+    .query<
+      { sql: string },
+      []
+    >(`SELECT sql FROM sqlite_master WHERE type='table' AND name='conversation_tool_surfaces'`)
+    .get();
   return row?.sql;
 }
 
@@ -33,8 +34,11 @@ function insertSurface(sqlite: Database, conversationId: string): void {
 
 function surfaceCount(sqlite: Database): number {
   const row = sqlite
-    .query(`SELECT COUNT(*) AS n FROM conversation_tool_surfaces`)
-    .get() as { n: number };
+    .query<
+      { n: number },
+      []
+    >(`SELECT COUNT(*) AS n FROM conversation_tool_surfaces`)
+    .get()!;
   return row.n;
 }
 

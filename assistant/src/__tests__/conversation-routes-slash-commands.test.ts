@@ -400,11 +400,7 @@ describe("handleSendMessage slash command interception", () => {
   test("clears processing and drains the queue when /compact's initial persist fails", async () => {
     const { conversation } = makeConversation();
     const drainQueue = mock(async () => {});
-    (
-      conversation as unknown as {
-        drainQueue: () => Promise<void>;
-      }
-    ).drainQueue = drainQueue;
+    conversation.drainQueue = drainQueue;
 
     // Force the user-message persist (the first addMessage in the /compact
     // branch, on the synchronous pre-202 path) to throw.
@@ -556,7 +552,7 @@ describe("handleSendMessage canned wake-up greeting", () => {
     const { conversation, persistUserMessage, runAgentLoop } =
       makeConversation();
     conversation.setProcessing(true);
-    const stub = conversation as unknown as { isProcessing: () => boolean };
+    const stub = conversation;
     stub.isProcessing = () => false;
     // What the real one does while another holder has the flag, which is what
     // the fall-through below runs into.
@@ -659,7 +655,7 @@ describe("handleSendMessage flag taken after its queue decision", () => {
     const { conversation, runAgentLoop } = makeConversation();
     conversation.setProcessing(true);
     // The early gate reads idle, the claim below does not.
-    const stub = conversation as unknown as { isProcessing: () => boolean };
+    const stub = conversation;
     stub.isProcessing = () => false;
 
     const res = await callHandler(

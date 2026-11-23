@@ -34,7 +34,6 @@ function ensureTestDir(): void {
 
 import { getConfig, invalidateConfigCache } from "../config/loader.js";
 import { AssistantConfigSchema } from "../config/schema.js";
-import { AssistantConfig } from "../config/schema.js";
 import { DEFAULT_ELEVENLABS_VOICE_ID } from "../config/schemas/elevenlabs.js";
 import { SttServiceSchema } from "../config/schemas/stt.js";
 import { TtsServiceSchema } from "../config/schemas/tts.js";
@@ -1981,9 +1980,7 @@ describe("resolveTtsConfig", () => {
     // Force an unknown provider via type assertion for coverage.
     // structuredClone prevents mutation from leaking into Zod's shared
     // default objects (Zod 4 stores defaults by reference).
-    const config = structuredClone(
-      AssistantConfigSchema.parse({}),
-    ) as AssistantConfig;
+    const config = structuredClone(AssistantConfigSchema.parse({}));
     (config.services.tts as { provider: string }).provider = "aws-polly";
     const resolved = resolveTtsConfig(config);
     expect(resolved.provider as string).toBe("aws-polly");
@@ -1991,9 +1988,7 @@ describe("resolveTtsConfig", () => {
   });
 
   test("unknown provider resolution is deterministic across repeated calls", () => {
-    const config = structuredClone(
-      AssistantConfigSchema.parse({}),
-    ) as AssistantConfig;
+    const config = structuredClone(AssistantConfigSchema.parse({}));
     (config.services.tts as { provider: string }).provider = "nonexistent";
     const first = resolveTtsConfig(config);
     const second = resolveTtsConfig(config);

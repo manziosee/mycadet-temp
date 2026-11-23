@@ -2,6 +2,8 @@ import { existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { beforeEach, describe, expect, mock, test } from "bun:test";
 
+import { z } from "zod";
+
 mock.module("../heartbeat/heartbeat-service.js", () => ({
   HeartbeatService: {
     getInstance: () => null,
@@ -78,7 +80,12 @@ import {
   NotFoundError,
 } from "../runtime/routes/errors.js";
 import { ROUTES as HEARTBEAT_ROUTES } from "../runtime/routes/heartbeat-routes.js";
-import { ROUTES as SCHEDULE_ROUTES } from "../runtime/routes/schedule-routes.js";
+import {
+  ROUTES as SCHEDULE_ROUTES,
+  scheduleRunSchema,
+  scheduleSchema,
+  scheduleUsageSummarySchema,
+} from "../runtime/routes/schedule-routes.js";
 import type { RouteDefinition } from "../runtime/routes/types.js";
 import { resolveDefaultScheduleInferenceProfile } from "../schedule/inference-profile.js";
 import {
@@ -104,6 +111,32 @@ function clearTables(): void {
   db.run("DELETE FROM messages");
   db.run("DELETE FROM conversations");
 }
+
+const schedulesResponseSchema = z.looseObject({
+  schedules: z.array(scheduleSchema.loose()),
+});
+const scheduleResponseSchema = z.looseObject({
+  schedule: scheduleSchema.loose(),
+});
+const runsResponseSchema = z.looseObject({
+  runs: z.array(scheduleRunSchema.loose()),
+});
+const heartbeatRunsResponseSchema = z.looseObject({
+  runs: z.array(
+    z.looseObject({
+      id: z.string(),
+      status: z.string(),
+      conversationId: z.string().nullable(),
+      conversationExists: z.boolean(),
+      conversationArchivedAt: z.number().nullable(),
+      estimatedCostUsd: z.number(),
+    }),
+  ),
+});
+const usageResponseSchema = z.looseObject({
+  summaries: z.array(scheduleUsageSummarySchema.loose()),
+});
+const reassignedResponseSchema = z.looseObject({ reassigned: z.number() });
 
 function findRoute(endpoint: string, method: string): RouteDefinition {
   const route = SCHEDULE_ROUTES.find(
@@ -206,9 +239,11 @@ describe("schedule run-now trust propagation", () => {
     });
 
     const route = findRoute("schedules/:id/run", "POST");
-    const result = (await route.handler({
-      pathParams: { id: schedule.id },
-    })) as { schedules: unknown[] };
+    const result = schedulesResponseSchema.parse(
+      await route.handler({
+        pathParams: { id: schedule.id },
+      }),
+    );
 
     expect(result.schedules).toBeDefined();
     expect(getOrCreateCalls).toHaveLength(1);
@@ -246,9 +281,7 @@ describe("GET /schedules — default defer exclusion", () => {
     });
 
     const route = findRoute("schedules", "GET");
-    const result = (await route.handler({})) as {
-      schedules: Array<{ id: string }>;
-    };
+    const result = schedulesResponseSchema.parse(await route.handler({}));
     expect(result.schedules).toHaveLength(1);
     expect(result.schedules.every((s) => s.id !== deferred.id)).toBe(true);
   });
@@ -269,9 +302,11 @@ describe("GET /schedules — default defer exclusion", () => {
     });
 
     const route = findRoute("schedules", "GET");
-    const result = (await route.handler({
-      queryParams: { include_all: "true" },
-    })) as { schedules: Array<{ id: string }> };
+    const result = schedulesResponseSchema.parse(
+      await route.handler({
+        queryParams: { include_all: "true" },
+      }),
+    );
     expect(result.schedules).toHaveLength(2);
   });
 
@@ -309,14 +344,7 @@ describe("GET /schedules — default defer exclusion", () => {
     });
 
     const route = findRoute("schedules", "GET");
-    const result = (await route.handler({})) as {
-      schedules: Array<{
-        name: string;
-        createdFromConversationId: string | null;
-        createdFromConversationExists: boolean;
-        createdFromConversationArchivedAt: number | null;
-      }>;
-    };
+    const result = schedulesResponseSchema.parse(await route.handler({}));
 
     const byName = new Map(result.schedules.map((s) => [s.name, s]));
     const active = byName.get("Active source schedule")!;
@@ -349,13 +377,7 @@ describe("GET /schedules — default defer exclusion", () => {
     });
 
     const route = findRoute("schedules", "GET");
-    const result = (await route.handler({})) as {
-      schedules: Array<{
-        name: string;
-        description: string;
-        cadenceDescription: string;
-      }>;
-    };
+    const result = schedulesResponseSchema.parse(await route.handler({}));
 
     expect(result.schedules).toHaveLength(1);
     expect(result.schedules[0]).toMatchObject({
@@ -375,13 +397,7 @@ describe("GET /schedules — default defer exclusion", () => {
     });
 
     const route = findRoute("schedules", "GET");
-    const result = (await route.handler({})) as {
-      schedules: Array<{
-        name: string;
-        description: string;
-        cadenceDescription: string;
-      }>;
-    };
+    const result = schedulesResponseSchema.parse(await route.handler({}));
 
     expect(result.schedules[0]).toMatchObject({
       name: "One-shot schedule",
@@ -405,13 +421,7 @@ describe("GET /schedules — default defer exclusion", () => {
     });
 
     const route = findRoute("schedules", "GET");
-    const result = (await route.handler({})) as {
-      schedules: Array<{
-        name: string;
-        cadenceDescription: string;
-        isOneShot: boolean;
-      }>;
-    };
+    const result = schedulesResponseSchema.parse(await route.handler({}));
     const byName = new Map(result.schedules.map((s) => [s.name, s]));
 
     expect(byName.get("RRule single fire")).toMatchObject({
@@ -441,10 +451,12 @@ describe("GET /schedules — default defer exclusion", () => {
 
     const route = findRoute("schedules/:id/toggle", "POST");
     const agent = listSchedules().find((j) => j.createdBy === "agent")!;
-    const result = (await route.handler({
-      pathParams: { id: agent.id },
-      body: { enabled: false },
-    })) as { schedules: Array<{ id: string }> };
+    const result = schedulesResponseSchema.parse(
+      await route.handler({
+        pathParams: { id: agent.id },
+        body: { enabled: false },
+      }),
+    );
     expect(result.schedules).toHaveLength(1);
     expect(result.schedules[0].id).toBe(agent.id);
   });
@@ -504,11 +516,11 @@ describe("GET /schedules/:id", () => {
     });
 
     const route = findRoute("schedules/:id", "GET");
-    const result = (await route.handler({
-      pathParams: { id: schedule.id },
-    })) as {
-      schedule: Record<string, unknown>;
-    };
+    const result = scheduleResponseSchema.parse(
+      await route.handler({
+        pathParams: { id: schedule.id },
+      }),
+    );
 
     expect(result.schedule).toMatchObject({
       id: schedule.id,
@@ -536,11 +548,11 @@ describe("GET /schedules/:id", () => {
     });
 
     const route = findRoute("schedules/:id", "GET");
-    const result = (await route.handler({
-      pathParams: { id: schedule.id },
-    })) as {
-      schedule: { quiet: boolean };
-    };
+    const result = scheduleResponseSchema.parse(
+      await route.handler({
+        pathParams: { id: schedule.id },
+      }),
+    );
 
     expect(result.schedule.quiet).toBe(true);
   });
@@ -555,11 +567,11 @@ describe("GET /schedules/:id", () => {
     });
 
     const route = findRoute("schedules/:id", "GET");
-    const result = (await route.handler({
-      pathParams: { id: deferred.id },
-    })) as {
-      schedule: { id: string };
-    };
+    const result = scheduleResponseSchema.parse(
+      await route.handler({
+        pathParams: { id: deferred.id },
+      }),
+    );
     expect(result.schedule.id).toBe(deferred.id);
   });
 
@@ -592,9 +604,9 @@ describe("schedule runs list — limit handling", () => {
       await createScheduleRun(job.id, `conv-${i}`);
     }
     const route = findRoute("schedules/:id/runs", "GET");
-    const result = (await route.handler({ pathParams: { id: job.id } })) as {
-      runs: unknown[];
-    };
+    const result = runsResponseSchema.parse(
+      await route.handler({ pathParams: { id: job.id } }),
+    );
     expect(Array.isArray(result.runs)).toBe(true);
     expect(result.runs).toHaveLength(3);
   });
@@ -608,10 +620,12 @@ describe("schedule runs list — limit handling", () => {
     });
     await createScheduleRun(job.id, "conv");
     const route = findRoute("schedules/:id/runs", "GET");
-    const result = (await route.handler({
-      pathParams: { id: job.id },
-      queryParams: { limit: "abc" },
-    })) as { runs: unknown[] };
+    const result = runsResponseSchema.parse(
+      await route.handler({
+        pathParams: { id: job.id },
+        queryParams: { limit: "abc" },
+      }),
+    );
     expect(Array.isArray(result.runs)).toBe(true);
   });
 
@@ -626,10 +640,12 @@ describe("schedule runs list — limit handling", () => {
       await createScheduleRun(job.id, `conv-${i}`);
     }
     const route = findRoute("schedules/:id/runs", "GET");
-    const result = (await route.handler({
-      pathParams: { id: job.id },
-      queryParams: { limit: "-5" },
-    })) as { runs: unknown[] };
+    const result = runsResponseSchema.parse(
+      await route.handler({
+        pathParams: { id: job.id },
+        queryParams: { limit: "-5" },
+      }),
+    );
     expect(result.runs).toHaveLength(1);
   });
 
@@ -644,10 +660,12 @@ describe("schedule runs list — limit handling", () => {
       await createScheduleRun(job.id, `conv-${i}`);
     }
     const route = findRoute("schedules/:id/runs", "GET");
-    const result = (await route.handler({
-      pathParams: { id: job.id },
-      queryParams: { limit: "0" },
-    })) as { runs: unknown[] };
+    const result = runsResponseSchema.parse(
+      await route.handler({
+        pathParams: { id: job.id },
+        queryParams: { limit: "0" },
+      }),
+    );
     expect(result.runs).toHaveLength(1);
   });
 
@@ -662,10 +680,12 @@ describe("schedule runs list — limit handling", () => {
       await createScheduleRun(job.id, `conv-${i}`);
     }
     const route = findRoute("schedules/:id/runs", "GET");
-    const result = (await route.handler({
-      pathParams: { id: job.id },
-      queryParams: { limit: "9999" },
-    })) as { runs: unknown[] };
+    const result = runsResponseSchema.parse(
+      await route.handler({
+        pathParams: { id: job.id },
+        queryParams: { limit: "9999" },
+      }),
+    );
     expect(result.runs).toHaveLength(5);
   });
 
@@ -680,10 +700,12 @@ describe("schedule runs list — limit handling", () => {
       await createScheduleRun(job.id, `conv-${i}`);
     }
     const route = findRoute("schedules/:id/runs", "GET");
-    const result = (await route.handler({
-      pathParams: { id: job.id },
-      queryParams: { limit: "2.7" },
-    })) as { runs: unknown[] };
+    const result = runsResponseSchema.parse(
+      await route.handler({
+        pathParams: { id: job.id },
+        queryParams: { limit: "2.7" },
+      }),
+    );
     expect(result.runs).toHaveLength(2);
   });
 });
@@ -727,14 +749,9 @@ describe("schedule and heartbeat run metadata", () => {
     recordUsageCostAt(conversation.id, "req-after-run", 2500, 0.75);
 
     const route = findRoute("schedules/:id/runs", "GET");
-    const result = (await route.handler({ pathParams: { id: job.id } })) as {
-      runs: Array<{
-        conversationId: string | null;
-        conversationExists: boolean;
-        conversationArchivedAt: number | null;
-        estimatedCostUsd: number;
-      }>;
-    };
+    const result = runsResponseSchema.parse(
+      await route.handler({ pathParams: { id: job.id } }),
+    );
 
     expect(result.runs).toHaveLength(1);
     expect(result.runs[0].conversationId).toBe(conversation.id);
@@ -766,12 +783,9 @@ describe("schedule and heartbeat run metadata", () => {
     await completeScheduleRun(runId, { status: "ok" });
 
     const route = findRoute("schedules/:id/runs", "GET");
-    const result = (await route.handler({ pathParams: { id: job.id } })) as {
-      runs: Array<{
-        conversationExists: boolean;
-        conversationArchivedAt: number | null;
-      }>;
-    };
+    const result = runsResponseSchema.parse(
+      await route.handler({ pathParams: { id: job.id } }),
+    );
 
     expect(result.runs[0].conversationExists).toBe(true);
     expect(result.runs[0].conversationArchivedAt).toBe(archivedAt);
@@ -800,24 +814,16 @@ describe("schedule and heartbeat run metadata", () => {
     await completeScheduleRun(scriptRunId, { status: "ok" });
 
     const route = findRoute("schedules/:id/runs", "GET");
-    const missingResult = (await route.handler({
-      pathParams: { id: missingJob.id },
-    })) as {
-      runs: Array<{
-        conversationId: string | null;
-        conversationExists: boolean;
-        conversationArchivedAt: number | null;
-      }>;
-    };
-    const scriptResult = (await route.handler({
-      pathParams: { id: scriptJob.id },
-    })) as {
-      runs: Array<{
-        conversationId: string | null;
-        conversationExists: boolean;
-        conversationArchivedAt: number | null;
-      }>;
-    };
+    const missingResult = runsResponseSchema.parse(
+      await route.handler({
+        pathParams: { id: missingJob.id },
+      }),
+    );
+    const scriptResult = runsResponseSchema.parse(
+      await route.handler({
+        pathParams: { id: scriptJob.id },
+      }),
+    );
 
     expect(missingResult.runs[0].conversationId).toBe("conv-missing");
     expect(missingResult.runs[0].conversationExists).toBe(false);
@@ -853,14 +859,7 @@ describe("schedule and heartbeat run metadata", () => {
     recordUsageCostAt(conversation.id, "hb-after", 2100, 0.5);
 
     const route = findHeartbeatRoute("heartbeat/runs", "GET");
-    const result = route.handler({}) as {
-      runs: Array<{
-        conversationId: string | null;
-        conversationExists: boolean;
-        conversationArchivedAt: number | null;
-        estimatedCostUsd: number;
-      }>;
-    };
+    const result = heartbeatRunsResponseSchema.parse(route.handler({}));
 
     expect(result.runs).toHaveLength(1);
     expect(result.runs[0].conversationId).toBe(conversation.id);
@@ -887,9 +886,7 @@ describe("schedule and heartbeat run metadata", () => {
     recordUsageCostAt(conversation.id, "hb-fallback-inside", 1500, 0.02);
 
     const route = findHeartbeatRoute("heartbeat/runs", "GET");
-    const result = route.handler({}) as {
-      runs: Array<{ estimatedCostUsd: number }>;
-    };
+    const result = heartbeatRunsResponseSchema.parse(route.handler({}));
 
     expect(result.runs[0].estimatedCostUsd).toBeCloseTo(0.02);
   });
@@ -917,9 +914,7 @@ describe("schedule and heartbeat run metadata", () => {
     );
 
     const route = findHeartbeatRoute("heartbeat/runs", "GET");
-    const result = route.handler({}) as {
-      runs: Array<{ id: string; status: string }>;
-    };
+    const result = heartbeatRunsResponseSchema.parse(route.handler({}));
 
     expect(result.runs).toHaveLength(1);
     expect(result.runs[0].id).toBe(okId);
@@ -936,14 +931,7 @@ describe("GET /schedules/usage-summary", () => {
 
   function getUsageSummary(queryParams: Record<string, string>) {
     const route = findRoute("schedules/usage-summary", "GET");
-    return route.handler({ queryParams }) as {
-      summaries: Array<{
-        scheduleId: string;
-        runCount: number;
-        totalEstimatedCostUsd: number;
-        eventCount: number;
-      }>;
-    };
+    return usageResponseSchema.parse(route.handler({ queryParams }));
   }
 
   test("returns zero rows when no schedules exist", () => {
@@ -1102,9 +1090,7 @@ describe("POST /schedules — create", () => {
 
   async function postCreate(body: Record<string, unknown>) {
     const route = findRoute("schedules", "POST");
-    return (await route.handler({ body })) as {
-      schedule: { id: string; inferenceProfile: string | null };
-    };
+    return scheduleResponseSchema.parse(await route.handler({ body }));
   }
 
   test("creates a recurring execute schedule with defaults", async () => {
@@ -1234,13 +1220,7 @@ describe("POST /schedules — create", () => {
     });
 
     const route = findRoute("schedules", "GET");
-    const result = (await route.handler({})) as {
-      schedules: Array<{
-        name: string;
-        mode: string;
-        workflowName: string | null;
-      }>;
-    };
+    const result = schedulesResponseSchema.parse(await route.handler({}));
     const job = result.schedules.find((s) => s.name === "Workflow schedule");
     expect(job).toBeDefined();
     expect(job!.mode).toBe("workflow");
@@ -1364,12 +1344,12 @@ describe("PATCH /schedules/:id — description", () => {
     });
 
     const route = findRoute("schedules/:id", "PATCH");
-    const result = (await route.handler({
-      pathParams: { id: schedule.id },
-      body: { description: "Updated description" },
-    })) as {
-      schedules: Array<{ id: string; description: string }>;
-    };
+    const result = schedulesResponseSchema.parse(
+      await route.handler({
+        pathParams: { id: schedule.id },
+        body: { description: "Updated description" },
+      }),
+    );
 
     expect(result.schedules[0]).toMatchObject({
       id: schedule.id,
@@ -1494,13 +1474,6 @@ describe("plugin-sourced schedules over routes", () => {
     });
   }
 
-  type SerializedEntry = {
-    id: string;
-    enabled: boolean;
-    sourceKey: string | null;
-    userEnabled: boolean | null;
-  };
-
   test("list serializes sourceKey and userEnabled for sourced and imperative rows", async () => {
     const sourced = await seedSourcedSchedule();
     const imperative = await createSchedule({
@@ -1511,9 +1484,7 @@ describe("plugin-sourced schedules over routes", () => {
     });
 
     const route = findRoute("schedules", "GET");
-    const result = (await route.handler({})) as {
-      schedules: SerializedEntry[];
-    };
+    const result = schedulesResponseSchema.parse(await route.handler({}));
     const byId = new Map(result.schedules.map((s) => [s.id, s]));
 
     expect(byId.get(sourced.id)).toMatchObject({
@@ -1530,19 +1501,23 @@ describe("plugin-sourced schedules over routes", () => {
     const sourced = await seedSourcedSchedule();
     const route = findRoute("schedules/:id/toggle", "POST");
 
-    const disabled = (await route.handler({
-      pathParams: { id: sourced.id },
-      body: { enabled: false },
-    })) as { schedules: SerializedEntry[] };
+    const disabled = schedulesResponseSchema.parse(
+      await route.handler({
+        pathParams: { id: sourced.id },
+        body: { enabled: false },
+      }),
+    );
     expect(disabled.schedules.find((s) => s.id === sourced.id)).toMatchObject({
       enabled: false,
       userEnabled: false,
     });
 
-    const enabled = (await route.handler({
-      pathParams: { id: sourced.id },
-      body: { enabled: true },
-    })) as { schedules: SerializedEntry[] };
+    const enabled = schedulesResponseSchema.parse(
+      await route.handler({
+        pathParams: { id: sourced.id },
+        body: { enabled: true },
+      }),
+    );
     expect(enabled.schedules.find((s) => s.id === sourced.id)).toMatchObject({
       enabled: true,
       userEnabled: true,
@@ -1558,10 +1533,12 @@ describe("plugin-sourced schedules over routes", () => {
     });
 
     const route = findRoute("schedules/:id/toggle", "POST");
-    const result = (await route.handler({
-      pathParams: { id: imperative.id },
-      body: { enabled: false },
-    })) as { schedules: SerializedEntry[] };
+    const result = schedulesResponseSchema.parse(
+      await route.handler({
+        pathParams: { id: imperative.id },
+        body: { enabled: false },
+      }),
+    );
 
     expect(result.schedules.find((s) => s.id === imperative.id)).toMatchObject({
       enabled: false,
@@ -1728,17 +1705,13 @@ describe("wake mode in schedule routes", () => {
 
     const route = findRoute("schedules/:id", "PATCH");
     // Wake mutations are owner-gated; a local IPC caller is the owner.
-    const result = (await route.handler({
-      pathParams: { id: schedule.id },
-      body: { mode: "wake", wakeConversationId: "conv-xyz" },
-      headers: { "x-cadet-principal-type": "local" },
-    })) as {
-      schedules: Array<{
-        id: string;
-        mode: string;
-        wakeConversationId: string | null;
-      }>;
-    };
+    const result = schedulesResponseSchema.parse(
+      await route.handler({
+        pathParams: { id: schedule.id },
+        body: { mode: "wake", wakeConversationId: "conv-xyz" },
+        headers: { "x-cadet-principal-type": "local" },
+      }),
+    );
     const updated = result.schedules.find((s) => s.id === schedule.id);
     expect(updated).toBeDefined();
     expect(updated!.mode).toBe("wake");
@@ -1756,9 +1729,7 @@ describe("wake mode in schedule routes", () => {
     });
 
     const route = findRoute("schedules", "GET");
-    const result = (await route.handler({})) as {
-      schedules: Array<{ name: string; wakeConversationId: string | null }>;
-    };
+    const result = schedulesResponseSchema.parse(await route.handler({}));
     const wakeSchedule = result.schedules.find(
       (s) => s.name === "Wake schedule",
     );
@@ -1774,9 +1745,7 @@ describe("PATCH /schedules/:id — timeout override", () => {
 
   function listOne(): { id: string; timeoutMs: number | null } {
     const route = findRoute("schedules", "GET");
-    const result = route.handler({}) as {
-      schedules: Array<{ id: string; timeoutMs: number | null }>;
-    };
+    const result = schedulesResponseSchema.parse(route.handler({}));
     return result.schedules[0];
   }
 
@@ -1865,14 +1834,14 @@ describe("GET /schedules - inference_profile filter", () => {
     });
 
     const route = findRoute("schedules", "GET");
-    const filtered = (await route.handler({
-      queryParams: { inference_profile: "cost-optimized" },
-    })) as { schedules: Array<{ name: string; inferenceProfile: string }> };
+    const filtered = schedulesResponseSchema.parse(
+      await route.handler({
+        queryParams: { inference_profile: "cost-optimized" },
+      }),
+    );
     expect(filtered.schedules.map((s) => s.name)).toEqual(["Cheap digest"]);
 
-    const unfiltered = (await route.handler({})) as {
-      schedules: Array<{ name: string }>;
-    };
+    const unfiltered = schedulesResponseSchema.parse(await route.handler({}));
     expect(unfiltered.schedules).toHaveLength(2);
   });
 
@@ -1897,9 +1866,14 @@ describe("GET /schedules - inference_profile filter", () => {
     });
 
     const route = findRoute("schedules", "GET");
-    const result = (await route.handler({
-      queryParams: { inference_profile: "cost-optimized", include_all: "true" },
-    })) as { schedules: Array<{ name: string; isDeferred: boolean }> };
+    const result = schedulesResponseSchema.parse(
+      await route.handler({
+        queryParams: {
+          inference_profile: "cost-optimized",
+          include_all: "true",
+        },
+      }),
+    );
 
     // The count a delete warning shows must match what the reassign moves, so
     // the deferred row has to be visible AND separable from the named ones.
@@ -1910,13 +1884,15 @@ describe("GET /schedules - inference_profile filter", () => {
     expect(result.schedules.filter((s) => s.isDeferred)).toHaveLength(1);
 
     const reassign = findRoute("schedules/reassign-profile", "POST");
-    const moved = (await reassign.handler({
-      body: {
-        from: "cost-optimized",
-        to: resolveDefaultScheduleInferenceProfile()!,
-      },
-      headers: { "x-cadet-principal-type": "local" },
-    })) as { reassigned: number };
+    const moved = reassignedResponseSchema.parse(
+      await reassign.handler({
+        body: {
+          from: "cost-optimized",
+          to: resolveDefaultScheduleInferenceProfile()!,
+        },
+        headers: { "x-cadet-principal-type": "local" },
+      }),
+    );
     expect(moved.reassigned).toBe(result.schedules.length);
   });
 
@@ -1930,9 +1906,11 @@ describe("GET /schedules - inference_profile filter", () => {
     });
 
     const route = findRoute("schedules", "GET");
-    const result = (await route.handler({
-      queryParams: { inference_profile: "cost-optimized" },
-    })) as { schedules: unknown[] };
+    const result = schedulesResponseSchema.parse(
+      await route.handler({
+        queryParams: { inference_profile: "cost-optimized" },
+      }),
+    );
     expect(result.schedules).toEqual([]);
   });
 });
@@ -1976,9 +1954,11 @@ describe("POST /schedules/reassign-profile", () => {
       syntax: "cron",
     });
 
-    const result = (await reassignRoute().handler({
-      body: { from: "cost-optimized", to: resolvedDefault! },
-    })) as { reassigned: number };
+    const result = reassignedResponseSchema.parse(
+      await reassignRoute().handler({
+        body: { from: "cost-optimized", to: resolvedDefault! },
+      }),
+    );
 
     expect(result.reassigned).toBe(2);
     expect(listSchedules({ inferenceProfile: "cost-optimized" })).toEqual([]);
@@ -2003,10 +1983,12 @@ describe("POST /schedules/reassign-profile", () => {
       inferenceProfile: "cost-optimized",
     });
 
-    const result = (await reassignRoute().handler({
-      body: { from: "cost-optimized", to: resolvedDefault! },
-      headers: { "x-cadet-principal-type": "local" },
-    })) as { reassigned: number };
+    const result = reassignedResponseSchema.parse(
+      await reassignRoute().handler({
+        body: { from: "cost-optimized", to: resolvedDefault! },
+        headers: { "x-cadet-principal-type": "local" },
+      }),
+    );
 
     expect(result.reassigned).toBe(1);
     expect(listSchedules()[0].inferenceProfile).toBe(resolvedDefault!);
@@ -2086,9 +2068,11 @@ describe("POST /schedules/reassign-profile", () => {
     });
     const updatedAtBefore = listSchedules()[0].updatedAt;
 
-    const result = (await reassignRoute().handler({
-      body: { from: "cost-optimized", to: resolvedDefault! },
-    })) as { reassigned: number };
+    const result = reassignedResponseSchema.parse(
+      await reassignRoute().handler({
+        body: { from: "cost-optimized", to: resolvedDefault! },
+      }),
+    );
 
     expect(result.reassigned).toBe(0);
     expect(listSchedules()[0].id).toBe(schedule.id);
@@ -2113,9 +2097,11 @@ describe("POST /schedules/reassign-profile", () => {
       schedule.id,
     );
 
-    const result = (await reassignRoute().handler({
-      body: { from: "deleted-profile", to: resolvedDefault! },
-    })) as { reassigned: number };
+    const result = reassignedResponseSchema.parse(
+      await reassignRoute().handler({
+        body: { from: "deleted-profile", to: resolvedDefault! },
+      }),
+    );
 
     expect(result.reassigned).toBe(1);
     expect(listSchedules()[0].inferenceProfile).toBe(resolvedDefault!);
@@ -2159,9 +2145,11 @@ describe("POST /schedules/reassign-profile", () => {
       (job) => job.name === "Already default",
     )!.updatedAt;
 
-    const result = (await reassignRoute().handler({
-      body: { to: resolvedDefault! },
-    })) as { reassigned: number };
+    const result = reassignedResponseSchema.parse(
+      await reassignRoute().handler({
+        body: { to: resolvedDefault! },
+      }),
+    );
 
     // Two moved (the cheap one and the dangling one); the third was already
     // on the target, so it is neither counted nor rewritten.
@@ -2211,9 +2199,11 @@ describe("POST /schedules/reassign-profile", () => {
     const firedBefore = byId.get(fired.id)!.updatedAt;
     const cancelledBefore = byId.get(cancelled.id)!.updatedAt;
 
-    const result = (await reassignRoute().handler({
-      body: { to: resolvedDefault! },
-    })) as { reassigned: number };
+    const result = reassignedResponseSchema.parse(
+      await reassignRoute().handler({
+        body: { to: resolvedDefault! },
+      }),
+    );
 
     // Their profile is history, so counting them would report a bigger move
     // than the user was shown.
@@ -2243,9 +2233,11 @@ describe("POST /schedules/reassign-profile", () => {
 
     // Deleting a profile has to clear every row naming it, including rows that
     // will never fire again: the pin is what the delete is removing.
-    const result = (await reassignRoute().handler({
-      body: { from: "cost-optimized", to: resolvedDefault! },
-    })) as { reassigned: number };
+    const result = reassignedResponseSchema.parse(
+      await reassignRoute().handler({
+        body: { from: "cost-optimized", to: resolvedDefault! },
+      }),
+    );
 
     expect(result.reassigned).toBe(1);
     expect(listSchedules()[0].inferenceProfile).toBe(resolvedDefault!);

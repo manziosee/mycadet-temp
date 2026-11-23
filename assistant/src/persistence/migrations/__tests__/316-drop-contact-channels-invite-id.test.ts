@@ -52,9 +52,14 @@ function tableExists(raw: Database, table: string): boolean {
 }
 
 function columnNames(raw: Database, table: string): Set<string> {
-  const cols = raw.prepare(`PRAGMA table_info(${table})`).all() as {
-    name: string;
-  }[];
+  const cols = raw
+    .prepare<
+      {
+        name: string;
+      },
+      []
+    >(`PRAGMA table_info(${table})`)
+    .all();
   return new Set(cols.map((c) => c.name));
 }
 
@@ -119,10 +124,11 @@ describe("migration 316 — drop contact_channels.invite_id", () => {
 
     expect(tableExists(raw, "assistant_ingress_invites")).toBe(true);
     const invite = raw
-      .prepare(
-        `SELECT token_hash FROM assistant_ingress_invites WHERE id = 'inv-1'`,
-      )
-      .get() as { token_hash: string };
+      .prepare<
+        { token_hash: string },
+        []
+      >(`SELECT token_hash FROM assistant_ingress_invites WHERE id = 'inv-1'`)
+      .get()!;
     expect(invite.token_hash).toBe("hash-1");
   });
 

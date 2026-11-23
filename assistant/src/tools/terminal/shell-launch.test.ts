@@ -34,9 +34,9 @@ let spawnImpl: SpawnImpl = originalSpawn as SpawnImpl;
 
 const spawnSpy = mock((...args: Parameters<typeof realChildProcess.spawn>) => {
   spawnCalls.push({
-    command: args[0] as string,
+    command: args[0],
     args: args[1],
-    options: (args[2] ?? {}) as realChildProcess.SpawnOptions,
+    options: args[2] ?? {},
   });
   return spawnImpl(...args);
 });

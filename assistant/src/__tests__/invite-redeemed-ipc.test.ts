@@ -61,11 +61,11 @@ describe("handleInviteRedeemed (invite_redeemed)", () => {
     handleInviteRedeemed({ body: { ...OUTCOME } });
 
     const contactRows = getSqlite()
-      .query("SELECT COUNT(*) AS n FROM contacts")
-      .get() as { n: number };
+      .query<{ n: number }, []>("SELECT COUNT(*) AS n FROM contacts")
+      .get()!;
     const channelRows = getSqlite()
-      .query("SELECT COUNT(*) AS n FROM contact_channels")
-      .get() as { n: number };
+      .query<{ n: number }, []>("SELECT COUNT(*) AS n FROM contact_channels")
+      .get()!;
 
     expect(contactRows.n).toBe(1);
     expect(channelRows.n).toBe(1);

@@ -2084,10 +2084,7 @@ describe("startVoiceTurn race-loss state restore", () => {
         if (attempt === 1) {
           // The winner installs its own trust + turn channel context during
           // the persist await, then the busy throw lands here.
-          const conv = fake.conversation as unknown as {
-            setTrustContext: (ctx: unknown) => void;
-            setTurnChannelContext: (ctx: unknown) => void;
-          };
+          const conv = fake.conversation;
           conv.setTrustContext(overwrittenTrust);
           conv.setTurnChannelContext(overwrittenChannelContext);
           fake.setProcessingFlag(true);

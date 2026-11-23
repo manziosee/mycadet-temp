@@ -179,9 +179,9 @@ function makeHarness(opts?: {
 
   const deps: Partial<WorkflowRunManagerDeps> = {
     executeWorkflow: opts?.engine ?? defaultEngine,
-    leafRunner: (() => {
+    leafRunner: () => {
       throw new Error("leafRunner must not be called in run-manager tests");
-    }) as unknown as WorkflowRunManagerDeps["leafRunner"],
+    },
     journal: fake.journal,
     getConfig: () => makeConfig(opts?.maxConcurrentRuns),
     wake: (async (wakeOpts) => {
@@ -385,9 +385,7 @@ describe("WorkflowRunManager — progress events", () => {
         outputTokens: 12,
         resultSummary: "found it",
       });
-      return new Promise(() => {}) as ReturnType<
-        WorkflowRunManagerDeps["executeWorkflow"]
-      >;
+      return new Promise(() => {});
     };
     const h = makeHarness({ engine: fakeEngine });
 

@@ -500,9 +500,9 @@ describe("HTTP route: handleCancelVerificationSession (guardian path)", () => {
   });
 
   test("returns success even when no active session exists", async () => {
-    const result = (await handleCancelVerificationSession({
+    const result = await handleCancelVerificationSession({
       body: { channel: "phone" },
-    })) as unknown as Record<string, unknown>;
+    });
     expect(result.success).toBe(true);
   });
 
@@ -514,9 +514,9 @@ describe("HTTP route: handleCancelVerificationSession (guardian path)", () => {
     expect(startResult.success).toBe(true);
 
     // Cancel it
-    const cancelResult = (await handleCancelVerificationSession({
+    const cancelResult = await handleCancelVerificationSession({
       body: { channel: "phone" },
-    })) as unknown as Record<string, unknown>;
+    });
     expect(cancelResult.success).toBe(true);
   });
 });

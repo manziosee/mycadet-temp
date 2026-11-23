@@ -46,7 +46,7 @@ let mockTwilioApiValidationBody = JSON.stringify({ sid: "AC_test" });
 const originalFetch = globalThis.fetch;
 
 function readMockTwilioAccountSid(): string | undefined {
-  const raw = loadRawConfig() as Record<string, unknown>;
+  const raw = loadRawConfig();
   const twilio = (raw.twilio ?? {}) as Record<string, unknown>;
   return (
     (twilio.accountSid as string | undefined) ??
@@ -59,7 +59,7 @@ function readMockTwilioAuthToken(): string | undefined {
 }
 
 function readMockTwilioPhoneNumber(): string | undefined {
-  const raw = loadRawConfig() as Record<string, unknown>;
+  const raw = loadRawConfig();
   const twilio = (raw.twilio ?? {}) as Record<string, unknown>;
   return twilio.phoneNumber as string | undefined;
 }
@@ -1373,7 +1373,7 @@ describe("twilio webhook routes", () => {
 
       expect(result.success).toBe(true);
       expect(result.hasCredentials).toBe(true);
-      expect((loadRawConfig() as Record<string, unknown>).twilio).toEqual({
+      expect(loadRawConfig().twilio).toEqual({
         accountSid: "AC_new_credentials",
         phoneNumber: "",
         setupStarted: true,

@@ -1,8 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
 import type { AssistantEvent } from "../api/index.js";
-import { ChoiceSurfaceData } from "../api/surfaces.js";
-import { CopyBlockSurfaceData } from "../api/surfaces.js";
 import { SurfaceType } from "../api/surfaces.js";
 import type { Conversation } from "../daemon/conversation.js";
 import {
@@ -95,7 +93,7 @@ describe("choice and copy_block surface proxying", () => {
       return;
     }
 
-    const data = showMessage.data as ChoiceSurfaceData;
+    const data = showMessage.data;
     expect(data.options.map((option) => option.id)).toEqual([
       "clean-inbox",
       "plan-week",
@@ -160,7 +158,7 @@ describe("choice and copy_block surface proxying", () => {
       return;
     }
 
-    expect(showMessage.data as CopyBlockSurfaceData).toEqual({
+    expect(showMessage.data).toEqual({
       text: "Paste this prompt into another assistant.",
       label: "Port prompt",
       language: "text",

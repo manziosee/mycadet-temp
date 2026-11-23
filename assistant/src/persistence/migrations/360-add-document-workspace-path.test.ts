@@ -31,10 +31,15 @@ function createTestDb() {
 }
 
 function columnInfo(sqlite: Database) {
-  return sqlite.query("PRAGMA table_info(documents)").all() as Array<{
-    name: string;
-    notnull: number;
-  }>;
+  return sqlite
+    .query<
+      {
+        name: string;
+        notnull: number;
+      },
+      []
+    >("PRAGMA table_info(documents)")
+    .all();
 }
 
 function insertDocument(
@@ -74,10 +79,11 @@ describe("migration 360: documents.workspace_path", () => {
     migrateAddDocumentWorkspacePath(db);
 
     const row = sqlite
-      .query(
-        "SELECT workspace_path FROM documents WHERE surface_id = 'doc-old'",
-      )
-      .get() as { workspace_path: unknown };
+      .query<
+        { workspace_path: unknown },
+        []
+      >("SELECT workspace_path FROM documents WHERE surface_id = 'doc-old'")
+      .get()!;
     expect(row.workspace_path).toBeNull();
   });
 

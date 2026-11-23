@@ -1,3 +1,4 @@
+import type { SQLQueryBindings } from "bun:sqlite";
 /**
  * Index-time trigger dispatch in `indexMessageNow`, one case per tier.
  *
@@ -10,7 +11,6 @@
  * Memory off, which is the memory-off case exercised here: the dispatch must
  * read the live config's tier, not treat "no concept-page consumer" as v1.
  */
-
 import { beforeEach, describe, expect, mock, test } from "bun:test";
 
 mock.module("../../../../persistence/embeddings/qdrant-client.js", () => ({
@@ -104,8 +104,8 @@ async function indexOneMessage(
 
 function enqueuedJobTypes(): string[] {
   const rows = getMemorySqlite()!
-    .query("SELECT DISTINCT type FROM memory_jobs")
-    .all() as { type: string }[];
+    .query<{ type: string }, []>("SELECT DISTINCT type FROM memory_jobs")
+    .all();
   return rows.map((row) => row.type);
 }
 
@@ -181,8 +181,11 @@ describe("indexMessageNow tier dispatch", () => {
     );
 
     const segmentRow = getMemorySqlite()!
-      .query("SELECT COUNT(*) AS n FROM memory_segments WHERE message_id = ?")
-      .get(messageId) as { n: number };
+      .query<
+        { n: number },
+        SQLQueryBindings[]
+      >("SELECT COUNT(*) AS n FROM memory_segments WHERE message_id = ?")
+      .get(messageId)!;
     expect(segmentRow.n).toBe(0);
     expect(enqueuedJobTypes()).toHaveLength(0);
   });

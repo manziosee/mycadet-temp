@@ -172,8 +172,7 @@ describe("runAgentLoopImpl fatal-failure cleanup (ATL-1009)", () => {
       throw new Error("commit crashed (simulated Bun memoryUsage bug)");
     });
     const ctx = makeCtx({
-      commitTurnChanges:
-        commitTurnChanges as unknown as Context["commitTurnChanges"],
+      commitTurnChanges: commitTurnChanges,
     });
 
     // The commit throw still surfaces (it runs after the clear), but the flag
@@ -200,8 +199,7 @@ describe("runAgentLoopImpl fatal-failure cleanup (ATL-1009)", () => {
     const commitTurnChanges = mock(async () => {});
     const ctx = makeCtx({
       drainQueue,
-      commitTurnChanges:
-        commitTurnChanges as unknown as Context["commitTurnChanges"],
+      commitTurnChanges: commitTurnChanges,
     });
 
     await runAgentLoopImpl(ctx, "background task", "msg-fatal-2", (event) =>
@@ -230,9 +228,7 @@ describe("runAgentLoopImpl per-turn view state", () => {
     const events: AssistantEvent[] = [];
     const ctx = makeCtx({
       visibleAppId: "app-on-screen",
-      commitTurnChanges: mock(
-        async () => {},
-      ) as unknown as Context["commitTurnChanges"],
+      commitTurnChanges: mock(async () => {}),
     });
 
     await runAgentLoopImpl(ctx, "background task", "msg-visible-app", (event) =>

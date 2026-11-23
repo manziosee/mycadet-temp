@@ -20,7 +20,6 @@ import { getDb } from "../persistence/db-connection.js";
 import { initializeDb } from "../persistence/db-init.js";
 import { conversations, messages } from "../persistence/schema/index.js";
 import { ROUTES } from "../runtime/routes/conversations-import-routes.js";
-import type { RouteHandlerArgs } from "../runtime/routes/types.js";
 
 await initializeDb();
 
@@ -60,7 +59,7 @@ describe("conversations import system-row filtering", () => {
     // WHEN the conversation is imported
     const result = (await importHandler({
       body,
-    } as unknown as RouteHandlerArgs)) as {
+    })) as {
       ok: boolean;
       imported: number;
       messages: number;
@@ -105,7 +104,7 @@ describe("conversations import provenance source", () => {
     // WHEN the conversation is imported
     const result = (await importHandler({
       body,
-    } as unknown as RouteHandlerArgs)) as { imported: number };
+    })) as { imported: number };
     expect(result.imported).toBe(1);
 
     // THEN the created row records the provider-derived provenance source
@@ -116,7 +115,7 @@ describe("conversations import provenance source", () => {
     // AND re-importing the same sourceKey still dedups (no second row)
     const again = (await importHandler({
       body,
-    } as unknown as RouteHandlerArgs)) as { imported: number; skipped: number };
+    })) as { imported: number; skipped: number };
     expect(again.imported).toBe(0);
     expect(again.skipped).toBe(1);
     expect(db.select().from(conversations).all()).toHaveLength(1);
@@ -142,7 +141,7 @@ describe("conversations import provenance source", () => {
     // WHEN the conversations are imported
     const result = (await importHandler({
       body,
-    } as unknown as RouteHandlerArgs)) as { imported: number };
+    })) as { imported: number };
     expect(result.imported).toBe(2);
 
     // THEN each prefix is normalized into import:<provider>, not import:unknown
@@ -170,7 +169,7 @@ describe("conversations import provenance source", () => {
     // WHEN the conversation is imported
     const result = (await importHandler({
       body,
-    } as unknown as RouteHandlerArgs)) as { imported: number };
+    })) as { imported: number };
     expect(result.imported).toBe(1);
 
     // THEN the created row falls back to the unknown-provider source

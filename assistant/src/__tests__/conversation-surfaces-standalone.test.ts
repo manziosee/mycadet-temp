@@ -205,10 +205,7 @@ describe("showStandaloneSurface", () => {
     expect(ctx.surfaceState.has("surf-3")).toBe(true);
     // ui_surface_show should have been emitted
     expect(ctx.sentMessages.length).toBeGreaterThanOrEqual(1);
-    const showMsg = ctx.sentMessages.find(
-      (m) =>
-        (m as unknown as Record<string, unknown>).type === "ui_surface_show",
-    ) as unknown as Record<string, unknown> | undefined;
+    const showMsg = ctx.sentMessages.find((m) => m.type === "ui_surface_show");
     expect(showMsg).toBeDefined();
     expect(showMsg?.surfaceId).toBe("surf-3");
     expect(showMsg?.surfaceType).toBe("confirmation");
@@ -299,10 +296,10 @@ describe("showStandaloneSurface", () => {
 
     // The timeout handler should emit ui_surface_complete so the client
     // dismisses the surface and prevents stale interactions.
-    const completeMsg = ctx.sentMessages.find((m) => {
-      const r = m as unknown as Record<string, unknown>;
-      return r.type === "ui_surface_complete" && r.surfaceId === "surf-6b";
-    }) as unknown as Record<string, unknown> | undefined;
+    const completeMsg = ctx.sentMessages.find(
+      (m): m is Extract<AssistantEvent, { type: "ui_surface_complete" }> =>
+        m.type === "ui_surface_complete" && m.surfaceId === "surf-6b",
+    );
     expect(completeMsg).toBeDefined();
     expect(completeMsg?.conversationId).toBe("test-conv-1");
     expect(completeMsg?.summary).toBe("Timed out");
@@ -312,7 +309,7 @@ describe("showStandaloneSurface", () => {
     const ctx = createMockContext();
     let showEmitted = false;
     broadcastImpl = (msg: AssistantEvent) => {
-      const type = (msg as unknown as Record<string, unknown>).type;
+      const type = msg.type;
       if (type === "ui_surface_show") {
         showEmitted = true;
         ctx.sentMessages.push(msg);
@@ -443,10 +440,8 @@ describe("showStandaloneSurface", () => {
     await resultPromise;
 
     const completeMsg = ctx.sentMessages.find(
-      (m) =>
-        (m as unknown as Record<string, unknown>).type ===
-        "ui_surface_complete",
-    ) as unknown as Record<string, unknown> | undefined;
+      (m) => m.type === "ui_surface_complete",
+    );
     expect(completeMsg).toBeDefined();
     expect(completeMsg?.surfaceId).toBe("surf-8");
     expect(completeMsg?.conversationId).toBe("test-conv-1");
@@ -603,9 +598,8 @@ describe("standalone surface cleanup on conversation dispose", () => {
 
     // Verify a ui_surface_dismiss was emitted for each surface
     const dismissMessages = ctx.sentMessages.filter(
-      (m) =>
-        (m as unknown as Record<string, unknown>).type === "ui_surface_dismiss",
-    ) as unknown as Array<Record<string, unknown>>;
+      (m) => m.type === "ui_surface_dismiss",
+    );
     expect(dismissMessages).toHaveLength(2);
     const dismissedIds = dismissMessages.map((m) => m.surfaceId).sort();
     expect(dismissedIds).toEqual(["surf-d3", "surf-d4"]);

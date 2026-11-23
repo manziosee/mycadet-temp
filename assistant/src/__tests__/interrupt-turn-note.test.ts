@@ -62,7 +62,7 @@ describe("interrupted-turn note on the interrupting message", () => {
       content: "wait, quick one first: what is 31 times 12?",
     });
 
-    const llmContent = ctx.messages[0].content as ContentBlock[];
+    const llmContent = ctx.messages[0].content;
     expect(llmContent.at(-1)).toEqual({
       type: "text",
       text: INTERRUPTED_TURN_NOTE_TEXT,
@@ -88,7 +88,7 @@ describe("interrupted-turn note on the interrupting message", () => {
     const persisted = await persistQueuedMessageBody(ctx, {
       content: "hold on",
     });
-    const live = (ctx.messages[0].content as ContentBlock[]).at(-1) as {
+    const live = ctx.messages[0].content.at(-1) as {
       type: "text";
       text: string;
     };
@@ -112,7 +112,7 @@ describe("interrupted-turn note on the interrupting message", () => {
       content: "just a message",
     });
 
-    const llmContent = ctx.messages[0].content as ContentBlock[];
+    const llmContent = ctx.messages[0].content;
     expect(llmContent).toHaveLength(1);
 
     const row = messageRow(persisted.id);
@@ -137,8 +137,8 @@ describe("interrupted-turn note on the interrupting message", () => {
     await persistQueuedMessageBody(ctx, { content: "second" });
 
     expect(ctx.pendingInterruptNote).toBe(false);
-    expect(ctx.messages[0].content as ContentBlock[]).toHaveLength(2);
-    expect(ctx.messages[1].content as ContentBlock[]).toHaveLength(1);
+    expect(ctx.messages[0].content).toHaveLength(2);
+    expect(ctx.messages[1].content).toHaveLength(1);
   });
 
   test("the note sits after the attachment annotations, live and reloaded", async () => {
@@ -154,7 +154,7 @@ describe("interrupted-turn note on the interrupting message", () => {
       ],
     });
 
-    const llmContent = ctx.messages[0].content as ContentBlock[];
+    const llmContent = ctx.messages[0].content;
     const note = llmContent.at(-1) as { type: "text"; text: string };
     const annotation = llmContent.at(-2) as { type: "text"; text: string };
     expect(note.text).toBe(INTERRUPTED_TURN_NOTE_TEXT);

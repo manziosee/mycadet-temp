@@ -261,10 +261,7 @@ describe("forceCompact event emission", () => {
       (m) => m.type === "context_compacted",
     );
     expect(compactedEvents.length).toBe(1);
-    const compactedEvent = compactedEvents[0] as Extract<
-      AssistantEvent,
-      { type: "context_compacted" }
-    >;
+    const compactedEvent = compactedEvents[0];
     expect(compactedEvent.conversationId).toBe("conv-compact-events");
     expect(compactedEvent.estimatedInputTokens).toBe(80_000);
     expect(compactedEvent.maxInputTokens).toBe(200_000);
@@ -280,10 +277,7 @@ describe("forceCompact event emission", () => {
 
     const usageEvents = collected.filter((m) => m.type === "usage_update");
     expect(usageEvents.length).toBe(1);
-    const usageEvent = usageEvents[0] as Extract<
-      AssistantEvent,
-      { type: "usage_update" }
-    >;
+    const usageEvent = usageEvents[0];
     // `context_compacted` is now the single source of truth for the UI
     // indicator after compaction; the paired `usage_update` intentionally
     // omits contextWindow to avoid a redundant SwiftUI invalidation.
@@ -324,10 +318,7 @@ describe("forceCompact event emission", () => {
       (m) => m.type === "context_compacted",
     );
     expect(compactedEvents.length).toBe(1);
-    const compactedEvent = compactedEvents[0] as Extract<
-      AssistantEvent,
-      { type: "context_compacted" }
-    >;
+    const compactedEvent = compactedEvents[0];
     expect(compactedEvent.conversationId).toBe("conv-compact-trunc");
     expect(compactedEvent.estimatedInputTokens).toBe(80_000);
     expect(compactedEvent.maxInputTokens).toBe(200_000);
@@ -399,10 +390,7 @@ describe("forceCompact context-window usage push", () => {
 
     const usage = collected.filter((m) => m.type === "context_window_usage");
     expect(usage.length).toBe(1);
-    const usageEvent = usage[0] as Extract<
-      AssistantEvent,
-      { type: "context_window_usage" }
-    >;
+    const usageEvent = usage[0];
     expect(usageEvent.conversationId).toBe("conv-compact-usage");
     // Same figures the `/compact` card renders, so the indicator and the card
     // cannot disagree.
@@ -442,10 +430,7 @@ describe("forceCompact context-window usage push", () => {
 
     const usage = cardSink.filter((m) => m.type === "context_window_usage");
     expect(usage.length).toBe(1);
-    expect(
-      (usage[0] as Extract<AssistantEvent, { type: "context_window_usage" }>)
-        .tokens,
-    ).toBe(result.estimatedInputTokens);
+    expect(usage[0].tokens).toBe(result.estimatedInputTokens);
     expect(
       conversationSink.filter((m) => m.type === "context_window_usage").length,
     ).toBe(0);
@@ -483,10 +468,7 @@ describe("forceCompact context-window usage push", () => {
 
     const usage = collected.filter((m) => m.type === "context_window_usage");
     expect(usage.length).toBe(1);
-    const usageEvent = usage[0] as Extract<
-      AssistantEvent,
-      { type: "context_window_usage" }
-    >;
+    const usageEvent = usage[0];
     expect(usageEvent.tokens).toBe(56_000);
     expect(usageEvent.maxTokens).toBe(200_000);
   });

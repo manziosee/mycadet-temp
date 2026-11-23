@@ -75,9 +75,9 @@ function inflateWal(byteTarget: number): void {
   sqlite.exec(
     "CREATE TABLE IF NOT EXISTS bloat (id INTEGER PRIMARY KEY, payload BLOB)",
   );
-  const pageSize = (
-    sqlite.query("PRAGMA page_size").get() as { page_size: number }
-  ).page_size;
+  const pageSize = sqlite
+    .query<{ page_size: number }, []>("PRAGMA page_size")
+    .get()!.page_size;
   const rowsTarget = Math.max(1, Math.ceil(byteTarget / pageSize));
   const payload = new Uint8Array(Math.max(1, pageSize - 64));
   const insert = sqlite.prepare("INSERT INTO bloat (payload) VALUES (?)");
@@ -256,9 +256,14 @@ describe("applyConnectionPragmas", () => {
     /** Checkpointing alone never shrinks the WAL file; the size limit is what
      *  truncates it back after a burst. Pin that every connection carries it. */
     const sqlite = getSqlite();
-    const row = sqlite.query("PRAGMA journal_size_limit").get() as {
-      journal_size_limit: number;
-    };
+    const row = sqlite
+      .query<
+        {
+          journal_size_limit: number;
+        },
+        []
+      >("PRAGMA journal_size_limit")
+      .get()!;
     expect(row.journal_size_limit).toBe(67108864);
   });
 });

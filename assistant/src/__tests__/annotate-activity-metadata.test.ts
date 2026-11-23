@@ -80,11 +80,11 @@ function makeDeps(): EventHandlerDeps {
     turnChannelContext: {
       userMessageChannel: "cadet",
       assistantMessageChannel: "cadet",
-    } as unknown as EventHandlerDeps["turnChannelContext"],
+    } as EventHandlerDeps["turnChannelContext"],
     turnInterfaceContext: {
       userMessageInterface: "web",
       assistantMessageInterface: "web",
-    } as unknown as EventHandlerDeps["turnInterfaceContext"],
+    } as EventHandlerDeps["turnInterfaceContext"],
     applyCompaction: async () => {},
   };
 }
@@ -162,7 +162,7 @@ describe("annotatePersistedAssistantMessage — activityMetadata", () => {
 
     // THEN the metadata is stamped on the persisted block verbatim
     const row = getMessageById(state.lastAssistantMessageId!);
-    const block = findBlockById(row!.content as ContentBlock[], toolUseId);
+    const block = findBlockById(row!.content, toolUseId);
     expect(block._activityMetadata).toEqual(webSearchActivity);
   });
 
@@ -201,12 +201,9 @@ describe("annotatePersistedAssistantMessage — activityMetadata", () => {
     // in build-persisted-content.test.ts), and the unrelated external tool_use
     // block carries no activity of its own
     const row = getMessageById(state.lastAssistantMessageId!);
-    const nativeBlock = findBlockById(row!.content as ContentBlock[], nativeId);
+    const nativeBlock = findBlockById(row!.content, nativeId);
     expect(nativeBlock._activityMetadata).toBeUndefined();
-    const externalBlock = findBlockById(
-      row!.content as ContentBlock[],
-      externalId,
-    );
+    const externalBlock = findBlockById(row!.content, externalId);
     expect(externalBlock._activityMetadata).toBeUndefined();
   });
 
@@ -234,7 +231,7 @@ describe("annotatePersistedAssistantMessage — activityMetadata", () => {
 
     // THEN no _activityMetadata is written
     const row = getMessageById(state.lastAssistantMessageId!);
-    const block = findBlockById(row!.content as ContentBlock[], toolUseId);
+    const block = findBlockById(row!.content, toolUseId);
     expect(block._activityMetadata).toBeUndefined();
   });
 });

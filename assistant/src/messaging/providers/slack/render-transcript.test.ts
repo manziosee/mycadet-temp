@@ -1232,7 +1232,7 @@ describe("renderSlackTranscript — replayable content-block preservation", () =
         // ui_surface is local-only UI scaffolding and must not leak into
         // the replayable output. Typed as a generic shape here because
         // ui_surface is not part of the Anthropic ContentBlock union.
-        { type: "ui_surface", foo: "bar" } as unknown as never,
+        { type: "ui_surface", foo: "bar" } as never,
       ] as never,
     };
     const out = renderSlackTranscript([base]);
@@ -1337,7 +1337,7 @@ describe("renderSlackTranscript — replayable content-block preservation", () =
           name: "web_search",
           input: { q: "x" },
         },
-        { type: "ui_surface", foo: "bar" } as unknown as never,
+        { type: "ui_surface", foo: "bar" } as never,
       ] as never,
     };
     const out = renderSlackTranscript([base]);

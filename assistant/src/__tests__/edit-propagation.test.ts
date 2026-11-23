@@ -158,7 +158,7 @@ describe("Slack edit propagation", () => {
       content: "new text",
     });
 
-    const respJson = resp as Record<string, unknown>;
+    const respJson = resp;
     expect(respJson.accepted).toBe(true);
     expect(respJson.duplicate).toBe(false);
 
@@ -201,7 +201,7 @@ describe("Slack edit propagation", () => {
       content: "corrected text",
     });
 
-    const respJson = resp as Record<string, unknown>;
+    const respJson = resp;
     expect(respJson.accepted).toBe(true);
     expect(respJson.duplicate).toBe(false);
 
@@ -233,14 +233,14 @@ describe("Slack edit propagation", () => {
         >(`SELECT COUNT(*) AS n FROM ${table}`)
         .get()!.n;
 
-    const resp = (await handleEditIntercept({
+    const resp = await handleEditIntercept({
       sourceChannel: "slack",
       conversationExternalId: "C0NEVERSEEN",
       externalMessageId: nextEditEventId(),
       sourceMessageId: "1999.0001",
       assistantId: "self",
       content: "edited text",
-    })) as Record<string, unknown>;
+    });
 
     expect(resp.accepted).toBe(true);
     expect(resp.edited).toBe(false);
@@ -309,7 +309,7 @@ describe("Slack edit propagation", () => {
         sourceMessageId: seeded.channelTs,
         assistantId: "self",
         content: "new text",
-      }) as Promise<Record<string, unknown>>;
+      });
 
     const first = await send();
     const second = await send();
@@ -349,7 +349,7 @@ describe("Slack edit propagation", () => {
       content: "new text",
     });
 
-    expect((resp as Record<string, unknown>).accepted).toBe(true);
+    expect(resp.accepted).toBe(true);
 
     // The thread id names where the reply goes, not a conversation of the
     // edit's own. Keying one off it is what minted a conversation per edit.
@@ -437,7 +437,7 @@ describe("Slack edit propagation", () => {
       content: "original text",
     });
 
-    const respJson = resp as Record<string, unknown>;
+    const respJson = resp;
     expect(respJson.accepted).toBe(true);
     expect(respJson.duplicate).toBe(false);
     expect(respJson.noop).toBe(true);
@@ -502,7 +502,7 @@ describe("Slack edit propagation", () => {
       content: "new text",
     });
 
-    const respJson = resp as Record<string, unknown>;
+    const respJson = resp;
     expect(respJson.accepted).toBe(true);
     expect(respJson.duplicate).toBe(false);
 

@@ -403,8 +403,7 @@ describe("call-store", () => {
 
     // Verify the record was updated by querying directly
     const db = getDb();
-    const raw = (db as unknown as { $client: import("bun:sqlite").Database })
-      .$client;
+    const raw = db.$client;
     const updated = raw
       .query<
         {
@@ -438,11 +437,7 @@ describe("call-store", () => {
     expect(pending).toBeNull();
 
     // Verify both were expired
-    const raw = (
-      getDb() as unknown as {
-        $client: import("bun:sqlite").Database;
-      }
-    ).$client;
+    const raw = getDb().$client;
     const rows = raw
       .query<
         { status: string },
@@ -473,11 +468,7 @@ describe("call-store", () => {
     expirePendingQuestions(session.id);
 
     // q1 should still be answered, not expired
-    const raw = (
-      getDb() as unknown as {
-        $client: import("bun:sqlite").Database;
-      }
-    ).$client;
+    const raw = getDb().$client;
     const q1Row = raw
       .query<
         { status: string },
@@ -570,11 +561,7 @@ describe("call-store", () => {
     expect(claimCallback("test-dedupe-key-4", session.id)).toBeNull();
 
     // Only one row should exist in the table for this key
-    const raw = (
-      getDb() as unknown as {
-        $client: import("bun:sqlite").Database;
-      }
-    ).$client;
+    const raw = getDb().$client;
     const rows = raw
       .query<
         { cnt: number },
@@ -597,11 +584,7 @@ describe("call-store", () => {
     expect(first).toBeTypeOf("string");
 
     // Simulate an orphaned claim by backdating the created_at to well past expiry
-    const raw = (
-      getDb() as unknown as {
-        $client: import("bun:sqlite").Database;
-      }
-    ).$client;
+    const raw = getDb().$client;
     const oldTimestamp = Date.now() - 120_000; // 2 minutes ago, well past 60s expiry
     raw
       .query(
@@ -649,11 +632,7 @@ describe("call-store", () => {
     finalizeCallbackClaim("test-dedupe-key-permanent", claimId);
 
     // Verify the created_at is set far in the future
-    const raw = (
-      getDb() as unknown as {
-        $client: import("bun:sqlite").Database;
-      }
-    ).$client;
+    const raw = getDb().$client;
     const row = raw
       .query<
         { created_at: number },
@@ -681,11 +660,7 @@ describe("call-store", () => {
     finalizeCallbackClaim("test-dedupe-key-permanent-b", "wrong-claim-id");
 
     // Verify the created_at was NOT set to far-future (it should still be close to now)
-    const raw = (
-      getDb() as unknown as {
-        $client: import("bun:sqlite").Database;
-      }
-    ).$client;
+    const raw = getDb().$client;
     const row = raw
       .query<
         { created_at: number },
@@ -709,11 +684,7 @@ describe("call-store", () => {
     expect(claimA).toBeTypeOf("string");
 
     // Simulate handler A taking too long: backdate the claim so it expires
-    const raw = (
-      getDb() as unknown as {
-        $client: import("bun:sqlite").Database;
-      }
-    ).$client;
+    const raw = getDb().$client;
     const oldTimestamp = Date.now() - 120_000;
     raw
       .query(

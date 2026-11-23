@@ -1,3 +1,4 @@
+import assert from "node:assert/strict";
 /**
  * Tests for `buildPersistedAssistantContent` stamping native web-search
  * activity (`_activityMetadata`) onto `server_tool_use` blocks at persist time.
@@ -22,6 +23,7 @@ import {
 } from "../daemon/conversation-agent-loop-handlers.js";
 import { initializeDb } from "../persistence/db-init.js";
 import type { ContentBlock } from "../providers/types.js";
+import { jsonObjectSchema } from "./helpers/json-object-schema.js";
 beforeAll(async () => {
   await initializeDb();
 });
@@ -53,13 +55,11 @@ function findBlockById(
   blocks: ContentBlock[],
   id: string,
 ): Record<string, unknown> {
-  const block = (blocks as unknown as Array<Record<string, unknown>>).find(
-    (b) => b.id === id,
-  );
+  const block = blocks.find((b) => "id" in b && b.id === id);
   if (!block) {
     throw new Error(`block ${id} not found`);
   }
-  return block;
+  return jsonObjectSchema.parse(block);
 }
 
 // ── Tests ─────────────────────────────────────────────────────────────────────
@@ -77,7 +77,7 @@ describe("buildPersistedAssistantContent — native activityMetadata", () => {
     // annotate pass never runs for this turn)
     const nativeId = "srvtu_native_search";
     activity.set(nativeId, webSearchActivity);
-    const rawBlocks = [
+    const rawBlocks: ContentBlock[] = [
       { type: "text", text: "Let me search." },
       {
         type: "server_tool_use",
@@ -85,7 +85,7 @@ describe("buildPersistedAssistantContent — native activityMetadata", () => {
         name: "web_search",
         input: { query: "cadet docs" },
       },
-    ] as unknown as ContentBlock[];
+    ];
 
     // WHEN the content is built for persistence
     const built = buildPersistedAssistantContent(rawBlocks, [], activity);
@@ -99,14 +99,14 @@ describe("buildPersistedAssistantContent — native activityMetadata", () => {
   test("leaves a server_tool_use block untouched when no activity was captured", () => {
     // GIVEN a native server_tool_use with no entry in the activity map
     const nativeId = "srvtu_no_activity";
-    const rawBlocks = [
+    const rawBlocks: ContentBlock[] = [
       {
         type: "server_tool_use",
         id: nativeId,
         name: "web_search",
         input: { query: "cadet docs" },
       },
-    ] as unknown as ContentBlock[];
+    ];
 
     // WHEN the content is built for persistence
     const built = buildPersistedAssistantContent(rawBlocks, [], activity);
@@ -121,14 +121,14 @@ describe("buildPersistedAssistantContent — native activityMetadata", () => {
     // activity (external activity is stamped later in handleToolResult, not here)
     const externalId = "tu_external_search";
     activity.set(externalId, webSearchActivity);
-    const rawBlocks = [
+    const rawBlocks: ContentBlock[] = [
       {
         type: "tool_use",
         id: externalId,
         name: "web_search",
         input: { query: "cadet docs" },
       },
-    ] as unknown as ContentBlock[];
+    ];
 
     // WHEN the content is built for persistence
     const built = buildPersistedAssistantContent(rawBlocks, [], activity);
@@ -141,14 +141,14 @@ describe("buildPersistedAssistantContent — native activityMetadata", () => {
   test("does not stamp when no activity map is provided", () => {
     // GIVEN a native server_tool_use block AND no activity map argument
     const nativeId = "srvtu_no_map";
-    const rawBlocks = [
+    const rawBlocks: ContentBlock[] = [
       {
         type: "server_tool_use",
         id: nativeId,
         name: "web_search",
         input: { query: "cadet docs" },
       },
-    ] as unknown as ContentBlock[];
+    ];
 
     // WHEN the content is built for persistence without the optional map
     const built = buildPersistedAssistantContent(rawBlocks, []);
@@ -164,20 +164,18 @@ describe("stampThinkingTiming", () => {
     // GIVEN a turn that interleaves text and two thinking blocks AND the
     // per-block timing captured while streaming (one entry per thinking block,
     // in stream order)
-    const content = [
+    const content: ContentBlock[] = [
       { type: "thinking", thinking: "first", signature: "s1" },
       { type: "text", text: "answer" },
       { type: "thinking", thinking: "second", signature: "s2" },
-    ] as unknown as ContentBlock[];
+    ];
     const timings = [
       { startedAt: 100, completedAt: 250 },
       { startedAt: 400, completedAt: 480 },
     ];
 
     // WHEN the content is stamped before persistence
-    const stamped = stampThinkingTiming(content, timings) as unknown as Array<
-      Record<string, unknown>
-    >;
+    const stamped = stampThinkingTiming(content, timings);
 
     // THEN each thinking block carries the `_`-prefixed timing for its position
     expect(stamped[0]).toMatchObject({
@@ -197,9 +195,9 @@ describe("stampThinkingTiming", () => {
   test("leaves thinking blocks unstamped when no timing was captured", () => {
     // GIVEN thinking content but an empty timing list (thinking streaming was
     // disabled, so no per-block timing was recorded this turn)
-    const content = [
+    const content: ContentBlock[] = [
       { type: "thinking", thinking: "first", signature: "s1" },
-    ] as unknown as ContentBlock[];
+    ];
 
     // WHEN the content is stamped with no timing
     const stamped = stampThinkingTiming(content, []);
@@ -213,16 +211,14 @@ describe("stampThinkingTiming", () => {
   test("stamps only the thinking blocks that have a matching timing entry", () => {
     // GIVEN two thinking blocks but only one captured timing entry (e.g. the
     // second block opened after the timing array was already finalized)
-    const content = [
+    const content: ContentBlock[] = [
       { type: "thinking", thinking: "first", signature: "s1" },
       { type: "thinking", thinking: "second", signature: "s2" },
-    ] as unknown as ContentBlock[];
+    ];
     const timings = [{ startedAt: 100, completedAt: 250 }];
 
     // WHEN the content is stamped
-    const stamped = stampThinkingTiming(content, timings) as unknown as Array<
-      Record<string, unknown>
-    >;
+    const stamped = stampThinkingTiming(content, timings);
 
     // THEN the first block is stamped and the unmatched second block is left as-is
     expect(stamped[0]).toMatchObject({ _startedAt: 100, _completedAt: 250 });
@@ -251,12 +247,14 @@ describe("buildPersistedAssistantContent — persisted-text redaction", () => {
     legacyFallbackCandidates: readonly ResolvedRevealCandidate[] = [],
   ): string {
     const built = buildPersistedAssistantContent(
-      [{ type: "text", text }] as unknown as ContentBlock[],
+      [{ type: "text", text }],
       [],
       undefined,
       legacyFallbackCandidates,
-    ) as unknown as Array<Record<string, unknown>>;
-    return built[0].text as string;
+    );
+    const [first] = built;
+    assert(first?.type === "text", "Expected a text content block");
+    return first.text;
   }
 
   test("emits the legacy marker for a scanner match, never sentinel glyphs", () => {
@@ -283,11 +281,11 @@ describe("buildPersistedAssistantContent — persisted-text redaction", () => {
     // `renderHistoryContent` neutralizes any block lacking the rider, so a
     // legacy-mode row must still carry it or its own text gets re-scanned.
     const built = buildPersistedAssistantContent(
-      [{ type: "text", text: "no secrets here" }] as unknown as ContentBlock[],
+      [{ type: "text", text: "no secrets here" }],
       [],
-    ) as unknown as Array<Record<string, unknown>>;
+    );
 
-    expect(built[0]._redactionVersion).toBe(2);
+    expect(built[0]).toHaveProperty("_redactionVersion", 2);
   });
 
   test("a proven candidate the scanner CAN classify flattens to the generic marker", () => {

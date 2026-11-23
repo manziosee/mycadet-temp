@@ -82,8 +82,7 @@ describe("GoogleGeminiProvider", () => {
 
     expect(mockGenerateContent).toHaveBeenCalledTimes(1);
 
-    const call = (mockGenerateContent as ReturnType<typeof mock>).mock
-      .calls[0][0] as {
+    const call = mockGenerateContent.mock.calls[0][0] as {
       contents: Array<{
         parts: Array<{ inlineData?: { mimeType: string; data: string } }>;
       }>;
@@ -101,8 +100,7 @@ describe("GoogleGeminiProvider", () => {
 
     await provider.transcribe(Buffer.from("audio"), "audio/wav");
 
-    const call = (mockGenerateContent as ReturnType<typeof mock>).mock
-      .calls[0][0] as { model: string };
+    const call = mockGenerateContent.mock.calls[0][0] as { model: string };
     expect(call.model).toBe("gemini-2.5-flash");
   });
 
@@ -114,8 +112,7 @@ describe("GoogleGeminiProvider", () => {
 
     await provider.transcribe(Buffer.from("audio"), "audio/wav");
 
-    const call = (mockGenerateContent as ReturnType<typeof mock>).mock
-      .calls[0][0] as { model: string };
+    const call = mockGenerateContent.mock.calls[0][0] as { model: string };
     expect(call.model).toBe("gemini-2.0-pro");
   });
 

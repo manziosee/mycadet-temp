@@ -74,11 +74,11 @@ function makeDeps(): EventHandlerDeps {
     turnChannelContext: {
       userMessageChannel: "cadet",
       assistantMessageChannel: "cadet",
-    } as unknown as EventHandlerDeps["turnChannelContext"],
+    } as EventHandlerDeps["turnChannelContext"],
     turnInterfaceContext: {
       userMessageInterface: "web",
       assistantMessageInterface: "web",
-    } as unknown as EventHandlerDeps["turnInterfaceContext"],
+    } as EventHandlerDeps["turnInterfaceContext"],
     applyCompaction: async () => {},
   };
 }
@@ -152,10 +152,7 @@ describe("annotatePersistedAssistantMessage — risk-option arrays (Phase B)", (
     });
 
     const row = getMessageById(state.lastAssistantMessageId!);
-    const block = findPersistedToolUse(
-      row!.content as ContentBlock[],
-      toolUseId,
-    );
+    const block = findPersistedToolUse(row!.content, toolUseId);
     // Existing scalars still flow through.
     expect(block._riskLevel).toBe("high");
     expect(block._riskReason).toBe("Modifies state");
@@ -194,10 +191,7 @@ describe("annotatePersistedAssistantMessage — risk-option arrays (Phase B)", (
     });
 
     const row = getMessageById(state.lastAssistantMessageId!);
-    const block = findPersistedToolUse(
-      row!.content as ContentBlock[],
-      toolUseId,
-    );
+    const block = findPersistedToolUse(row!.content, toolUseId);
     expect(block._riskLevel).toBe("low");
     expect(block._riskScopeOptions).toBeUndefined();
     expect(block._riskAllowlistOptions).toBeUndefined();
@@ -229,10 +223,7 @@ describe("annotatePersistedAssistantMessage — risk-option arrays (Phase B)", (
     });
 
     const row = getMessageById(state.lastAssistantMessageId!);
-    const block = findPersistedToolUse(
-      row!.content as ContentBlock[],
-      toolUseId,
-    );
+    const block = findPersistedToolUse(row!.content, toolUseId);
     expect(block._riskLevel).toBe("low");
     expect(block._riskScopeOptions).toBeUndefined();
     expect(block._riskAllowlistOptions).toBeUndefined();
@@ -266,10 +257,7 @@ describe("annotatePersistedAssistantMessage — risk-option arrays (Phase B)", (
     });
 
     const row = getMessageById(state.lastAssistantMessageId!);
-    const block = findPersistedToolUse(
-      row!.content as ContentBlock[],
-      toolUseId,
-    );
+    const block = findPersistedToolUse(row!.content, toolUseId);
     expect(block._riskLevel).toBe("medium");
     expect(block._riskAllowlistOptions).toEqual(allowlistOptions);
     expect(block._riskScopeOptions).toBeUndefined();

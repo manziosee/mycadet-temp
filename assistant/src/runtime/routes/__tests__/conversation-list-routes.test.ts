@@ -106,7 +106,7 @@ describe("GET /v1/conversations — archiveStatus", () => {
     createConversation("live-1");
     seedArchived("archived-1");
 
-    const result = (await invoke()) as ListResponse;
+    const result = await invoke();
 
     expect(result.conversations).toHaveLength(1);
     expect(result.conversations[0]!.title).toBe("live-1");
@@ -118,9 +118,9 @@ describe("GET /v1/conversations — archiveStatus", () => {
     seedArchived("archived-1");
     seedArchived("archived-2");
 
-    const result = (await invoke({
+    const result = await invoke({
       archiveStatus: "archived",
-    })) as ListResponse;
+    });
 
     expect(result.conversations).toHaveLength(2);
     const titles = result.conversations.map((c) => c.title).sort();
@@ -131,7 +131,7 @@ describe("GET /v1/conversations — archiveStatus", () => {
     createConversation("live-1");
     seedArchived("archived-1");
 
-    const result = (await invoke({ archiveStatus: "all" })) as ListResponse;
+    const result = await invoke({ archiveStatus: "all" });
 
     expect(result.conversations).toHaveLength(2);
     const titles = result.conversations.map((c) => c.title).sort();
@@ -145,10 +145,10 @@ describe("GET /v1/conversations — archiveStatus", () => {
     createConversation("live-2");
     seedArchived("archived-1");
 
-    const result = (await invoke({
+    const result = await invoke({
       archiveStatus: "archived",
       limit: "1",
-    })) as ListResponse;
+    });
 
     expect(result.conversations).toHaveLength(1);
     expect(result.conversations[0]!.title).toBe("archived-1");
@@ -174,9 +174,9 @@ describe("GET /v1/conversations — archiveStatus", () => {
     // AND a live archived row to make sure the archived list isn't empty.
     seedArchived("archived-live");
 
-    const result = (await invoke({
+    const result = await invoke({
       archiveStatus: "archived",
-    })) as ListResponse;
+    });
 
     expect(result.conversations.map((c) => c.title).sort()).toEqual([
       "archived-live",
@@ -197,7 +197,7 @@ describe("GET /v1/conversations — conversationType", () => {
     createConversation({ title: "sched-1", conversationType: "scheduled" });
 
     // WHEN listing without a conversationType filter
-    const result = (await invoke()) as ListResponse;
+    const result = await invoke();
 
     // THEN only the foreground row is returned
     expect(result.conversations.map((c) => c.title)).toEqual(["foreground-1"]);
@@ -210,9 +210,9 @@ describe("GET /v1/conversations — conversationType", () => {
     createConversation({ title: "sched-1", conversationType: "scheduled" });
 
     // WHEN listing with conversationType=background
-    const result = (await invoke({
+    const result = await invoke({
       conversationType: "background",
-    })) as ListResponse;
+    });
 
     // THEN both the background and scheduled rows are returned
     expect(result.conversations.map((c) => c.title).sort()).toEqual([
@@ -228,9 +228,9 @@ describe("GET /v1/conversations — conversationType", () => {
     createConversation({ title: "sched-1", conversationType: "scheduled" });
 
     // WHEN listing with conversationType=scheduled
-    const result = (await invoke({
+    const result = await invoke({
       conversationType: "scheduled",
-    })) as ListResponse;
+    });
 
     // THEN only the scheduled row is returned (background is excluded)
     expect(result.conversations.map((c) => c.title)).toEqual(["sched-1"]);
@@ -315,7 +315,7 @@ describe("GET /v1/conversations with groupId", () => {
     seedInGroup("in-custom-group", group.id);
     seedPinned("pinned-1");
 
-    const result = (await invoke({ groupId: "system:all" })) as ListResponse;
+    const result = await invoke({ groupId: "system:all" });
 
     expect(result.conversations.map((c) => c.title)).toEqual(["ungrouped-1"]);
   });
@@ -331,7 +331,7 @@ describe("GET /v1/conversations with groupId", () => {
       conv.id,
     );
 
-    const result = (await invoke({ groupId: "system:all" })) as ListResponse;
+    const result = await invoke({ groupId: "system:all" });
 
     expect(result.conversations.map((c) => c.title)).toEqual(["never-filed"]);
   });
@@ -341,7 +341,7 @@ describe("GET /v1/conversations with groupId", () => {
     seedPinned("pinned-1");
     seedPinned("pinned-2");
 
-    const result = (await invoke({ groupId: "system:pinned" })) as ListResponse;
+    const result = await invoke({ groupId: "system:pinned" });
 
     expect(result.conversations.map((c) => c.title).sort()).toEqual([
       "pinned-1",
@@ -357,7 +357,7 @@ describe("GET /v1/conversations with groupId", () => {
     seedInGroup("recipe-1", recipes.id);
     createConversation("ungrouped-1");
 
-    const result = (await invoke({ groupId: carChat.id })) as ListResponse;
+    const result = await invoke({ groupId: carChat.id });
 
     expect(result.conversations.map((c) => c.title).sort()).toEqual([
       "car-1",
@@ -387,7 +387,7 @@ describe("GET /v1/conversations with groupId", () => {
       );
     }
 
-    const result = (await invoke({ groupId: "system:pinned" })) as ListResponse;
+    const result = await invoke({ groupId: "system:pinned" });
 
     expect(result.conversations.map((c) => c.title)).toEqual([
       "newest",
@@ -403,7 +403,7 @@ describe("GET /v1/conversations with groupId", () => {
     seedInGroup("car-1", group.id);
     seedPinned("pinned-1");
 
-    const result = (await invoke({ groupId: group.id })) as ListResponse;
+    const result = await invoke({ groupId: group.id });
 
     expect(result.conversations.map((c) => c.title)).toEqual(["car-1"]);
   });
@@ -440,7 +440,7 @@ describe("GET /v1/conversations with groupId", () => {
     );
     createConversation("plain-ungrouped");
 
-    const result = (await invoke({ groupId: "system:all" })) as ListResponse;
+    const result = await invoke({ groupId: "system:all" });
 
     expect(result.conversations.map((c) => c.title).sort()).toEqual([
       "plain-ungrouped",
@@ -461,7 +461,7 @@ describe("GET /v1/conversations with groupId", () => {
     );
     createConversation("plain-ungrouped");
 
-    const result = (await invoke({ groupId: "system:all" })) as ListResponse;
+    const result = await invoke({ groupId: "system:all" });
 
     expect(result.conversations.map((c) => c.title)).toEqual([
       "plain-ungrouped",
@@ -474,9 +474,9 @@ describe("GET /v1/conversations with groupId", () => {
     const group = createGroup("Car Chat");
     seedInGroup("car-1", group.id);
 
-    const ungrouped = (await invoke({ groupId: "system:all" })) as ListResponse;
-    const pinned = (await invoke({ groupId: "system:pinned" })) as ListResponse;
-    const custom = (await invoke({ groupId: group.id })) as ListResponse;
+    const ungrouped = await invoke({ groupId: "system:all" });
+    const pinned = await invoke({ groupId: "system:pinned" });
+    const custom = await invoke({ groupId: group.id });
 
     expect(ungrouped.conversations.map((c) => c.title)).toEqual([
       "ungrouped-1",
@@ -509,7 +509,7 @@ describe("GET /v1/conversations with groupId", () => {
       newer.id,
     );
 
-    const result = (await invoke({ groupId: "system:all" })) as ListResponse;
+    const result = await invoke({ groupId: "system:all" });
 
     expect(result.conversations.map((c) => c.title)).toEqual([
       "newer",
@@ -525,10 +525,10 @@ describe("GET /v1/conversations with groupId", () => {
       createConversation(`ungrouped-${i}`);
     }
 
-    const result = (await invoke({
+    const result = await invoke({
       groupId: group.id,
       limit: "2",
-    })) as ListResponse;
+    });
 
     expect(result.conversations).toHaveLength(2);
     expect(result.hasMore).toBe(false);
@@ -540,7 +540,7 @@ describe("GET /v1/conversations with groupId", () => {
     createConversation("ungrouped-1");
     seedPinned("pinned-1");
 
-    const result = (await invoke()) as ListResponse;
+    const result = await invoke();
 
     expect(result.conversations.map((c) => c.title).sort()).toEqual([
       "car-1",
@@ -1322,7 +1322,7 @@ describe("GET /v1/conversations, conversationType=all", () => {
     createConversation({ title: "bg-1", conversationType: "background" });
     createConversation({ title: "sched-1", conversationType: "scheduled" });
 
-    const result = (await invoke({ conversationType: "all" })) as ListResponse;
+    const result = await invoke({ conversationType: "all" });
 
     expect(result.conversations.map((c) => c.title).sort()).toEqual([
       "bg-1",
@@ -1346,10 +1346,10 @@ describe("GET /v1/conversations, conversationType=all", () => {
       archivedBackground.id,
     );
 
-    const result = (await invoke({
+    const result = await invoke({
       conversationType: "all",
       archiveStatus: "all",
-    })) as ListResponse;
+    });
 
     expect(result.conversations.map((c) => c.title).sort()).toEqual([
       "archived-1",
@@ -1371,7 +1371,7 @@ describe("GET /v1/conversations, conversationType=all", () => {
     setLastMessageAt(middle.id, 2000);
     setLastMessageAt(newest.id, 3000);
 
-    const result = (await invoke({ conversationType: "all" })) as ListResponse;
+    const result = await invoke({ conversationType: "all" });
 
     expect(result.conversations.map((c) => c.title)).toEqual([
       "newest-foreground",
@@ -1400,10 +1400,10 @@ describe("GET /v1/conversations, conversationType=all", () => {
       doneEarlier.id,
     );
 
-    const result = (await invoke({
+    const result = await invoke({
       conversationType: "all",
       archiveStatus: "all",
-    })) as ListResponse;
+    });
 
     expect(result.conversations.map((c) => c.title)).toEqual([
       "old-chat-marked-done-later",
@@ -1433,7 +1433,7 @@ describe("GET /v1/conversations, conversationType=all", () => {
       subagent.id,
     );
 
-    const result = (await invoke({ conversationType: "all" })) as ListResponse;
+    const result = await invoke({ conversationType: "all" });
 
     expect(result.conversations.map((c) => c.title)).toEqual(["foreground-1"]);
   });
@@ -1453,10 +1453,10 @@ describe("GET /v1/conversations, conversationType=all", () => {
     setLastMessageAt(pinned.id, 1000);
     setLastMessageAt(newer.id, 2000);
 
-    const result = (await invoke({
+    const result = await invoke({
       conversationType: "all",
       limit: "1",
-    })) as ListResponse;
+    });
 
     expect(result.conversations.map((c) => c.title)).toEqual(["newer-1"]);
     expect(result.hasMore).toBe(true);
@@ -1467,18 +1467,18 @@ describe("GET /v1/conversations, conversationType=all", () => {
     createConversation({ title: "bg-1", conversationType: "background" });
     createConversation({ title: "sched-1", conversationType: "scheduled" });
 
-    const first = (await invoke({
+    const first = await invoke({
       conversationType: "all",
       limit: "2",
-    })) as ListResponse;
+    });
     expect(first.conversations).toHaveLength(2);
     expect(first.hasMore).toBe(true);
 
-    const second = (await invoke({
+    const second = await invoke({
       conversationType: "all",
       limit: "2",
       offset: String(first.nextOffset),
-    })) as ListResponse;
+    });
     expect(second.conversations).toHaveLength(1);
     expect(second.hasMore).toBe(false);
   });

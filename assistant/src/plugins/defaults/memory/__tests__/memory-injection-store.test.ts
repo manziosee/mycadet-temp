@@ -1,3 +1,4 @@
+import assert from "node:assert/strict";
 /**
  * Tests for `memory-injection-store.ts`, the memory plugin's per-conversation
  * memory-injection opt-out. They run on the REAL memory connection — each
@@ -15,10 +16,10 @@
  *   - fail-soft: an unopenable memory database resolves on-read and reports
  *     failure on write rather than throwing.
  */
-
 import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import type { SQLQueryBindings } from "bun:sqlite";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
 import {
@@ -76,13 +77,14 @@ describe("memory injection store", () => {
       .run("conv-a", 1234);
     expect(setMemoryInjectionOff("conv-a", true)).toBe(true);
     const rows = getMemorySqlite()
-      ?.query(
-        "SELECT conversation_id, memory_injection_off FROM activation_sessions",
-      )
-      .all() as Array<{
-      conversation_id: string;
-      memory_injection_off: number | null;
-    }>;
+      ?.query<
+        {
+          conversation_id: string;
+          memory_injection_off: number | null;
+        },
+        []
+      >("SELECT conversation_id, memory_injection_off FROM activation_sessions")
+      .all();
     expect(rows).toEqual([
       { conversation_id: "conv-a", memory_injection_off: 1 },
     ]);
@@ -90,10 +92,12 @@ describe("memory injection store", () => {
     // A conversation with no marker row gets one, stamped now.
     expect(setMemoryInjectionOff("conv-b", false)).toBe(true);
     const created = getMemorySqlite()
-      ?.query(
-        "SELECT created_at FROM activation_sessions WHERE conversation_id = ?",
-      )
-      .get("conv-b") as { created_at: number };
+      ?.query<
+        { created_at: number },
+        SQLQueryBindings[]
+      >("SELECT created_at FROM activation_sessions WHERE conversation_id = ?")
+      .get("conv-b");
+    assert(created, "Expected the conversation marker");
     expect(created.created_at).toBeGreaterThan(0);
   });
 

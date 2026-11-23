@@ -1,5 +1,6 @@
 import { existsSync } from "node:fs";
 import { join } from "node:path";
+import type { SQLQueryBindings } from "bun:sqlite";
 import { beforeEach, describe, expect, test } from "bun:test";
 
 import { eq } from "drizzle-orm";
@@ -247,11 +248,14 @@ describe("forkConversationForRetrospective", () => {
   test("rejects an unknown throughMessageId without creating a fork", async () => {
     const source = await seedSource("Failure thread");
     const countConversations = () =>
-      (
-        getSqlite().query("SELECT COUNT(*) AS c FROM conversations").get() as {
-          c: number;
-        }
-      ).c;
+      getSqlite()
+        .query<
+          {
+            c: number;
+          },
+          []
+        >("SELECT COUNT(*) AS c FROM conversations")
+        .get()!.c;
     const before = countConversations();
 
     await expect(
@@ -413,10 +417,11 @@ describe("forkConversationForRetrospective — compacted source", () => {
       .get();
     expect(forkActivation?.everInjectedJson).toBe(everInjected);
     const v3Rows = getMemorySqlite()!
-      .query(
-        "SELECT slug FROM memory_v3_injected_sections WHERE conversation_id = ?",
-      )
-      .all(fork.id) as Array<{ slug: string }>;
+      .query<
+        { slug: string },
+        SQLQueryBindings[]
+      >("SELECT slug FROM memory_v3_injected_sections WHERE conversation_id = ?")
+      .all(fork.id);
     expect(v3Rows.map((r) => r.slug)).toEqual(["card-a"]);
   });
 

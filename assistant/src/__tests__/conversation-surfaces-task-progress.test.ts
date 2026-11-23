@@ -3,7 +3,6 @@ import { describe, expect, test } from "bun:test";
 import { UISurfaceUpdateEvent } from "../api/events/ui-surface-update.js";
 import type { AssistantEvent } from "../api/index.js";
 import { CardSurfaceData } from "../api/surfaces.js";
-import { DynamicPageSurfaceData } from "../api/surfaces.js";
 import { SurfaceType } from "../api/surfaces.js";
 import type { Conversation } from "../daemon/conversation.js";
 import {
@@ -174,9 +173,7 @@ describe("task_progress surface compatibility", () => {
     if (!showMessage || showMessage.surfaceType !== "card") {
       return;
     }
-    expect((showMessage.data as CardSurfaceData).template).toBe(
-      "task_progress",
-    );
+    expect(showMessage.data.template).toBe("task_progress");
   });
 
   test("blocks Slack ui_show for non-task_progress card when dynamic UI is disabled", async () => {
@@ -268,7 +265,7 @@ describe("task_progress surface compatibility", () => {
       return;
     }
 
-    const card = showMessage.data as CardSurfaceData;
+    const card = showMessage.data;
     expect(card.template).toBe("task_progress");
     expect(card.title).toBe("Ordering from DoorDash");
     expect(card.body).toBe("");
@@ -298,7 +295,7 @@ describe("task_progress surface compatibility", () => {
       return;
     }
 
-    const card = showMessage.data as CardSurfaceData;
+    const card = showMessage.data;
     expect(card.template).toBe("task_progress");
     const templateData = card.templateData as Record<string, unknown>;
     expect(templateData.status).toBe("in_progress");
@@ -335,8 +332,10 @@ describe("task_progress surface compatibility", () => {
       return;
     }
 
-    const templateData = (showMessage.data as CardSurfaceData)
-      .templateData as Record<string, unknown>;
+    const templateData = showMessage.data.templateData as Record<
+      string,
+      unknown
+    >;
     expect(templateData.status).toBe("in_progress");
     const steps = templateData.steps as Array<Record<string, unknown>>;
     expect(steps).toHaveLength(2);
@@ -369,7 +368,7 @@ describe("task_progress surface compatibility", () => {
       return;
     }
 
-    const page = showMessage.data as DynamicPageSurfaceData;
+    const page = showMessage.data;
     expect(page.html).toBe("<h1>Hello</h1>");
     expect(page.preview).toEqual({
       title: "Slides",
@@ -464,7 +463,7 @@ describe("task_progress surface compatibility", () => {
       return;
     }
 
-    const page = showMessage.data as DynamicPageSurfaceData;
+    const page = showMessage.data;
     expect(page.html).toBe("<h1>Nested</h1>");
   });
 

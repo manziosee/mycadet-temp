@@ -22,8 +22,11 @@ function createTestDb(options: { withTable?: boolean } = {}) {
 
 function columns(sqlite: Database): Array<{ name: string; notnull: number }> {
   return sqlite
-    .query("PRAGMA table_info(conversation_tool_surfaces)")
-    .all() as Array<{ name: string; notnull: number }>;
+    .query<
+      { name: string; notnull: number },
+      []
+    >("PRAGMA table_info(conversation_tool_surfaces)")
+    .all();
 }
 
 describe("migration 380: conversation_tool_surfaces.delegate_independent_tasks", () => {
@@ -56,10 +59,11 @@ describe("migration 380: conversation_tool_surfaces.delegate_independent_tasks",
     migrateConversationToolSurfacesDelegateIndependentTasks(db);
 
     const row = sqlite
-      .query(
-        "SELECT delegate_independent_tasks FROM conversation_tool_surfaces WHERE conversation_id = 'conv-1'",
-      )
-      .get() as { delegate_independent_tasks: unknown };
+      .query<
+        { delegate_independent_tasks: unknown },
+        []
+      >("SELECT delegate_independent_tasks FROM conversation_tool_surfaces WHERE conversation_id = 'conv-1'")
+      .get()!;
     expect(row.delegate_independent_tasks).toBeNull();
   });
 

@@ -21,8 +21,11 @@ function createTestDb() {
 
 function tableNames(db: ReturnType<typeof createTestDb>): string[] {
   const rows = getSqliteFrom(db)
-    .prepare("SELECT name FROM sqlite_master WHERE type = 'table'")
-    .all() as { name: string }[];
+    .prepare<
+      { name: string },
+      []
+    >("SELECT name FROM sqlite_master WHERE type = 'table'")
+    .all();
   return rows.map((row) => row.name);
 }
 
@@ -57,8 +60,11 @@ describe("migrateCreateAcpRefusedCredentials", () => {
     );
 
     const rows = raw
-      .prepare("SELECT digest, refused_at FROM acp_refused_credentials")
-      .all() as { digest: string; refused_at: number }[];
+      .prepare<
+        { digest: string; refused_at: number },
+        []
+      >("SELECT digest, refused_at FROM acp_refused_credentials")
+      .all();
     expect(rows).toEqual([{ digest: "abc", refused_at: 1 }]);
   });
 });

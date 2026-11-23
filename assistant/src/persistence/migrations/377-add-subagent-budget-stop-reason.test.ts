@@ -1,3 +1,4 @@
+import type { SQLQueryBindings } from "bun:sqlite";
 import { Database } from "bun:sqlite";
 import { describe, expect, test } from "bun:test";
 
@@ -22,16 +23,24 @@ function createTestDb() {
 }
 
 function columnInfo(sqlite: Database) {
-  return sqlite.query("PRAGMA table_info(subagents)").all() as Array<{
-    name: string;
-    notnull: number;
-  }>;
+  return sqlite
+    .query<
+      {
+        name: string;
+        notnull: number;
+      },
+      []
+    >("PRAGMA table_info(subagents)")
+    .all();
 }
 
 function reasonOf(sqlite: Database, id: string): unknown {
   const row = sqlite
-    .query("SELECT budget_stop_reason FROM subagents WHERE id = ?")
-    .get(id) as { budget_stop_reason: unknown };
+    .query<
+      { budget_stop_reason: unknown },
+      SQLQueryBindings[]
+    >("SELECT budget_stop_reason FROM subagents WHERE id = ?")
+    .get(id)!;
   return row.budget_stop_reason;
 }
 

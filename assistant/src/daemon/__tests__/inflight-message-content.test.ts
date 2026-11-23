@@ -5,6 +5,7 @@
  * cleanup, and the stranded-writer fold at the turn seam.
  */
 import { existsSync, readFileSync } from "node:fs";
+import type { SQLQueryBindings } from "bun:sqlite";
 import { describe, expect, test } from "bun:test";
 
 import pino from "pino";
@@ -36,15 +37,21 @@ function textBlock(text: string): ContentBlock {
 function rawRow(messageId: string): { content: string; finalized: number } {
   const sqlite = getSqliteFrom(getDb());
   return sqlite
-    .query("SELECT content, finalized FROM messages WHERE id = ?")
-    .get(messageId) as { content: string; finalized: number };
+    .query<
+      { content: string; finalized: number },
+      SQLQueryBindings[]
+    >("SELECT content, finalized FROM messages WHERE id = ?")
+    .get(messageId)!;
 }
 
 function rawMetadata(messageId: string): Record<string, unknown> {
   const sqlite = getSqliteFrom(getDb());
   const row = sqlite
-    .query("SELECT metadata FROM messages WHERE id = ?")
-    .get(messageId) as { metadata: string | null };
+    .query<
+      { metadata: string | null },
+      SQLQueryBindings[]
+    >("SELECT metadata FROM messages WHERE id = ?")
+    .get(messageId)!;
   return row?.metadata
     ? (JSON.parse(row.metadata) as Record<string, unknown>)
     : {};

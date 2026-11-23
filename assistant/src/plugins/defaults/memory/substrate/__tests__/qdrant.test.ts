@@ -89,7 +89,7 @@ const state = {
   // Schema returned by `client.getCollection`. Tests that exercise the
   // drift path point this at a partial schema; the default mirrors a fully
   // migrated collection so the no-drift path is the silent default.
-  getCollectionInfo: FULL_SCHEMA_INFO as MockCollectionInfo,
+  getCollectionInfo: FULL_SCHEMA_INFO,
   getCollectionThrows: null as Error | null,
   getCollectionCalls: 0,
   // Point count returned by `client.count`. Used by `countConceptPagePoints`
@@ -728,7 +728,7 @@ describe("memory v2 qdrant — upsert", () => {
     // No summary vectors when caller didn't pass them — Qdrant accepts a
     // partial named-vector subset, and pages without a frontmatter summary
     // legitimately have nothing to embed on the summary side.
-    const vectorRecord = point.vector as unknown as Record<string, unknown>;
+    const vectorRecord = point.vector;
     expect(vectorRecord.summary_dense).toBeUndefined();
     expect(vectorRecord.summary_sparse).toBeUndefined();
     // Point ID is a UUID-shaped string derived from the slug.
@@ -753,7 +753,7 @@ describe("memory v2 qdrant — upsert", () => {
 
     expect(state.upsertCalls).toHaveLength(1);
     const [point] = state.upsertCalls[0].points;
-    const vectorRecord = point.vector as unknown as Record<string, unknown>;
+    const vectorRecord = point.vector;
     expect(vectorRecord.dense).toEqual([0.1, 0.2, 0.3]);
     expect(vectorRecord.sparse).toEqual({
       indices: [1, 2],
@@ -781,7 +781,7 @@ describe("memory v2 qdrant — upsert", () => {
     });
 
     const [point] = state.upsertCalls[0].points;
-    const vectorRecord = point.vector as unknown as Record<string, unknown>;
+    const vectorRecord = point.vector;
     expect(vectorRecord.summary_dense).toBeUndefined();
     expect(vectorRecord.summary_sparse).toBeUndefined();
   });
@@ -1016,8 +1016,7 @@ describe("memory v2 qdrant — hybrid query", () => {
     // Each query is a single-channel call (no `prefetch` + `fusion` shape).
     for (const call of state.queryCalls) {
       expect(call).not.toHaveProperty("prefetch");
-      const wholeCall = call as unknown as Record<string, unknown>;
-      expect(wholeCall.fusion).toBeUndefined();
+      expect("fusion" in call ? call.fusion : undefined).toBeUndefined();
     }
   });
 

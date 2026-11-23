@@ -980,7 +980,7 @@ describe("DeepgramRealtimeTranscriber", () => {
 
       const textMessages = mockWs.sentData.filter((d) => typeof d === "string");
       expect(textMessages).toHaveLength(1);
-      expect(JSON.parse(textMessages[0] as string)).toEqual({
+      expect(JSON.parse(textMessages[0])).toEqual({
         type: "Finalize",
       });
       // No finalized event until the provider's from_finalize flush arrives.
@@ -1418,7 +1418,7 @@ describe("DeepgramRealtimeTranscriber", () => {
     // Only the CloseStream message should have been sent, not the audio.
     const textMessages = mockWs.sentData.filter((d) => typeof d === "string");
     expect(textMessages).toHaveLength(1);
-    expect(JSON.parse(textMessages[0] as string)).toEqual({
+    expect(JSON.parse(textMessages[0])).toEqual({
       type: "CloseStream",
     });
   });
@@ -1434,7 +1434,7 @@ describe("DeepgramRealtimeTranscriber", () => {
 
     const textMessages = mockWs.sentData.filter((d) => typeof d === "string");
     expect(textMessages).toHaveLength(1);
-    expect(JSON.parse(textMessages[0] as string)).toEqual({
+    expect(JSON.parse(textMessages[0])).toEqual({
       type: "CloseStream",
     });
   });

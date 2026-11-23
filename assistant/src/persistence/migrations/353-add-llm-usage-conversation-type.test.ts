@@ -1,3 +1,4 @@
+import type { SQLQueryBindings } from "bun:sqlite";
 import { Database } from "bun:sqlite";
 import { describe, expect, test } from "bun:test";
 
@@ -55,8 +56,11 @@ function insertUsageEvent(
 
 function typeOf(sqlite: Database, eventId: string): unknown {
   const row = sqlite
-    .query("SELECT conversation_type FROM llm_usage_events WHERE id = ?")
-    .get(eventId) as { conversation_type: unknown };
+    .query<
+      { conversation_type: unknown },
+      SQLQueryBindings[]
+    >("SELECT conversation_type FROM llm_usage_events WHERE id = ?")
+    .get(eventId)!;
   return row.conversation_type;
 }
 
@@ -65,12 +69,16 @@ describe("migration 353: llm_usage_events.conversation_type", () => {
     const { sqlite, db } = createTestDb();
     migrateAddLlmUsageConversationType(db);
 
-    const columns = (
-      sqlite.query("PRAGMA table_info(llm_usage_events)").all() as Array<{
-        name: string;
-        notnull: number;
-      }>
-    ).filter((c) => c.name === "conversation_type");
+    const columns = sqlite
+      .query<
+        {
+          name: string;
+          notnull: number;
+        },
+        []
+      >("PRAGMA table_info(llm_usage_events)")
+      .all()
+      .filter((c) => c.name === "conversation_type");
     expect(columns).toHaveLength(1);
     expect(columns[0].notnull).toBe(0);
   });

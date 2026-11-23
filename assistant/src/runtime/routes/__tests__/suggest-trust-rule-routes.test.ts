@@ -143,7 +143,7 @@ describe("suggestTrustRuleRoute", () => {
   describe("happy path", () => {
     test("returns correct SuggestTrustRuleResponse shape with scopeOptions and directoryScopeOptions passed through", async () => {
       const result = await suggestTrustRuleRoute.handler({
-        body: baseRequest as unknown as Record<string, unknown>,
+        body: baseRequest,
       });
 
       expect(result).toMatchObject({
@@ -158,7 +158,7 @@ describe("suggestTrustRuleRoute", () => {
 
     test("passes callSite 'trustRuleSuggestion' and tool_choice to provider", async () => {
       await suggestTrustRuleRoute.handler({
-        body: baseRequest as unknown as Record<string, unknown>,
+        body: baseRequest,
       });
 
       expect(mockSendMessage).toHaveBeenCalledTimes(1);
@@ -183,7 +183,7 @@ describe("suggestTrustRuleRoute", () => {
 
       await expect(
         suggestTrustRuleRoute.handler({
-          body: baseRequest as unknown as Record<string, unknown>,
+          body: baseRequest,
         }),
       ).rejects.toThrow("No LLM provider configured for trustRuleSuggestion");
     });
@@ -195,7 +195,7 @@ describe("suggestTrustRuleRoute", () => {
 
       await expect(
         suggestTrustRuleRoute.handler({
-          body: baseRequest as unknown as Record<string, unknown>,
+          body: baseRequest,
         }),
       ).rejects.toThrow("No tool_use block in trust rule suggestion response");
     });
@@ -209,7 +209,7 @@ describe("suggestTrustRuleRoute", () => {
       };
 
       const result = await suggestTrustRuleRoute.handler({
-        body: requestWithoutDirScope as unknown as Record<string, unknown>,
+        body: requestWithoutDirScope,
       });
 
       expect(result).toMatchObject({
@@ -240,7 +240,7 @@ describe("suggestTrustRuleRoute", () => {
           body: {
             ...baseRequest,
             intent: "sideways",
-          } as unknown as Record<string, unknown>,
+          },
         }),
       ).rejects.toThrow(BadRequestError);
     });

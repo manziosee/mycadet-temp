@@ -113,7 +113,7 @@ describe("askQuestionTool definition", () => {
     expect(def.description).toContain("up to 5");
     expect(def.description).toContain("Skip button");
 
-    const schema = def.input_schema as unknown as {
+    const schema = def.input_schema as {
       properties: Record<
         string,
         {
@@ -723,7 +723,7 @@ describe("AskQuestionTool batched input", () => {
 describe("askQuestionTool definition (batched schema)", () => {
   test("exposes batched questions and a desktop help alternative", () => {
     const def = askQuestionTool;
-    const schema = def.input_schema as unknown as {
+    const schema = def.input_schema as {
       properties: Record<
         string,
         {

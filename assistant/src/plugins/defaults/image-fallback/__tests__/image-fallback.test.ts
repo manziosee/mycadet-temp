@@ -185,7 +185,7 @@ function makeCtx(
     originalMessages: Object.freeze([...latestMessages]),
     logger,
     ...overrides,
-  } as unknown as UserPromptSubmitContext;
+  } as UserPromptSubmitContext;
 }
 
 function toolResult(contentBlocks?: ContentBlock[]): ToolResultContent {
@@ -208,7 +208,7 @@ function makeCompactCtx(
     modelProfileKey: "text-only",
     logger,
     ...overrides,
-  } as unknown as PostCompactContext;
+  } as PostCompactContext;
 }
 
 function makeToolCtx(
@@ -223,7 +223,7 @@ function makeToolCtx(
     maxInputTokens: 100_000,
     logger,
     ...overrides,
-  } as unknown as PostToolUseContext;
+  } as PostToolUseContext;
 }
 
 // ─── Setup ──────────────────────────────────────────────────────────────────
@@ -527,9 +527,7 @@ describe("image-fallback user-prompt-submit hook", () => {
       expect(ms).toBe(CAPTION_TIMEOUT_MS);
       return originalTimeout(5);
     });
-    const abortSignal = AbortSignal as unknown as {
-      timeout: (ms: number) => AbortSignal;
-    };
+    const abortSignal = AbortSignal;
     abortSignal.timeout = timeoutSpy;
 
     try {

@@ -950,7 +950,7 @@ describe("host-proxy preactivation across an interrupt", () => {
       interfaceId: "macos",
       capabilities: [],
       callback: (event) => {
-        events.push(event as unknown as Record<string, unknown>);
+        events.push(event);
       },
     });
 
@@ -1092,7 +1092,7 @@ describe("host-proxy preactivation across an interrupt", () => {
       interfaceId: "macos",
       capabilities: [],
       callback: (event) => {
-        events.push(event as unknown as Record<string, unknown>);
+        events.push(event);
       },
     });
 

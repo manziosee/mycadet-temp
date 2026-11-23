@@ -1,3 +1,4 @@
+import type { SQLQueryBindings } from "bun:sqlite";
 import type { Database } from "bun:sqlite";
 import { beforeEach, describe, expect, test } from "bun:test";
 
@@ -179,8 +180,11 @@ describe("conversation_move_to_group tool", () => {
     expect(result.content).toContain("pinned");
     expect(groupIdOf("conv-pin")).toBe("system:pinned");
     const pinned = getRawDb()
-      .query("SELECT is_pinned FROM conversations WHERE id = ?")
-      .get("conv-pin") as { is_pinned: number };
+      .query<
+        { is_pinned: number },
+        SQLQueryBindings[]
+      >("SELECT is_pinned FROM conversations WHERE id = ?")
+      .get("conv-pin")!;
     expect(pinned.is_pinned).toBe(1);
   });
 
@@ -198,8 +202,11 @@ describe("conversation_move_to_group tool", () => {
 
     expect(result.isError).toBe(false);
     const row = getRawDb()
-      .query("SELECT display_order FROM conversations WHERE id = ?")
-      .get("conv-ord") as { display_order: number | null };
+      .query<
+        { display_order: number | null },
+        SQLQueryBindings[]
+      >("SELECT display_order FROM conversations WHERE id = ?")
+      .get("conv-ord")!;
     expect(row.display_order).toBe(7);
   });
 

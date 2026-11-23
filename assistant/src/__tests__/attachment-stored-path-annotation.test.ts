@@ -49,7 +49,7 @@ function lastAnnotationBlock(ctx: MessagingConversationContext): {
   text: string;
 } {
   const llmMessage = ctx.messages.at(-1)!;
-  return (llmMessage.content as ContentBlock[]).at(-1) as {
+  return llmMessage.content.at(-1) as {
     type: string;
     text: string;
   };
@@ -163,10 +163,10 @@ describe("persistQueuedMessageBody stored path annotations", () => {
     await persistQueuedMessageBody(ctx, { content: "a".repeat(8_000_001) });
     await persistQueuedMessageBody(ctx, { content: "b".repeat(8_000_001) });
 
-    const first = (ctx.messages[0].content as ContentBlock[]).at(-1) as {
+    const first = ctx.messages[0].content.at(-1) as {
       text: string;
     };
-    const second = (ctx.messages[1].content as ContentBlock[]).at(-1) as {
+    const second = ctx.messages[1].content.at(-1) as {
       text: string;
     };
     expect(first.text).toContain("oversized-content-");
@@ -184,7 +184,7 @@ describe("persistQueuedMessageBody stored path annotations", () => {
       displayContent: display,
     });
 
-    const llmContent = ctx.messages[0].content as ContentBlock[];
+    const llmContent = ctx.messages[0].content;
     expect(JSON.stringify(llmContent)).not.toContain("oversized-content-");
     expect(JSON.stringify(llmContent)).toContain("fenced model copy");
     expect(JSON.stringify(llmContent)).not.toContain(display);
@@ -206,7 +206,7 @@ describe("persistQueuedMessageBody stored path annotations", () => {
     await persistQueuedMessageBody(ctx, { content: "just text" });
 
     expect(ctx.messages).toHaveLength(1);
-    const content = ctx.messages[0].content as ContentBlock[];
+    const content = ctx.messages[0].content;
     expect(content).toHaveLength(1);
     expect(content[0].type).toBe("text");
   });

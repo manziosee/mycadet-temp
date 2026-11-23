@@ -77,16 +77,26 @@ function bootstrapLegacyTables(raw: Database): void {
 }
 
 function columnNames(raw: Database, table: string): Set<string> {
-  const cols = raw.prepare(`PRAGMA table_info(${table})`).all() as {
-    name: string;
-  }[];
+  const cols = raw
+    .prepare<
+      {
+        name: string;
+      },
+      []
+    >(`PRAGMA table_info(${table})`)
+    .all();
   return new Set(cols.map((c) => c.name));
 }
 
 function indexNames(raw: Database, table: string): Set<string> {
-  const idx = raw.prepare(`PRAGMA index_list(${table})`).all() as {
-    name: string;
-  }[];
+  const idx = raw
+    .prepare<
+      {
+        name: string;
+      },
+      []
+    >(`PRAGMA index_list(${table})`)
+    .all();
   return new Set(idx.map((i) => i.name));
 }
 

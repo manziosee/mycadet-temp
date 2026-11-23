@@ -68,8 +68,7 @@ async function showTaskProgress(
     data: { template: "task_progress", templateData },
   });
   expect(result.isError).toBe(false);
-  return (JSON.parse(result.content as string) as { surfaceId: string })
-    .surfaceId;
+  return (JSON.parse(result.content) as { surfaceId: string }).surfaceId;
 }
 
 function updatesFor(sent: AssistantEvent[], surfaceId: string) {
@@ -87,10 +86,7 @@ function storedTemplateData(
   if (!stored || stored.surfaceType !== "card") {
     throw new Error(`no stored card for ${surfaceId}`);
   }
-  return (stored.data as CardSurfaceData).templateData as Record<
-    string,
-    unknown
-  >;
+  return stored.data.templateData as Record<string, unknown>;
 }
 
 describe("settleRunningTaskProgressSurfaces", () => {

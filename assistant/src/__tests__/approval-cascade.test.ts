@@ -245,10 +245,8 @@ describe("approval cascading", () => {
     conversationObj.handleConfirmationResponse("req-1", "allow");
 
     const confirmMsgs = emitted.filter(
-      (m) =>
-        m.type === "confirmation_state_changed" &&
-        (m as unknown as ConfirmationStateChangedEvent).state === "approved",
-    ) as unknown as ConfirmationStateChangedEvent[];
+      (m) => m.type === "confirmation_state_changed" && m.state === "approved",
+    ) as ConfirmationStateChangedEvent[];
 
     // Only the primary should be resolved
     expect(confirmMsgs).toHaveLength(1);
@@ -279,10 +277,8 @@ describe("approval cascading", () => {
     conversationObj.handleConfirmationResponse("req-1", "deny");
 
     const confirmMsgs = emitted.filter(
-      (m) =>
-        m.type === "confirmation_state_changed" &&
-        (m as unknown as ConfirmationStateChangedEvent).state === "denied",
-    ) as unknown as ConfirmationStateChangedEvent[];
+      (m) => m.type === "confirmation_state_changed" && m.state === "denied",
+    ) as ConfirmationStateChangedEvent[];
 
     // Only the primary should be denied
     expect(confirmMsgs).toHaveLength(1);
@@ -327,10 +323,8 @@ describe("approval cascading", () => {
 
     // Only the primary should be resolved
     const confirmMsgs = emitted.filter(
-      (m) =>
-        m.type === "confirmation_state_changed" &&
-        (m as unknown as ConfirmationStateChangedEvent).state === "approved",
-    ) as unknown as ConfirmationStateChangedEvent[];
+      (m) => m.type === "confirmation_state_changed" && m.state === "approved",
+    ) as ConfirmationStateChangedEvent[];
 
     expect(confirmMsgs).toHaveLength(1);
     expect(confirmMsgs[0].requestId).toBe("req-primary");

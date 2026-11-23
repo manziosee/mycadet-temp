@@ -96,7 +96,7 @@ function makeFakeRunner(opts?: {
   };
 
   return {
-    runner: runner as unknown as typeof import("./leaf-runner.js").runLeaf,
+    runner: runner,
     prompts,
     calls,
     get highWater() {
@@ -398,7 +398,7 @@ describe("executeWorkflow — abort handling (leaf abort = run abort)", () => {
       err.name = "AbortError";
       throw err;
     };
-    return runner as unknown as typeof import("./leaf-runner.js").runLeaf;
+    return runner;
   }
 
   test("aborting mid-leaf in agent() ends the run as `aborted` (not `failed`)", async () => {
@@ -906,7 +906,7 @@ describe("executeWorkflow — fan-out unwind (no orphaned leaves)", () => {
     // leaf is NOT journaled, and the run waits for it to settle.
     let inFlight = 0;
     let abortedCount = 0;
-    const runner = (async (leafOpts: RunLeafOptions): Promise<LeafResult> => {
+    const runner = async (leafOpts: RunLeafOptions): Promise<LeafResult> => {
       inFlight += 1;
       const sig = leafOpts.signal;
       try {
@@ -933,7 +933,7 @@ describe("executeWorkflow — fan-out unwind (no orphaned leaves)", () => {
       } finally {
         inFlight -= 1;
       }
-    }) as unknown as typeof import("./leaf-runner.js").runLeaf;
+    };
 
     const res = await execute(
       "wf-unwind-cancel",
@@ -1258,9 +1258,7 @@ describe("executeWorkflow — onLeaf observe-only hook", () => {
   test("an aborted in-flight leaf emits leaf_started but NO leaf_finished", async () => {
     const controller = new AbortController();
     let started = false;
-    const runner = (async (): Promise<
-      import("./leaf-runner.js").LeafResult
-    > => {
+    const runner = async (): Promise<import("./leaf-runner.js").LeafResult> => {
       started = true;
       await new Promise<void>((resolve) => {
         if (controller.signal.aborted) {
@@ -1273,7 +1271,7 @@ describe("executeWorkflow — onLeaf observe-only hook", () => {
       const err = new Error("The operation was aborted");
       err.name = "AbortError";
       throw err;
-    }) as unknown as typeof import("./leaf-runner.js").runLeaf;
+    };
 
     const { promise, events } = executeWithLeafEvents(
       "wf-leaf-abort",

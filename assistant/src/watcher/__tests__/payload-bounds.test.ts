@@ -62,7 +62,7 @@ describe("capPayloadForStorage", () => {
       count: 42,
       missing: null,
       nested: { deep: { value: "kept" } },
-    }) as Record<string, unknown>;
+    });
 
     // `sequence/reply-matcher.ts` reads exactly these two.
     expect(capped.from).toBe("sender@example.com");
@@ -78,7 +78,7 @@ describe("capPayloadForStorage", () => {
     for (let i = 0; i < WATCHER_PAYLOAD_FIELD_COUNT_MAX + 50; i++) {
       wide[`field-${i}`] = "v";
     }
-    const cappedWide = capPayloadForStorage(wide) as Record<string, unknown>;
+    const cappedWide = capPayloadForStorage(wide);
     // The kept fields plus one elision marker.
     expect(Object.keys(cappedWide)).toHaveLength(
       WATCHER_PAYLOAD_FIELD_COUNT_MAX + 1,

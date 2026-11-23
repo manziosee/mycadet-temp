@@ -57,8 +57,8 @@ function makeContext(history: Message[]): PostCompactContext {
       info() {},
       warn() {},
       error() {},
-    } as unknown as PostCompactContext["logger"],
-    broadcast: (() => {}) as unknown as PostCompactContext["broadcast"],
+    },
+    broadcast: () => {},
   };
 }
 

@@ -98,15 +98,11 @@ function findByType(
   messages: AssistantEvent[],
   type: string,
 ): AnyRecord | undefined {
-  return messages.find(
-    (m) => (m as unknown as AnyRecord).type === type,
-  ) as unknown as AnyRecord | undefined;
+  return messages.find((m) => (m as unknown as AnyRecord).type === type);
 }
 
 function findAllByType(messages: AssistantEvent[], type: string): AnyRecord[] {
-  return messages.filter(
-    (m) => (m as unknown as AnyRecord).type === type,
-  ) as unknown as AnyRecord[];
+  return messages.filter((m) => (m as unknown as AnyRecord).type === type);
 }
 
 // ── Confirmation surface payload shapes ──────────────────────────────

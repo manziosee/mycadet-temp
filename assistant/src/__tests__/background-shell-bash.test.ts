@@ -132,8 +132,7 @@ describe("bash tool background mode", () => {
     );
 
     expect(mockRegisterBackgroundTool).toHaveBeenCalledTimes(1);
-    const registered = mockRegisterBackgroundTool.mock
-      .calls[0]![0] as BackgroundTool;
+    const registered = mockRegisterBackgroundTool.mock.calls[0]![0];
     expect(registered.id).toBe("bg-test1234");
     expect(registered.toolName).toBe("bash");
     expect(registered.conversationId).toBe("conv-bg-test");
@@ -156,8 +155,7 @@ describe("bash tool background mode", () => {
     expect(mockRemoveBackgroundTool).toHaveBeenCalledWith("bg-test1234");
     expect(mockWakeAgentForOpportunity).toHaveBeenCalledTimes(1);
 
-    const wakeCall = mockWakeAgentForOpportunity.mock
-      .calls[0]![0] as WakeOptions;
+    const wakeCall = mockWakeAgentForOpportunity.mock.calls[0]![0];
     expect(wakeCall.conversationId).toBe("conv-bg-test");
     expect(wakeCall.source).toBe("background-tool");
     expect(wakeCall.hint).toContain("bg-test1234");
@@ -183,8 +181,7 @@ describe("bash tool background mode", () => {
     expect(mockRemoveBackgroundTool).toHaveBeenCalledWith("bg-test1234");
     expect(mockWakeAgentForOpportunity).toHaveBeenCalledTimes(1);
 
-    const wakeCall = mockWakeAgentForOpportunity.mock
-      .calls[0]![0] as WakeOptions;
+    const wakeCall = mockWakeAgentForOpportunity.mock.calls[0]![0];
     expect(wakeCall.conversationId).toBe("conv-bg-test");
     expect(wakeCall.source).toBe("background-tool");
     expect(wakeCall.hint).toContain("bg-test1234");
@@ -202,14 +199,12 @@ describe("bash tool background mode", () => {
     );
 
     // User presses Stop: cancel aborts the run and kills the process.
-    const registered = mockRegisterBackgroundTool.mock
-      .calls[0]![0] as BackgroundTool;
+    const registered = mockRegisterBackgroundTool.mock.calls[0]![0];
     registered.cancel();
 
     await waitForWake(mockWakeAgentForOpportunity);
 
-    const wakeCall = mockWakeAgentForOpportunity.mock
-      .calls[0]![0] as WakeOptions;
+    const wakeCall = mockWakeAgentForOpportunity.mock.calls[0]![0];
     // The wake must reflect the cancellation, not the generic "completed"
     // framing + SIGKILL-failed output the assistant used to receive — so it
     // matches the recorded/broadcast status and the inline card.

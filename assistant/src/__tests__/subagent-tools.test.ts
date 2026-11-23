@@ -3327,7 +3327,7 @@ describe("Subagent advisor-role consult", () => {
             },
             status: "running",
           }
-        : originalGetState(id)) as unknown as typeof manager.getState;
+        : originalGetState(id)) as typeof manager.getState;
     // The refusal itself is the manager's, so every caller gets it, not just
     // this tool (see the manager-level test in subagent-spawn-and-await). What
     // is asserted here is that the tool turns it into something the model can
@@ -3709,10 +3709,7 @@ describe("Advisor role is read-only", () => {
       isSubagent: true,
     } as unknown as Parameters<typeof createResolveToolsCallback>[1];
 
-    const resolve = createResolveToolsCallback(
-      toolDefs as unknown as Parameters<typeof createResolveToolsCallback>[0],
-      ctx,
-    );
+    const resolve = createResolveToolsCallback(toolDefs, ctx);
     expect(resolve).toBeDefined();
     const resolvedNames = resolve!([]).map((t) => t.name);
     expect(resolvedNames.sort()).toEqual([
@@ -3721,8 +3718,7 @@ describe("Advisor role is read-only", () => {
       "file_read",
     ]);
     // The per-turn execution gate matches the wire list.
-    const gate = (ctx as unknown as { allowedToolNames?: Set<string> })
-      .allowedToolNames;
+    const gate = ctx.allowedToolNames;
     expect(gate?.has("file_read")).toBe(true);
     expect(gate?.has("bash")).toBe(false);
     // `recall` reaches memory and prior conversations, which the consult's

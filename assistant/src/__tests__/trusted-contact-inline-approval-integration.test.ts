@@ -747,7 +747,7 @@ describe("(f) timeout/stale flow: stale guardian decision after inline wait time
     const retryNotifications = deliveredReplies.filter(
       (r) =>
         typeof r.payload.text === "string" &&
-        (r.payload.text as string).includes("approved"),
+        r.payload.text.includes("approved"),
     );
     expect(retryNotifications.length).toBeGreaterThan(0);
   });
@@ -801,7 +801,7 @@ describe("(f) timeout/stale flow: stale guardian decision after inline wait time
     const retryNotifications = deliveredReplies.filter(
       (r) =>
         typeof r.payload.text === "string" &&
-        (r.payload.text as string).includes("approved"),
+        r.payload.text.includes("approved"),
     );
     expect(retryNotifications.length).toBeGreaterThan(0);
   });
@@ -859,7 +859,7 @@ describe("(f) timeout/stale flow: stale guardian decision after inline wait time
       const retryNotifications = deliveredReplies.filter(
         (r) =>
           typeof r.payload.text === "string" &&
-          (r.payload.text as string).includes("Please retry"),
+          r.payload.text.includes("Please retry"),
       );
       expect(retryNotifications.length).toBe(0);
     } finally {
@@ -908,7 +908,7 @@ describe("(f) timeout/stale flow: stale guardian decision after inline wait time
     const retryNotifications = deliveredReplies.filter(
       (r) =>
         typeof r.payload.text === "string" &&
-        (r.payload.text as string).includes("Please retry"),
+        r.payload.text.includes("Please retry"),
     );
     expect(retryNotifications.length).toBe(0);
   });
@@ -1223,7 +1223,7 @@ describe("(g) access_request resolver: requester code delivery", () => {
       (r) =>
         r.payload.chatId === REQUESTER_UID &&
         typeof r.payload.text === "string" &&
-        (r.payload.text as string).includes("123456"),
+        r.payload.text.includes("123456"),
     );
     expect(requesterCodeReply).toBeDefined();
     expect(requesterCodeReply!.payload.text).toContain(
@@ -1239,7 +1239,7 @@ describe("(g) access_request resolver: requester code delivery", () => {
     const courier = deliveredReplies.find(
       (r) =>
         typeof r.payload.text === "string" &&
-        (r.payload.text as string).includes("receive from the guardian"),
+        r.payload.text.includes("receive from the guardian"),
     );
     expect(courier).toBeUndefined();
   });
@@ -1263,7 +1263,7 @@ describe("(g) access_request resolver: requester code delivery", () => {
       (r) =>
         r.payload.chatId === REQUESTER_UID &&
         typeof r.payload.text === "string" &&
-        (r.payload.text as string).includes("123456"),
+        r.payload.text.includes("123456"),
     );
     expect(requesterCodeReply).toBeDefined();
     expect(requesterCodeReply!.url).toContain("/deliver/slack");
@@ -1406,7 +1406,7 @@ describe("(g) access_request resolver: requester code delivery", () => {
     const courier = deliveredReplies.find(
       (r) =>
         typeof r.payload.text === "string" &&
-        (r.payload.text as string).includes("receive from the guardian"),
+        r.payload.text.includes("receive from the guardian"),
     );
     expect(courier).toBeDefined();
     expect(courier!.payload.chatId).toBe("C_SHARED_CHANNEL");

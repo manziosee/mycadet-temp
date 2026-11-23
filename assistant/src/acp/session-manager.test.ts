@@ -278,12 +278,7 @@ describe("AcpSessionManager parent notification", () => {
       kill: mock(() => {}),
       cancel: mock(() => cancelPending),
     };
-    const entry = injectSession(
-      manager,
-      "sess-race",
-      "parent-race",
-      proc as unknown as ReturnType<typeof fakeProcess>,
-    );
+    const entry = injectSession(manager, "sess-race", "parent-race", proc);
 
     const cancelPromise = (manager as any).cancel("sess-race");
     // Synchronously after kicking off cancel — before the protocol cancel
@@ -311,7 +306,7 @@ describe("AcpSessionManager parent notification", () => {
       manager,
       "sess-cancel-throw",
       "parent-cancel-throw",
-      proc as unknown as ReturnType<typeof fakeProcess>,
+      proc,
     );
     // A prompt is still in flight; cancel must not tear it down on failure.
     entry.currentPrompt = new Promise(() => {});
@@ -757,7 +752,7 @@ describe("AcpSessionManager.spawn: a stopped turn leaves no agent running", () =
         manager,
         opts.acpSessionId,
         opts.parentConversationId,
-        proc as unknown as ReturnType<typeof fakeProcess>,
+        proc,
       );
 
     await expect(
@@ -815,7 +810,7 @@ describe("AcpSessionManager.spawn: a stopped turn leaves no agent running", () =
         manager,
         opts.acpSessionId,
         opts.parentConversationId,
-        proc as unknown as ReturnType<typeof fakeProcess>,
+        proc,
       );
       return injected;
     };
@@ -887,7 +882,7 @@ describe("AcpSessionManager.spawn: a stopped turn leaves no agent running", () =
         manager,
         opts.acpSessionId,
         opts.parentConversationId,
-        proc as unknown as ReturnType<typeof fakeProcess>,
+        proc,
       );
     };
 
