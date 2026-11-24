@@ -10,6 +10,7 @@
 import { beforeEach, describe, expect, test } from "bun:test";
 
 import { eq } from "drizzle-orm";
+import { z } from "zod";
 
 import { readSlackMetadata } from "../messaging/providers/slack/message-metadata.js";
 import { readProviderMetadata } from "../messaging/read-provider-metadata.js";
@@ -48,7 +49,9 @@ function lexicalIndexJobMessageIds(): string[] {
     .map((r) => {
       try {
         return (
-          (JSON.parse(r.payload) as { messageId?: string }).messageId ?? ""
+          z
+            .looseObject({ messageId: z.string().optional() })
+            .parse(JSON.parse(r.payload)).messageId ?? ""
         );
       } catch {
         return "";

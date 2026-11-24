@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
+import { jsonObjectSchema } from "../../../__tests__/helpers/json-object-schema.js";
 import type { CadetTtsSocketOptions } from "../cadet-tts-socket.js";
 import { synthesizeOverCadetTtsSocket } from "../cadet-tts-socket.js";
 
@@ -71,7 +72,7 @@ function audioFrame(bytes: string): ArrayBuffer {
 function sentJson(ws: MockWebSocket): Array<Record<string, unknown>> {
   return ws.sentData
     .filter((d): d is string => typeof d === "string")
-    .map((d) => JSON.parse(d) as Record<string, unknown>);
+    .map((d) => jsonObjectSchema.parse(JSON.parse(d)));
 }
 
 describe("synthesizeOverCadetTtsSocket", () => {

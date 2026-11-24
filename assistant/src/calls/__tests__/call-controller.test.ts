@@ -8,6 +8,8 @@ import {
   test,
 } from "bun:test";
 
+import { jsonObjectSchema } from "../../__tests__/helpers/json-object-schema.js";
+
 process.env.DISABLE_HTTP_AUTH = "true";
 
 // Guardian requests/deliveries are created through the gateway client; serve
@@ -4313,7 +4315,7 @@ describe("call-controller", () => {
         (e) => e.eventType === "assistant_spoke",
       );
       expect(spoke.length).toBe(1);
-      return JSON.parse(spoke[0].payloadJson) as Record<string, unknown>;
+      return jsonObjectSchema.parse(JSON.parse(spoke[0].payloadJson));
     }
 
     test("a front-door answer runs one leg and is spoken verbatim", async () => {

@@ -36,7 +36,7 @@ import type {
 } from "../channels/types.js";
 import type { MessagingConversationContext } from "../daemon/conversation-messaging.js";
 import { persistQueuedMessageBody } from "../daemon/conversation-messaging.js";
-import type { MessageQueue } from "../daemon/conversation-queue-manager.js";
+import { MessageQueue } from "../daemon/conversation-queue-manager.js";
 
 function createWebTurnContext(
   clientOs: string | undefined,
@@ -49,11 +49,8 @@ function createWebTurnContext(
     userMessageInterface: "web",
     assistantMessageInterface: "web",
   };
-  const queueStub = {
-    push: () => true,
-    drain: () => [],
-    size: () => 0,
-  } as unknown as MessageQueue;
+  const queueStub = new MessageQueue();
+  queueStub.push = () => true;
   let processing = false;
   let owner = 0;
   return {

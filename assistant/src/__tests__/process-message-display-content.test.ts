@@ -139,7 +139,7 @@ import type {
 } from "../channels/types.js";
 import type { MessagingConversationContext } from "../daemon/conversation-messaging.js";
 import { persistQueuedMessageBody } from "../daemon/conversation-messaging.js";
-import type { MessageQueue } from "../daemon/conversation-queue-manager.js";
+import { MessageQueue } from "../daemon/conversation-queue-manager.js";
 import { UserMessageAttachment } from "../daemon/message-types/shared.js";
 import { processMessage } from "../daemon/process-message.js";
 import type { TrustContext } from "../daemon/trust-context-types.js";
@@ -150,11 +150,8 @@ function makeTestConversation() {
   const messages: Message[] = [];
   let turnChannelContext: TurnChannelContext | null = null;
   let turnInterfaceContext: TurnInterfaceContext | null = null;
-  const queueStub = {
-    push: () => true,
-    drain: () => [],
-    size: () => 0,
-  } as unknown as MessageQueue;
+  const queueStub = new MessageQueue();
+  queueStub.push = () => true;
   let processing = false;
   let owner = 0;
   const messagingCtx: MessagingConversationContext = {

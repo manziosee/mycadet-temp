@@ -5,6 +5,7 @@ import {
   ensureConversationExists,
 } from "../persistence/conversation-crud.js";
 import { initializeDb } from "../persistence/db-init.js";
+import { jsonObjectSchema } from "./helpers/json-object-schema.js";
 
 beforeAll(async () => {
   await initializeDb();
@@ -50,7 +51,7 @@ async function seedRows(
     }
     await addMessage(conversationId, "assistant", JSON.stringify(blocks), {
       ...(r.metadata
-        ? { metadata: JSON.parse(r.metadata) as Record<string, unknown> }
+        ? { metadata: jsonObjectSchema.parse(JSON.parse(r.metadata)) }
         : {}),
     });
   }

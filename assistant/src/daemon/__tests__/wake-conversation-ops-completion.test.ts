@@ -1,5 +1,7 @@
 import { beforeEach, describe, expect, mock, test } from "bun:test";
 
+import { jsonObjectSchema } from "../../__tests__/helpers/json-object-schema.js";
+
 // persistWakeTriggerMessage syncs each row to the disk view and publishes a
 // sync invalidation; stub both so this unit test stays a pure DB round-trip
 // without touching the filesystem or the event hub.
@@ -55,7 +57,7 @@ function readMetadata(conversationId: string): Record<string, unknown> {
   expect(rows.length).toBe(1);
   const raw = rows[0]?.metadata;
   expect(raw).toBeTruthy();
-  return JSON.parse(raw as string) as Record<string, unknown>;
+  return jsonObjectSchema.parse(JSON.parse(raw as string));
 }
 
 describe("persistWakeTriggerMessage backgroundToolCompletion", () => {

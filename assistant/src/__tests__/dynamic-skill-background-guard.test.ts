@@ -96,7 +96,7 @@ mock.module("../tools/shared/filesystem/path-policy.js", () => ({
   hostPolicy: () => ({ ok: false }),
 }));
 
-import type { PermissionPrompter } from "../permissions/prompter.js";
+import { PermissionPrompter } from "../permissions/prompter.js";
 import { PermissionChecker } from "../tools/permission-checker.js";
 import type { Tool, ToolContext } from "../tools/types.js";
 
@@ -112,11 +112,10 @@ const skillLoadTool: Tool = {
 
 // The prompter must never be reached in a non-interactive session; throwing
 // makes an unexpected prompt fail the test loudly.
-const throwingPrompter = {
-  prompt: () => {
-    throw new Error("prompter must not be invoked in a background session");
-  },
-} as unknown as PermissionPrompter;
+const throwingPrompter = new PermissionPrompter(() => {});
+throwingPrompter.prompt = () => {
+  throw new Error("prompter must not be invoked in a background session");
+};
 
 function makeBackgroundGuardianContext(): ToolContext {
   return {
@@ -153,12 +152,11 @@ function makeInteractiveContext(
 /** A prompter that records whether it was reached and resolves to `decision`. */
 function makeRecordingPrompter(decision: "allow" | "deny") {
   let called = false;
-  const prompter = {
-    prompt: async () => {
-      called = true;
-      return { decision };
-    },
-  } as unknown as PermissionPrompter;
+  const prompter = new PermissionPrompter(() => {});
+  prompter.prompt = async () => {
+    called = true;
+    return { decision };
+  };
   return { prompter, wasCalled: () => called };
 }
 

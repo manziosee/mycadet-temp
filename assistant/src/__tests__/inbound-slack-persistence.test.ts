@@ -48,7 +48,7 @@ import type {
 } from "../channels/types.js";
 import type { MessagingConversationContext } from "../daemon/conversation-messaging.js";
 import { persistQueuedMessageBody } from "../daemon/conversation-messaging.js";
-import type { MessageQueue } from "../daemon/conversation-queue-manager.js";
+import { MessageQueue } from "../daemon/conversation-queue-manager.js";
 import {
   readSlackMetadata,
   type SlackMessageMetadata,
@@ -61,11 +61,8 @@ import {
 function createTestContext(
   turnChannel: TurnChannelContext | null,
 ): MessagingConversationContext {
-  const queueStub = {
-    push: () => true,
-    drain: () => [],
-    size: () => 0,
-  } as unknown as MessageQueue;
+  const queueStub = new MessageQueue();
+  queueStub.push = () => true;
 
   const turnIfCtx: TurnInterfaceContext | null = turnChannel
     ? {

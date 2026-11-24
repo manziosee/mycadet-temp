@@ -21,6 +21,7 @@ import {
   getRetrospectiveState,
 } from "../plugins/defaults/memory/memory-retrospective-state.js";
 import type { PluginHooks } from "../plugins/types.js";
+import { jsonObjectSchema } from "./helpers/json-object-schema.js";
 
 await initializeDb();
 
@@ -199,7 +200,7 @@ describe("discardLastAssistantDisplayTurn", () => {
     discardLastAssistantDisplayTurn(CONV_ID);
 
     const anchor = getMessages(CONV_ID).find((m) => m.id === userId)!;
-    const metadata = JSON.parse(anchor.metadata!) as Record<string, unknown>;
+    const metadata = jsonObjectSchema.parse(JSON.parse(anchor.metadata!));
     expect(metadata.turnOutcome).toBeNull();
     expect(metadata.turnFailureCode).toBeNull();
   });

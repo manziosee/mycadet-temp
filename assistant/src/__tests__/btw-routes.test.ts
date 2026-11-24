@@ -110,6 +110,7 @@ mock.module("../daemon/conversation-store.js", () => ({
 // ---------------------------------------------------------------------------
 
 import type {
+  Message,
   ProviderResponse,
   SendMessageOptions,
 } from "../providers/types.js";
@@ -128,12 +129,12 @@ import { setConfig } from "./helpers/set-config.js";
 
 function makeMockProvider(
   onSendMessage?: (
-    messages: unknown[],
+    messages: Message[],
     options?: SendMessageOptions,
   ) => Promise<ProviderResponse>,
 ) {
   const defaultSendMessage = async (
-    _messages: unknown[],
+    _messages: Message[],
     options?: SendMessageOptions,
   ): Promise<ProviderResponse> => {
     options?.onEvent?.({ type: "text_delta", text: "hello" });
@@ -193,7 +194,10 @@ async function callHandler(
   }
 }
 
-async function readStream(stream: ReadableStream<Uint8Array>): Promise<string> {
+async function readStream(stream: unknown): Promise<string> {
+  if (!(stream instanceof ReadableStream)) {
+    throw new Error("Expected a streaming route response");
+  }
   const reader = stream.getReader();
   const chunks: Uint8Array[] = [];
   while (true) {
@@ -273,7 +277,7 @@ describe("POST /v1/btw", () => {
     });
     expect(result).toBeInstanceOf(ReadableStream);
 
-    const text = await readStream(result as ReadableStream<Uint8Array>);
+    const text = await readStream(result);
     expect(text).toContain(`event: btw_text_delta\ndata: {"text":"hello"}`);
   });
 
@@ -285,7 +289,7 @@ describe("POST /v1/btw", () => {
       conversationKey: "key",
       content: "hello",
     });
-    const text = await readStream(result as ReadableStream<Uint8Array>);
+    const text = await readStream(result);
     expect(text).toContain("event: btw_complete\ndata: {}");
   });
 
@@ -302,7 +306,7 @@ describe("POST /v1/btw", () => {
       conversationKey: "key",
       content: "  my question  ",
     });
-    await readStream(result as ReadableStream<Uint8Array>);
+    await readStream(result);
 
     expect(provider.sendMessage).toHaveBeenCalledTimes(1);
 
@@ -347,7 +351,7 @@ describe("POST /v1/btw", () => {
       conversationKey: "greeting",
       content: "Generate a greeting",
     });
-    await readStream(result as ReadableStream<Uint8Array>);
+    await readStream(result);
 
     expect(provider.sendMessage).toHaveBeenCalledTimes(1);
     const [, options] = provider.sendMessage.mock.calls[0];
@@ -367,14 +371,15 @@ describe("POST /v1/btw", () => {
       content: "Generate a greeting",
       clientTimezone: "Europe/Skopje",
     });
-    await readStream(result as ReadableStream<Uint8Array>);
+    await readStream(result);
 
     expect(provider.sendMessage).toHaveBeenCalledTimes(1);
-    const [messages] = provider.sendMessage.mock.calls[0] as [
-      Array<{ content: Array<{ type: string; text: string }> }>,
-      SendMessageOptions | undefined,
-    ];
-    const greetingPrompt = messages[2]!.content[0]!.text;
+    const [messages] = provider.sendMessage.mock.calls[0];
+    const greeting = messages[2]?.content[0];
+    if (typeof greeting !== "object" || greeting.type !== "text") {
+      throw new Error("Expected a text greeting prompt");
+    }
+    const greetingPrompt = greeting.text;
     expect(greetingPrompt).toContain("Generate a greeting");
     expect(greetingPrompt).toContain("<turn_context>");
     expect(greetingPrompt).toContain("current_time:");
@@ -390,7 +395,7 @@ describe("POST /v1/btw", () => {
       conversationKey: "profile-intro",
       content: "Generate an intro",
     });
-    await readStream(result as ReadableStream<Uint8Array>);
+    await readStream(result);
 
     expect(provider.sendMessage).toHaveBeenCalledTimes(1);
     const [, options] = provider.sendMessage.mock.calls[0];
@@ -414,7 +419,7 @@ describe("POST /v1/btw", () => {
         conversationKey: "profile-intro",
         content: "Generate an intro",
       });
-      const text = await readStream(result as ReadableStream<Uint8Array>);
+      const text = await readStream(result);
 
       expect(provider.sendMessage).toHaveBeenCalledTimes(1);
       expect(text).not.toContain("Hi, I'm Example Assistant!");
@@ -434,7 +439,7 @@ describe("POST /v1/btw", () => {
       conversationKey: "key",
       content: "hello",
     });
-    await readStream(result as ReadableStream<Uint8Array>);
+    await readStream(result);
 
     expect(mockAddMessage).not.toHaveBeenCalled();
   });
@@ -450,7 +455,7 @@ describe("POST /v1/btw", () => {
       conversationKey: "key",
       content: "hello",
     });
-    await readStream(result as ReadableStream<Uint8Array>);
+    await readStream(result);
 
     expect(session.processing).toBe(false);
   });
@@ -466,7 +471,7 @@ describe("POST /v1/btw", () => {
       conversationKey: "greeting-abc123",
       content: "Generate a greeting",
     });
-    await readStream(result as ReadableStream<Uint8Array>);
+    await readStream(result);
 
     expect(mockGetConversationByKey).toHaveBeenCalledWith("greeting-abc123");
     // An unmapped key has no real conversation, so the side-chain runs against
@@ -491,7 +496,7 @@ describe("POST /v1/btw", () => {
       conversationKey: "my-conversation-key",
       content: "What is 2+2?",
     });
-    await readStream(result as ReadableStream<Uint8Array>);
+    await readStream(result);
 
     // A mapped key targets a real conversation, so its persisted row is reused
     // — no ephemeral options.

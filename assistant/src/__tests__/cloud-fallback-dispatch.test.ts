@@ -5,7 +5,6 @@
  * selection, the real adapter factory, retry escalation, and provider clients.
  * Only the remote cloud proxy is replaced with a local HTTP server.
  */
-
 import {
   afterAll,
   afterEach,
@@ -34,6 +33,7 @@ import type {
 } from "../providers/types.js";
 import { credentialKey } from "../security/credential-key.js";
 import { setSecureKeyAsync } from "../security/secure-keys.js";
+import { jsonObjectSchema } from "./helpers/json-object-schema.js";
 import { useMemorySecureKeys } from "./helpers/secure-keys.js";
 import { setConfig } from "./helpers/set-config.js";
 
@@ -234,7 +234,7 @@ beforeAll(async () => {
       const url = new URL(req.url);
       let body: Record<string, unknown> = {};
       try {
-        body = (await req.json()) as Record<string, unknown>;
+        body = jsonObjectSchema.parse(await req.json());
       } catch {
         // The request path is sufficient for non-JSON probes.
       }

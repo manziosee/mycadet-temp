@@ -12,10 +12,10 @@
  * - A card from an earlier turn (absent from `currentTurnSurfaces`) is settled
  *   too; the settle is idempotent.
  */
-
 import { describe, expect, test } from "bun:test";
 
 import type pino from "pino";
+import { z } from "zod";
 
 import { UISurfaceUpdateEvent } from "../api/events/ui-surface-update.js";
 import type { AssistantEvent } from "../api/index.js";
@@ -68,7 +68,9 @@ async function showTaskProgress(
     data: { template: "task_progress", templateData },
   });
   expect(result.isError).toBe(false);
-  return (JSON.parse(result.content) as { surfaceId: string }).surfaceId;
+  return z
+    .looseObject({ surfaceId: z.string() })
+    .parse(JSON.parse(result.content)).surfaceId;
 }
 
 function updatesFor(sent: AssistantEvent[], surfaceId: string) {

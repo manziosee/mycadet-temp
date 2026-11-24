@@ -4,7 +4,7 @@ import {
   type RedirectedSecretRecord,
   redirectToSecurePrompt,
 } from "../daemon/conversation-messaging.js";
-import type { SecretPrompter } from "../permissions/secret-prompter.js";
+import { SecretPrompter } from "../permissions/secret-prompter.js";
 import { credentialKey } from "../security/credential-key.js";
 import * as secureKeysModule from "../security/secure-keys.js";
 import { useMemorySecureKeyMap } from "./helpers/secure-keys.js";
@@ -71,15 +71,14 @@ describe("session-messaging secret redirect", () => {
       field: string;
       label: string;
     }> = [];
-    const fakePrompter = {
-      prompt: (service: string, field: string, label: string) => {
-        promptCalls.push({ service, field, label });
-        return Promise.resolve({
-          value: "123456789:ABCDefGHIJklmnopQRSTuvwxyz012345678",
-          delivery: "store" as const,
-        });
-      },
-    } as unknown as SecretPrompter;
+    const fakePrompter = new SecretPrompter();
+    fakePrompter.prompt = (service: string, field: string, label: string) => {
+      promptCalls.push({ service, field, label });
+      return Promise.resolve({
+        value: "123456789:ABCDefGHIJklmnopQRSTuvwxyz012345678",
+        delivery: "store",
+      });
+    };
 
     let callbackRecord: RedirectedSecretRecord | undefined;
 
@@ -121,15 +120,14 @@ describe("session-messaging secret redirect", () => {
       field: string;
       label: string;
     }> = [];
-    const fakePrompter = {
-      prompt: (service: string, field: string, label: string) => {
-        promptCalls.push({ service, field, label });
-        return Promise.resolve({
-          value: "123456789:ABCDefGHIJklmnopQRSTuvwxyz012345678",
-          delivery: "store" as const,
-        });
-      },
-    } as unknown as SecretPrompter;
+    const fakePrompter = new SecretPrompter();
+    fakePrompter.prompt = (service: string, field: string, label: string) => {
+      promptCalls.push({ service, field, label });
+      return Promise.resolve({
+        value: "123456789:ABCDefGHIJklmnopQRSTuvwxyz012345678",
+        delivery: "store",
+      });
+    };
 
     await new Promise<void>((resolve) => {
       redirectToSecurePrompt(
@@ -160,15 +158,14 @@ describe("session-messaging secret redirect", () => {
       field: string;
       label: string;
     }> = [];
-    const fakePrompter = {
-      prompt: (service: string, field: string, label: string) => {
-        promptCalls.push({ service, field, label });
-        return Promise.resolve({
-          value: "123456789:ABCDefGHIJklmnopQRSTuvwxyz012345678",
-          delivery: "store" as const,
-        });
-      },
-    } as unknown as SecretPrompter;
+    const fakePrompter = new SecretPrompter();
+    fakePrompter.prompt = (service: string, field: string, label: string) => {
+      promptCalls.push({ service, field, label });
+      return Promise.resolve({
+        value: "123456789:ABCDefGHIJklmnopQRSTuvwxyz012345678",
+        delivery: "store",
+      });
+    };
 
     await new Promise<void>((resolve) => {
       redirectToSecurePrompt(
@@ -199,15 +196,14 @@ describe("session-messaging secret redirect", () => {
       field: string;
       label: string;
     }> = [];
-    const fakePrompter = {
-      prompt: (service: string, field: string, label: string) => {
-        promptCalls.push({ service, field, label });
-        return Promise.resolve({
-          value: "opaque-secret",
-          delivery: "store" as const,
-        });
-      },
-    } as unknown as SecretPrompter;
+    const fakePrompter = new SecretPrompter();
+    fakePrompter.prompt = (service: string, field: string, label: string) => {
+      promptCalls.push({ service, field, label });
+      return Promise.resolve({
+        value: "opaque-secret",
+        delivery: "store",
+      });
+    };
 
     await new Promise<void>((resolve) => {
       redirectToSecurePrompt("conv-1", fakePrompter, ["Some Unknown Secret"], {

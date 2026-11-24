@@ -7,9 +7,9 @@
  * shows, so the body is pinned here alongside the outcomes the commands have to
  * tell apart: a bind, a dismissal, and a genuine failure.
  */
-
 import { beforeEach, describe, expect, mock, test } from "bun:test";
 
+import { jsonObjectSchema } from "../../__tests__/helpers/json-object-schema.js";
 import { reportIpcFailureWithoutExiting } from "./run-assistant-command.js";
 
 interface IpcCall {
@@ -405,7 +405,7 @@ describe("contacts create --channel", () => {
       "--json",
     );
 
-    const parsed = JSON.parse(stdout) as Record<string, unknown>;
+    const parsed = jsonObjectSchema.parse(JSON.parse(stdout));
     expect(parsed.ok).toBe(true);
     expect(parsed.notesSaved).toBeNull();
   });

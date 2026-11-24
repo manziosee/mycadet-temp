@@ -11,6 +11,8 @@ import {
   test,
 } from "bun:test";
 
+import { z } from "zod";
+
 import { compileApp } from "../bundler/app-compiler.js";
 import { ensureCompilerTools } from "../bundler/compiler-tools.js";
 import {
@@ -113,9 +115,19 @@ describe("compileApp", () => {
     expect(html).toContain('src="main.js"');
     expect(html).toContain('type="module"');
 
-    const fingerprint = JSON.parse(
-      await readFile(join(appDir, "dist", ".source-fingerprint.json"), "utf-8"),
-    ) as { algorithm: string; files: Record<string, string> };
+    const fingerprint = z
+      .looseObject({
+        algorithm: z.string(),
+        files: z.record(z.string(), z.string()),
+      })
+      .parse(
+        JSON.parse(
+          await readFile(
+            join(appDir, "dist", ".source-fingerprint.json"),
+            "utf-8",
+          ),
+        ),
+      );
     expect(fingerprint.algorithm).toBe("sha256");
     expect(fingerprint.files["src/main.tsx"]).toMatch(/^[0-9a-f]{64}$/);
   });

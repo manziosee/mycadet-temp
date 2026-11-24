@@ -43,45 +43,37 @@ const USER_TURN: Message[] = [
 function stubTransports(provider: OpenCodeProvider) {
   const chat: unknown[] = [];
   const responses: Array<{ params: unknown; options: unknown }> = [];
-  (provider as unknown as { client: unknown }).client = {
-    chat: {
-      completions: {
-        create: async (params: unknown) => {
-          chat.push(params);
-          return {
-            async *[Symbol.asyncIterator]() {
-              yield {
-                choices: [{ delta: { content: "ok" }, finish_reason: "stop" }],
-                usage: { prompt_tokens: 2, completion_tokens: 1 },
-              };
+  Object.assign(provider["client"].chat.completions, {
+    create: async (params: unknown) => {
+      chat.push(params);
+      return {
+        async *[Symbol.asyncIterator]() {
+          yield {
+            choices: [{ delta: { content: "ok" }, finish_reason: "stop" }],
+            usage: { prompt_tokens: 2, completion_tokens: 1 },
+          };
+        },
+      };
+    },
+  });
+  const inner = provider["getResponsesInner"]();
+  Object.assign(inner["client"].responses, {
+    create: async (params: unknown, options: unknown) => {
+      responses.push({ params, options });
+      return {
+        async *[Symbol.asyncIterator]() {
+          yield { type: "response.output_text.delta", delta: "ok" };
+          yield {
+            type: "response.completed",
+            response: {
+              status: "completed",
+              usage: { input_tokens: 2, output_tokens: 1 },
             },
           };
         },
-      },
+      };
     },
-  };
-  const inner = (
-    provider as unknown as { getResponsesInner(): OpenCodeResponsesProvider }
-  ).getResponsesInner();
-  (inner as unknown as { client: unknown }).client = {
-    responses: {
-      create: async (params: unknown, options: unknown) => {
-        responses.push({ params, options });
-        return {
-          async *[Symbol.asyncIterator]() {
-            yield { type: "response.output_text.delta", delta: "ok" };
-            yield {
-              type: "response.completed",
-              response: {
-                status: "completed",
-                usage: { input_tokens: 2, output_tokens: 1 },
-              },
-            };
-          },
-        };
-      },
-    },
-  };
+  });
   return { chat, responses };
 }
 
@@ -186,38 +178,26 @@ describe("OpenCodeProvider", () => {
     const provider = new OpenCodeProvider("sk-test", "mimo-v2.5-free");
     expect(provider).toBeInstanceOf(OpenAIChatCompletionsProvider);
     expect(provider.name).toBe("opencode");
-    expect(
-      (provider as unknown as { assistantReasoningField?: string })
-        .assistantReasoningField,
-    ).toBe("reasoning_content");
-    expect(
-      (provider as unknown as { omitToolChoiceWhenReasoning: boolean })
-        .omitToolChoiceWhenReasoning,
-    ).toBe(true);
+    expect(provider["assistantReasoningField"]).toBe("reasoning_content");
+    expect(provider["omitToolChoiceWhenReasoning"]).toBe(true);
   });
 
   test("merges per-request OpenCode headers onto the transport", async () => {
     const provider = new OpenCodeProvider("sk-test", "mimo-v2.5-free");
     const seen: Array<{ params: unknown; options: unknown }> = [];
-    (provider as unknown as { client: unknown }).client = {
-      chat: {
-        completions: {
-          create: async (params: unknown, options: unknown) => {
-            seen.push({ params, options });
-            return {
-              async *[Symbol.asyncIterator]() {
-                yield {
-                  choices: [
-                    { delta: { content: "ok" }, finish_reason: "stop" },
-                  ],
-                  usage: { prompt_tokens: 2, completion_tokens: 1 },
-                };
-              },
+    Object.assign(provider["client"].chat.completions, {
+      create: async (params: unknown, options: unknown) => {
+        seen.push({ params, options });
+        return {
+          async *[Symbol.asyncIterator]() {
+            yield {
+              choices: [{ delta: { content: "ok" }, finish_reason: "stop" }],
+              usage: { prompt_tokens: 2, completion_tokens: 1 },
             };
           },
-        },
+        };
       },
-    };
+    });
 
     await provider.sendMessage(
       [{ role: "user", content: [{ type: "text", text: "question" }] }],
@@ -240,25 +220,19 @@ describe("OpenCodeProvider", () => {
   test("stamps session and request headers on a configless call", async () => {
     const provider = new OpenCodeProvider("sk-test", "mimo-v2.5-free");
     const seen: Array<{ options: unknown }> = [];
-    (provider as unknown as { client: unknown }).client = {
-      chat: {
-        completions: {
-          create: async (_params: unknown, options: unknown) => {
-            seen.push({ options });
-            return {
-              async *[Symbol.asyncIterator]() {
-                yield {
-                  choices: [
-                    { delta: { content: "ok" }, finish_reason: "stop" },
-                  ],
-                  usage: { prompt_tokens: 2, completion_tokens: 1 },
-                };
-              },
+    Object.assign(provider["client"].chat.completions, {
+      create: async (_params: unknown, options: unknown) => {
+        seen.push({ options });
+        return {
+          async *[Symbol.asyncIterator]() {
+            yield {
+              choices: [{ delta: { content: "ok" }, finish_reason: "stop" }],
+              usage: { prompt_tokens: 2, completion_tokens: 1 },
             };
           },
-        },
+        };
       },
-    };
+    });
 
     await provider.sendMessage([
       { role: "user", content: [{ type: "text", text: "question" }] },
@@ -273,25 +247,19 @@ describe("OpenCodeProvider", () => {
   test("backfills placeholder content after an aborted empty assistant turn", async () => {
     const provider = new OpenCodeProvider("sk-test", "mimo-v2.5-free");
     const requests: unknown[] = [];
-    (provider as unknown as { client: unknown }).client = {
-      chat: {
-        completions: {
-          create: async (params: unknown) => {
-            requests.push(params);
-            return {
-              async *[Symbol.asyncIterator]() {
-                yield {
-                  choices: [
-                    { delta: { content: "ok" }, finish_reason: "stop" },
-                  ],
-                  usage: { prompt_tokens: 2, completion_tokens: 1 },
-                };
-              },
+    Object.assign(provider["client"].chat.completions, {
+      create: async (params: unknown) => {
+        requests.push(params);
+        return {
+          async *[Symbol.asyncIterator]() {
+            yield {
+              choices: [{ delta: { content: "ok" }, finish_reason: "stop" }],
+              usage: { prompt_tokens: 2, completion_tokens: 1 },
             };
           },
-        },
+        };
       },
-    };
+    });
 
     await provider.sendMessage([
       { role: "user", content: [{ type: "text", text: "question" }] },
@@ -321,9 +289,7 @@ describe("OpenCodeResponsesProvider", () => {
     );
     expect(provider).toBeInstanceOf(OpenAIResponsesProvider);
     expect(provider.name).toBe("opencode");
-    expect(
-      (provider as unknown as { client: { baseURL?: string } }).client.baseURL,
-    ).toBe(OPENCODE_ZEN_BASE_URL);
+    expect(provider["client"].baseURL).toBe(OPENCODE_ZEN_BASE_URL);
   });
 
   test("keeps a configured OpenCode Go origin", () => {
@@ -332,9 +298,7 @@ describe("OpenCodeResponsesProvider", () => {
       "muse-spark-1.2-contributor-free",
       { baseURL: OPENCODE_GO_BASE_URL },
     );
-    expect(
-      (provider as unknown as { client: { baseURL?: string } }).client.baseURL,
-    ).toBe(OPENCODE_GO_BASE_URL);
+    expect(provider["client"].baseURL).toBe(OPENCODE_GO_BASE_URL);
   });
 });
 

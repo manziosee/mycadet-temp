@@ -39,6 +39,8 @@ import {
 
 import { eq } from "drizzle-orm";
 
+import { jsonObjectSchema } from "../../../../__tests__/helpers/json-object-schema.js";
+
 // Workspace pin must precede the `db` import below — the DB singleton
 // resolves its path at first call, so we need the env var set before
 // anything touches sqlite.
@@ -136,7 +138,7 @@ function consolidationJobPayloads(): Record<string, unknown>[] {
     .from(memoryJobs)
     .where(eq(memoryJobs.type, "memory_v2_consolidate"))
     .all()
-    .map((row) => JSON.parse(row.payload) as Record<string, unknown>);
+    .map((row) => jsonObjectSchema.parse(JSON.parse(row.payload)));
 }
 
 // Initialize the DB once for the file; clear per-test tables in beforeEach

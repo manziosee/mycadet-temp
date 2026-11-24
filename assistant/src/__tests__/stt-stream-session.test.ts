@@ -24,6 +24,7 @@ import {
   SttError,
   type SttStreamServerEvent,
 } from "../stt/types.js";
+import { jsonObjectSchema } from "./helpers/json-object-schema.js";
 
 // ---------------------------------------------------------------------------
 // Mock WebSocket
@@ -49,7 +50,7 @@ class MockSocket implements SttStreamSocket {
 
   /** Parse all sent frames as JSON. */
   get frames(): Record<string, unknown>[] {
-    return this.sent.map((s) => JSON.parse(s) as Record<string, unknown>);
+    return this.sent.map((s) => jsonObjectSchema.parse(JSON.parse(s)));
   }
 }
 

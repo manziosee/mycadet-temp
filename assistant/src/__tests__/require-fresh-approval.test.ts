@@ -186,12 +186,11 @@ function makeContext(overrides?: Partial<TC>): TC {
 }
 
 function makePrompter(): PermissionPrompter {
-  return {
-    prompt: async () => ({ decision: "allow" as const }),
-    resolveConfirmation: () => {},
-    updateSender: () => {},
-    dispose: () => {},
-  } as unknown as PermissionPrompter;
+  const prompter = new PermissionPrompter(() => {});
+  prompter.prompt = async () => ({ decision: "allow" });
+  prompter.resolveConfirmation = () => {};
+  prompter.dispose = () => {};
+  return prompter;
 }
 
 afterAll(() => {
@@ -410,15 +409,14 @@ describe("requireFreshApproval: workflow capability grants", () => {
   afterEach(() => {});
 
   function trackingPrompter(state: { prompted: boolean }): PermissionPrompter {
-    return {
-      prompt: async () => {
-        state.prompted = true;
-        return { decision: "allow" as const };
-      },
-      resolveConfirmation: () => {},
-      updateSender: () => {},
-      dispose: () => {},
-    } as unknown as PermissionPrompter;
+    const prompter = new PermissionPrompter(() => {});
+    prompter.prompt = async () => {
+      state.prompted = true;
+      return { decision: "allow" };
+    };
+    prompter.resolveConfirmation = () => {};
+    prompter.dispose = () => {};
+    return prompter;
   }
 
   test("run_workflow granting side-effecting tools prompts at launch", async () => {

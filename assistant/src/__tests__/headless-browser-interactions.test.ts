@@ -292,9 +292,7 @@ describe("executeBrowserClick (CDP)", () => {
     const visibleProbe = sendCalls.find(
       (c) => c.method === "Runtime.evaluate",
     )!;
-    expect(
-      (visibleProbe.params as { expression: string }).expression,
-    ).toContain("getBoundingClientRect");
+    expect(visibleProbe.params?.expression).toContain("getBoundingClientRect");
 
     // Arguments threaded through correctly.
     const qsCall = sendCalls.find((c) => c.method === "DOM.querySelector")!;
@@ -563,7 +561,7 @@ describe("executeBrowserType", () => {
     const keyDownIdx = methods.findIndex(
       (m, i) =>
         m === "Input.dispatchKeyEvent" &&
-        (sendCalls[i]!.params as { type: string }).type === "rawKeyDown",
+        sendCalls[i]!.params?.type === "rawKeyDown",
     );
     expect(insertIdx).toBeGreaterThanOrEqual(0);
     expect(keyDownIdx).toBeGreaterThan(insertIdx);
@@ -572,10 +570,10 @@ describe("executeBrowserType", () => {
       (c) => c.method === "Input.dispatchKeyEvent",
     );
     expect(keyEvents).toHaveLength(3);
-    expect((keyEvents[0]!.params as { key: string }).key).toBe("Enter");
-    expect((keyEvents[0]!.params as { type: string }).type).toBe("rawKeyDown");
-    expect((keyEvents[1]!.params as { type: string }).type).toBe("char");
-    expect((keyEvents[2]!.params as { type: string }).type).toBe("keyUp");
+    expect(keyEvents[0]!.params?.key).toBe("Enter");
+    expect(keyEvents[0]!.params?.type).toBe("rawKeyDown");
+    expect(keyEvents[1]!.params?.type).toBe("char");
+    expect(keyEvents[2]!.params?.type).toBe("keyUp");
   });
 
   test("errors when text is missing", async () => {
@@ -712,15 +710,15 @@ describe("executeBrowserPressKey", () => {
       "Input.dispatchKeyEvent",
       "Input.dispatchKeyEvent",
     ]);
-    const keyDown = sendCalls[0]!.params as Record<string, unknown>;
-    const charEvt = sendCalls[1]!.params as Record<string, unknown>;
-    const keyUp = sendCalls[2]!.params as Record<string, unknown>;
-    expect(keyDown.type).toBe("rawKeyDown");
-    expect(keyDown.key).toBe("Enter");
-    expect(keyDown.windowsVirtualKeyCode).toBe(13);
-    expect(charEvt.type).toBe("char");
-    expect(keyUp.type).toBe("keyUp");
-    expect(keyUp.key).toBe("Enter");
+    const keyDown = sendCalls[0]!.params;
+    const charEvt = sendCalls[1]!.params;
+    const keyUp = sendCalls[2]!.params;
+    expect(keyDown?.type).toBe("rawKeyDown");
+    expect(keyDown?.key).toBe("Enter");
+    expect(keyDown?.windowsVirtualKeyCode).toBe(13);
+    expect(charEvt?.type).toBe("char");
+    expect(keyUp?.type).toBe("keyUp");
+    expect(keyUp?.key).toBe("Enter");
   });
 
   test("presses modifier chords on the focused element", async () => {
@@ -835,7 +833,7 @@ describe("executeBrowserScroll", () => {
     // Input.dispatchMouseEvent mouseWheel at the viewport center.
     const evaluateCall = sendCalls.find((c) => c.method === "Runtime.evaluate");
     expect(evaluateCall).toBeDefined();
-    expect((evaluateCall!.params as { expression: string }).expression).toBe(
+    expect(evaluateCall!.params?.expression).toBe(
       "({ w: window.innerWidth, h: window.innerHeight })",
     );
     const wheelCall = sendCalls.find(
@@ -980,11 +978,7 @@ describe("executeBrowserSelectOption", () => {
     const methods = sendCalls.map((c) => c.method);
     expect(methods).toEqual(["DOM.resolveNode", "Runtime.callFunctionOn"]);
     expect(sendCalls[0]!.params).toEqual({ backendNodeId: 777 });
-    const callFn = sendCalls[1]!.params as {
-      objectId: string;
-      arguments: Array<{ value: unknown }>;
-      returnByValue?: boolean;
-    };
+    const callFn = sendCalls[1]!.params!;
     expect(callFn.objectId).toBe("obj-1");
     expect(callFn.arguments).toEqual([
       { value: "ca" },
@@ -1012,9 +1006,7 @@ describe("executeBrowserSelectOption", () => {
       "DOM.resolveNode",
       "Runtime.callFunctionOn",
     ]);
-    const callFn = sendCalls[4]!.params as {
-      arguments: Array<{ value: unknown }>;
-    };
+    const callFn = sendCalls[4]!.params!;
     expect(callFn.arguments).toEqual([
       { value: null },
       { value: "California" },
@@ -1029,8 +1021,9 @@ describe("executeBrowserSelectOption", () => {
     );
     expect(result.isError).toBe(false);
     expect(result.content).toContain("index=2");
-    const callFn = sendCalls.find((c) => c.method === "Runtime.callFunctionOn")!
-      .params as { arguments: Array<{ value: unknown }> };
+    const callFn = sendCalls.find(
+      (c) => c.method === "Runtime.callFunctionOn",
+    )!.params!;
     expect(callFn.arguments).toEqual([
       { value: null },
       { value: null },
@@ -1052,14 +1045,19 @@ describe("executeBrowserSelectOption", () => {
 
   test("dispatches input + change events via the function declaration", async () => {
     await executeBrowserSelectOption({ selector: "#state", value: "ca" }, ctx);
-    const callFn = sendCalls.find((c) => c.method === "Runtime.callFunctionOn")!
-      .params as { functionDeclaration: string };
+    const callFn = sendCalls.find(
+      (c) => c.method === "Runtime.callFunctionOn",
+    )!.params;
+    const declaration = callFn?.functionDeclaration;
+    if (typeof declaration !== "string") {
+      throw new Error("Expected a CDP function declaration");
+    }
     // The function body must dispatch BOTH input and change events
     // (HTML spec order: input fires before change for <select>).
-    expect(callFn.functionDeclaration).toContain('new Event("input"');
-    expect(callFn.functionDeclaration).toContain('new Event("change"');
-    const inputIdx = callFn.functionDeclaration.indexOf('new Event("input"');
-    const changeIdx = callFn.functionDeclaration.indexOf('new Event("change"');
+    expect(declaration).toContain('new Event("input"');
+    expect(declaration).toContain('new Event("change"');
+    const inputIdx = declaration.indexOf('new Event("input"');
+    const changeIdx = declaration.indexOf('new Event("change"');
     expect(inputIdx).toBeGreaterThanOrEqual(0);
     expect(changeIdx).toBeGreaterThan(inputIdx);
   });

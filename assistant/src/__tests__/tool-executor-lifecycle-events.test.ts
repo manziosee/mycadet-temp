@@ -277,26 +277,25 @@ function makePrompter(
     wasAbort?: boolean;
   }>,
 ) {
-  return {
-    prompt: async (
-      toolName: string,
-      _input: unknown,
-      riskLevel: string,
-      _allowlistOptions: unknown,
-      _scopeOptions: unknown,
-      _previewDiff: unknown,
-      conversationId?: string,
-    ) => {
-      // Record that a prompt was actually surfaced (with the risk and
-      // conversation the checker resolved) — the telemetry "prompted" half is
-      // gone, so the surfaced-prompt observation lives here now.
-      promptCalls.push({ toolName, riskLevel, conversationId });
-      return promptImpl ? promptImpl() : { decision: promptDecision };
-    },
-    resolveConfirmation: () => {},
-    updateSender: () => {},
-    dispose: () => {},
-  } as unknown as PermissionPrompter;
+  const prompter = new PermissionPrompter(() => {});
+  prompter.prompt = async (
+    toolName: string,
+    _input: unknown,
+    riskLevel: string,
+    _allowlistOptions: unknown,
+    _scopeOptions: unknown,
+    _previewDiff: unknown,
+    conversationId?: string,
+  ) => {
+    // Record that a prompt was actually surfaced (with the risk and
+    // conversation the checker resolved) — the telemetry "prompted" half is
+    // gone, so the surfaced-prompt observation lives here now.
+    promptCalls.push({ toolName, riskLevel, conversationId });
+    return promptImpl ? promptImpl() : { decision: promptDecision };
+  };
+  prompter.resolveConfirmation = () => {};
+  prompter.dispose = () => {};
+  return prompter;
 }
 
 describe("ToolExecutor audit terminals", () => {

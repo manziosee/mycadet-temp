@@ -2,6 +2,8 @@ import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { beforeEach, describe, expect, mock, test } from "bun:test";
 
+import { z } from "zod";
+
 import type { AgentLoopExitReason } from "../../../../hooks/types.js";
 import { getWorkspaceDir } from "../paths.js";
 
@@ -422,10 +424,9 @@ function makeJob(conversationId = "src-conv-1"): MemoryJob<{
  */
 function persistedInstructionText(): string {
   expect(addMessageCalls).toHaveLength(1);
-  const blocks = JSON.parse(addMessageCalls[0]!.content) as Array<{
-    type: string;
-    text: string;
-  }>;
+  const blocks = z
+    .array(z.looseObject({ type: z.string(), text: z.string() }))
+    .parse(JSON.parse(addMessageCalls[0]!.content));
   return blocks[0]!.text;
 }
 

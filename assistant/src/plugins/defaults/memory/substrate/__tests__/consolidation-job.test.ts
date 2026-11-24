@@ -1451,11 +1451,13 @@ describe("memoryV2ConsolidateJob — consecutive-failure state", () => {
     const raw = checkpointStore.get(CONSOLIDATION_FAILURE_CHECKPOINT_KEY);
     return raw === undefined
       ? null
-      : (JSON.parse(raw) as {
-          consecutiveFailures: number;
-          lastFailureAt: number;
-          kind: string;
-        });
+      : z
+          .looseObject({
+            consecutiveFailures: z.number(),
+            lastFailureAt: z.number(),
+            kind: z.string(),
+          })
+          .parse(JSON.parse(raw));
   }
 
   function seedFailureState(
