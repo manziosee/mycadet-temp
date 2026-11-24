@@ -1,19 +1,11 @@
 name: Cherry Pick to Release Branch
 
 on:
-  # rebrand(cadet): PR triggers disabled for the CI-minute budget.
-  # Vargas re-enables by uncommenting this block.
-  # pull_request:
-  #   branches:
-  #     - main
-  #   types:
-  #     # 'closed' handles the common case: the label is already on the PR when it
-  #     # merges. 'labeled' handles applying the label after the PR has merged, so
-  #     # the cherry-pick can be requested after the fact.
-  #     - closed
-  #     - labeled
-  #
-  workflow_dispatch:
+  # A backport writes to the base repository, including for merged fork PRs.
+  pull_request_target:
+    branches: [main]
+    types: [closed, labeled]
+
 jobs:
   cherry-pick:
     # Only ever act on merged PRs. Two entry points:
@@ -37,6 +29,8 @@ jobs:
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
+          # Use trusted base-branch code for the write-enabled workflow.
+          ref: refs/heads/main
           fetch-depth: 0
 
       - name: Determine latest release branch
