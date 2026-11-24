@@ -1,3 +1,4 @@
+import assert from "node:assert/strict";
 /**
  * Unit tests for the daemon `contacts_record_prompt` route.
  *
@@ -7,9 +8,9 @@
  * callback, which is what keeps an unattended assistant from changing the
  * contact graph.
  */
-
 import { beforeEach, describe, expect, mock, test } from "bun:test";
 
+import { jsonObjectSchema } from "../../../__tests__/helpers/json-object-schema.js";
 import { setBroadcastOverrideForTesting } from "../../assistant-event-hub.js";
 
 type Broadcast = Record<string, unknown>;
@@ -42,7 +43,8 @@ const claimPrompt = routeFor("contact_prompt_claim");
 function parkedRequestId(): string {
   const message = broadcasts.find((b) => b.type === "contact_record_request");
   expect(message).toBeDefined();
-  return message!.requestId as string;
+  assert(typeof message?.requestId === "string");
+  return message.requestId;
 }
 
 describe("contacts_record_prompt", () => {
@@ -59,10 +61,11 @@ describe("contacts_record_prompt", () => {
         notes: "Dentist",
         label: "Add a contact",
       },
-    }) as Promise<Record<string, unknown>>;
+    });
 
     // Settled only by the gateway callback: a bare await here would hang.
     let settled = false;
+    assert(pending instanceof Promise);
     void pending.then(() => {
       settled = true;
     });
@@ -92,7 +95,7 @@ describe("contacts_record_prompt", () => {
   test("a dismissal closes the form on the clients that did not dismiss it", async () => {
     const pending = recordPrompt.handler({
       body: { operation: "create", displayName: "Alice" },
-    }) as Promise<Record<string, unknown>>;
+    });
     const requestId = parkedRequestId();
 
     resolvePrompt.handler({
@@ -108,7 +111,7 @@ describe("contacts_record_prompt", () => {
   test("carries the gateway's error back to the caller", async () => {
     const pending = recordPrompt.handler({
       body: { operation: "delete", contactId: "ct_1" },
-    }) as Promise<Record<string, unknown>>;
+    });
 
     resolvePrompt.handler({
       body: { requestId: parkedRequestId(), error: "Cancelled by user" },
@@ -120,9 +123,11 @@ describe("contacts_record_prompt", () => {
   test("update, delete and merge require a contact id, and broadcast nothing without one", async () => {
     for (const operation of ["update", "delete", "merge"]) {
       broadcasts = [];
-      const result = (await recordPrompt.handler({
-        body: { operation, displayName: "Alice" },
-      })) as Record<string, unknown>;
+      const result = jsonObjectSchema.parse(
+        await recordPrompt.handler({
+          body: { operation, displayName: "Alice" },
+        }),
+      );
 
       expect(result.ok).toBe(false);
       expect(result.error).toBe(`contactId is required to ${operation}`);
@@ -148,7 +153,7 @@ describe("contacts_record_prompt", () => {
         donorDisplayName: "Bob",
         donorChannels,
       },
-    }) as Promise<Record<string, unknown>>;
+    });
 
     const message = broadcasts.find((b) => b.type === "contact_record_request");
     expect(message).toMatchObject({
@@ -166,9 +171,11 @@ describe("contacts_record_prompt", () => {
   });
 
   test("a merge without a donor is refused, and broadcasts nothing", async () => {
-    const result = (await recordPrompt.handler({
-      body: { operation: "merge", contactId: "ct_survivor" },
-    })) as Record<string, unknown>;
+    const result = jsonObjectSchema.parse(
+      await recordPrompt.handler({
+        body: { operation: "merge", contactId: "ct_survivor" },
+      }),
+    );
 
     expect(result).toEqual({
       ok: false,
@@ -178,13 +185,15 @@ describe("contacts_record_prompt", () => {
   });
 
   test("a contact cannot be merged into itself", async () => {
-    const result = (await recordPrompt.handler({
-      body: {
-        operation: "merge",
-        contactId: "ct_1",
-        donorContactId: "ct_1",
-      },
-    })) as Record<string, unknown>;
+    const result = jsonObjectSchema.parse(
+      await recordPrompt.handler({
+        body: {
+          operation: "merge",
+          contactId: "ct_1",
+          donorContactId: "ct_1",
+        },
+      }),
+    );
 
     expect(result).toEqual({
       ok: false,
@@ -196,7 +205,7 @@ describe("contacts_record_prompt", () => {
   test("only the first claim on a form is granted", async () => {
     const pending = recordPrompt.handler({
       body: { operation: "create", displayName: "Alice" },
-    }) as Promise<Record<string, unknown>>;
+    });
     const requestId = parkedRequestId();
 
     // Two clients answering the same broadcast. The daemon holds the only
@@ -227,7 +236,7 @@ describe("contacts_record_prompt", () => {
   test("a resolved form can no longer be claimed", async () => {
     const pending = recordPrompt.handler({
       body: { operation: "create", displayName: "Alice" },
-    }) as Promise<Record<string, unknown>>;
+    });
     const requestId = parkedRequestId();
 
     claimPrompt.handler({ body: { requestId } });
@@ -245,7 +254,7 @@ describe("contacts_record_prompt", () => {
   test("the caller's timeout is what closes the form", async () => {
     const pending = recordPrompt.handler({
       body: { operation: "create", displayName: "Alice", timeoutMs: 60 },
-    }) as Promise<Record<string, unknown>>;
+    });
     const requestId = parkedRequestId();
 
     // A form that outlived the command that opened it could still be answered,
@@ -268,7 +277,7 @@ describe("contacts_record_prompt", () => {
   test("claiming a form stops its deadline, so a slow write is not reported as a timeout", async () => {
     const pending = recordPrompt.handler({
       body: { operation: "delete", contactId: "ct_1", timeoutMs: 60 },
-    }) as Promise<Record<string, unknown>>;
+    });
     const requestId = parkedRequestId();
 
     // Somebody answered right at the deadline and the write is in flight. The
@@ -279,6 +288,7 @@ describe("contacts_record_prompt", () => {
     });
 
     let settled = false;
+    assert(pending instanceof Promise);
     void pending.then(() => {
       settled = true;
     });
@@ -295,15 +305,17 @@ describe("contacts_record_prompt", () => {
   test("a second form is refused rather than replacing the first", async () => {
     const first = recordPrompt.handler({
       body: { operation: "create", displayName: "Alice" },
-    }) as Promise<Record<string, unknown>>;
+    });
     const firstRequestId = parkedRequestId();
 
     // A client shows one contact form at a time, so a second broadcast would
     // take the first's card away and leave its command waiting on a form
     // nobody can answer.
-    const second = (await recordPrompt.handler({
-      body: { operation: "create", displayName: "Bob" },
-    })) as Record<string, unknown>;
+    const second = jsonObjectSchema.parse(
+      await recordPrompt.handler({
+        body: { operation: "create", displayName: "Bob" },
+      }),
+    );
 
     expect(second.ok).toBe(false);
     expect(String(second.error)).toContain("already open");
@@ -320,7 +332,7 @@ describe("contacts_record_prompt", () => {
   test("a form that has been answered does not block the next one", async () => {
     const first = recordPrompt.handler({
       body: { operation: "create", displayName: "Alice" },
-    }) as Promise<Record<string, unknown>>;
+    });
     const firstRequestId = parkedRequestId();
     claimPrompt.handler({ body: { requestId: firstRequestId } });
 
@@ -328,7 +340,7 @@ describe("contacts_record_prompt", () => {
     // guardian's card is done. The next command should not be refused.
     const second = recordPrompt.handler({
       body: { operation: "create", displayName: "Bob" },
-    }) as Promise<Record<string, unknown>>;
+    });
 
     expect(
       broadcasts.filter((b) => b.type === "contact_record_request"),
@@ -338,11 +350,11 @@ describe("contacts_record_prompt", () => {
       body: { requestId: firstRequestId, contactId: "ct_new" },
     });
     await first;
-    const secondId = (
-      broadcasts.filter((b) => b.type === "contact_record_request")[1] as {
-        requestId: string;
-      }
-    ).requestId;
+    const secondPrompt = broadcasts.filter(
+      (b) => b.type === "contact_record_request",
+    )[1];
+    assert(typeof secondPrompt?.requestId === "string");
+    const secondId = secondPrompt.requestId;
     resolvePrompt.handler({ body: { requestId: secondId, contactId: "ct_2" } });
     await second;
   });

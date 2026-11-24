@@ -1,6 +1,7 @@
 import { Database } from "bun:sqlite";
 import { describe, expect, test } from "bun:test";
 
+import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/bun-sqlite";
 
 import * as schema from "../schema/index.js";
@@ -37,10 +38,15 @@ function insertRow(
     .run(name, provider, auth);
 }
 
-function readProvider(sqlite: Database, name: string): string | undefined {
-  const row = sqlite
-    .query(`SELECT provider FROM provider_connections WHERE name = ?`)
-    .get(name) as { provider: string } | null;
+function readProvider(
+  db: ReturnType<typeof createTestDb>["db"],
+  name: string,
+): string | undefined {
+  const row = db
+    .select({ provider: schema.providerConnections.provider })
+    .from(schema.providerConnections)
+    .where(eq(schema.providerConnections.name, name))
+    .get();
   return row?.provider;
 }
 
@@ -56,7 +62,7 @@ describe("migration 366: chatgpt-subscription row identity", () => {
 
     migrateChatgptSubscriptionRowIdentity(db);
 
-    expect(readProvider(sqlite, "chatgpt-subscription")).toBe("chatgpt");
+    expect(readProvider(db, "chatgpt-subscription")).toBe("chatgpt");
   });
 
   test("leaves a claiming row with key auth untouched", () => {
@@ -70,7 +76,7 @@ describe("migration 366: chatgpt-subscription row identity", () => {
 
     migrateChatgptSubscriptionRowIdentity(db);
 
-    expect(readProvider(sqlite, "chatgpt-subscription")).toBe("openai");
+    expect(readProvider(db, "chatgpt-subscription")).toBe("openai");
   });
 
   test("leaves other rows untouched", () => {
@@ -80,8 +86,8 @@ describe("migration 366: chatgpt-subscription row identity", () => {
 
     migrateChatgptSubscriptionRowIdentity(db);
 
-    expect(readProvider(sqlite, "openai-key")).toBe("openai");
-    expect(readProvider(sqlite, "cadet")).toBe("cadet");
+    expect(readProvider(db, "openai-key")).toBe("openai");
+    expect(readProvider(db, "cadet")).toBe("cadet");
   });
 
   test("leaves unparseable auth untouched", () => {
@@ -90,7 +96,7 @@ describe("migration 366: chatgpt-subscription row identity", () => {
 
     migrateChatgptSubscriptionRowIdentity(db);
 
-    expect(readProvider(sqlite, "chatgpt-subscription")).toBe("openai");
+    expect(readProvider(db, "chatgpt-subscription")).toBe("openai");
   });
 
   test("is idempotent", () => {
@@ -105,7 +111,7 @@ describe("migration 366: chatgpt-subscription row identity", () => {
     migrateChatgptSubscriptionRowIdentity(db);
     migrateChatgptSubscriptionRowIdentity(db);
 
-    expect(readProvider(sqlite, "chatgpt-subscription")).toBe("chatgpt");
+    expect(readProvider(db, "chatgpt-subscription")).toBe("chatgpt");
   });
 
   test("no-ops without the table or the row", () => {

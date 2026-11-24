@@ -1,6 +1,7 @@
 import { Database } from "bun:sqlite";
 import { describe, expect, test } from "bun:test";
 
+import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/bun-sqlite";
 
 import * as schema from "../../schema/index.js";
@@ -37,10 +38,15 @@ function insertRow(
     .run(name, provider, baseUrl);
 }
 
-function readProvider(sqlite: Database, name: string): string | undefined {
-  const row = sqlite
-    .query(`SELECT provider FROM provider_connections WHERE name = ?`)
-    .get(name) as { provider: string } | null;
+function readProvider(
+  db: ReturnType<typeof createTestDb>["db"],
+  name: string,
+): string | undefined {
+  const row = db
+    .select({ provider: schema.providerConnections.provider })
+    .from(schema.providerConnections)
+    .where(eq(schema.providerConnections.name, name))
+    .get();
   return row?.provider;
 }
 
@@ -75,16 +81,16 @@ describe("migration 383: normalize opencode-host connections", () => {
 
     migrateNormalizeOpencodeHostConnections(db);
 
-    expect(readProvider(sqlite, "go")).toBe("opencode");
-    expect(readProvider(sqlite, "zen")).toBe("opencode");
-    expect(readProvider(sqlite, "sub")).toBe("opencode");
-    expect(readProvider(sqlite, "port")).toBe("opencode");
-    expect(readProvider(sqlite, "vllm")).toBe("openai-compatible");
-    expect(readProvider(sqlite, "no-url")).toBe("openai-compatible");
-    expect(readProvider(sqlite, "lookalike")).toBe("openai-compatible");
-    expect(readProvider(sqlite, "path-only")).toBe("openai-compatible");
-    expect(readProvider(sqlite, "garbage")).toBe("openai-compatible");
-    expect(readProvider(sqlite, "ollama")).toBe("ollama");
+    expect(readProvider(db, "go")).toBe("opencode");
+    expect(readProvider(db, "zen")).toBe("opencode");
+    expect(readProvider(db, "sub")).toBe("opencode");
+    expect(readProvider(db, "port")).toBe("opencode");
+    expect(readProvider(db, "vllm")).toBe("openai-compatible");
+    expect(readProvider(db, "no-url")).toBe("openai-compatible");
+    expect(readProvider(db, "lookalike")).toBe("openai-compatible");
+    expect(readProvider(db, "path-only")).toBe("openai-compatible");
+    expect(readProvider(db, "garbage")).toBe("openai-compatible");
+    expect(readProvider(db, "ollama")).toBe("ollama");
   });
 
   test("is idempotent", () => {
@@ -97,6 +103,6 @@ describe("migration 383: normalize opencode-host connections", () => {
     );
     migrateNormalizeOpencodeHostConnections(db);
     migrateNormalizeOpencodeHostConnections(db);
-    expect(readProvider(sqlite, "go")).toBe("opencode");
+    expect(readProvider(db, "go")).toBe("opencode");
   });
 });

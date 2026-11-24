@@ -1,3 +1,4 @@
+import assert from "node:assert/strict";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
 import { fetchMock } from "../../__tests__/helpers/fetch-mock.js";
@@ -17,15 +18,14 @@ describe("XAIProvider", () => {
   });
 
   test("successful transcription returns trimmed text", async () => {
-    globalThis.fetch = (async (
-      _url: string | URL | Request,
-      _init?: RequestInit,
-    ) => {
-      return new Response(JSON.stringify({ text: "  hello  " }), {
-        status: 200,
-        headers: { "Content-Type": "application/json" },
-      });
-    }) as typeof fetch;
+    globalThis.fetch = fetchMock(
+      async (_url: string | URL | Request, _init?: RequestInit) => {
+        return new Response(JSON.stringify({ text: "  hello  " }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      },
+    );
 
     const provider = new XAIProvider(TEST_API_KEY);
     const result = await provider.transcribe(
@@ -44,15 +44,14 @@ describe("XAIProvider", () => {
       },
     });
 
-    globalThis.fetch = (async (
-      _url: string | URL | Request,
-      _init?: RequestInit,
-    ) => {
-      return new Response(errorBody, {
-        status: 401,
-        headers: { "Content-Type": "application/json" },
-      });
-    }) as typeof fetch;
+    globalThis.fetch = fetchMock(
+      async (_url: string | URL | Request, _init?: RequestInit) => {
+        return new Response(errorBody, {
+          status: 401,
+          headers: { "Content-Type": "application/json" },
+        });
+      },
+    );
 
     const provider = new XAIProvider(TEST_API_KEY);
 
@@ -65,20 +64,20 @@ describe("XAIProvider", () => {
     let capturedBody: FormData | undefined;
     let capturedHeaders: HeadersInit | undefined;
 
-    globalThis.fetch = (async (
-      url: string | URL | Request,
-      init?: RequestInit,
-    ) => {
-      capturedBody = init?.body as FormData;
-      capturedHeaders = init?.headers;
-      expect(url).toBe("https://api.x.ai/v1/stt");
-      expect(init?.method).toBe("POST");
+    globalThis.fetch = fetchMock(
+      async (url: string | URL | Request, init?: RequestInit) => {
+        assert(init?.body instanceof FormData);
+        capturedBody = init.body;
+        capturedHeaders = init?.headers;
+        expect(url).toBe("https://api.x.ai/v1/stt");
+        expect(init?.method).toBe("POST");
 
-      return new Response(JSON.stringify({ text: "transcribed" }), {
-        status: 200,
-        headers: { "Content-Type": "application/json" },
-      });
-    }) as typeof fetch;
+        return new Response(JSON.stringify({ text: "transcribed" }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      },
+    );
 
     const provider = new XAIProvider(TEST_API_KEY);
     await provider.transcribe(Buffer.from("fake-audio"), "audio/mpeg");
@@ -95,23 +94,23 @@ describe("XAIProvider", () => {
     expect(capturedBody!.get("model")).toBeNull();
 
     const file = capturedBody!.get("file");
-    expect(file).toBeInstanceOf(Blob);
-    expect((file as Blob).type).toBe("audio/mpeg");
+    assert(file instanceof Blob);
+    expect(file.type).toBe("audio/mpeg");
   });
 
   test("forwards a configured language as a form field, appended before the file", async () => {
     let capturedBody: FormData | undefined;
 
-    globalThis.fetch = (async (
-      _url: string | URL | Request,
-      init?: RequestInit,
-    ) => {
-      capturedBody = init?.body as FormData;
-      return new Response(JSON.stringify({ text: "hola" }), {
-        status: 200,
-        headers: { "Content-Type": "application/json" },
-      });
-    }) as typeof fetch;
+    globalThis.fetch = fetchMock(
+      async (_url: string | URL | Request, init?: RequestInit) => {
+        assert(init?.body instanceof FormData);
+        capturedBody = init.body;
+        return new Response(JSON.stringify({ text: "hola" }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      },
+    );
 
     const provider = new XAIProvider(TEST_API_KEY, { language: "es" });
     await provider.transcribe(Buffer.from("fake-audio"), "audio/wav");
@@ -124,16 +123,16 @@ describe("XAIProvider", () => {
   test("omits the language field entirely when no language is configured", async () => {
     let capturedBody: FormData | undefined;
 
-    globalThis.fetch = (async (
-      _url: string | URL | Request,
-      init?: RequestInit,
-    ) => {
-      capturedBody = init?.body as FormData;
-      return new Response(JSON.stringify({ text: "hello" }), {
-        status: 200,
-        headers: { "Content-Type": "application/json" },
-      });
-    }) as typeof fetch;
+    globalThis.fetch = fetchMock(
+      async (_url: string | URL | Request, init?: RequestInit) => {
+        assert(init?.body instanceof FormData);
+        capturedBody = init.body;
+        return new Response(JSON.stringify({ text: "hello" }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      },
+    );
 
     const provider = new XAIProvider(TEST_API_KEY);
     await provider.transcribe(Buffer.from("fake-audio"), "audio/wav");
@@ -189,7 +188,8 @@ describe("XAIProvider", () => {
       await provider.transcribe(Buffer.from("audio"), "audio/wav");
       expect.unreachable("should have thrown");
     } catch (err) {
-      const msg = (err as Error).message;
+      assert(err instanceof Error);
+      const msg = err.message;
       expect(msg).toContain("xAI STT error (500)");
       // The body portion should be at most 300 chars
       const bodyPart = msg.replace("xAI STT error (500): ", "");

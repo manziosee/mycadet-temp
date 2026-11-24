@@ -1577,8 +1577,9 @@ describe("GeminiProvider", () => {
       ]);
       expect(true).toBe(false); // should not reach
     } catch (error) {
-      expect((error as Error).message).toContain("Gemini API error (429)");
-      expect((error as Error).message).toContain("Rate limit exceeded");
+      assert(error instanceof Error);
+      expect(error.message).toContain("Gemini API error (429)");
+      expect(error.message).toContain("Rate limit exceeded");
     }
   });
 
@@ -1594,8 +1595,9 @@ describe("GeminiProvider", () => {
       ]);
       expect(true).toBe(false);
     } catch (error) {
-      expect((error as Error).message).toContain("Gemini request failed");
-      expect((error as Error).message).toContain("Network failure");
+      assert(error instanceof Error);
+      expect(error.message).toContain("Gemini request failed");
+      expect(error.message).toContain("Network failure");
     }
   });
 
@@ -1670,7 +1672,8 @@ describe("GeminiProvider", () => {
       throw new Error("expected sendMessage to throw");
     } catch (error) {
       expect(error).toBeInstanceOf(ProviderError);
-      return (error as ProviderError).reason;
+      assert(error instanceof ProviderError);
+      return error.reason;
     }
   }
 
@@ -1765,7 +1768,8 @@ describe("GeminiProvider", () => {
       throw new Error("expected sendMessage to throw");
     } catch (error) {
       expect(error).toBeInstanceOf(ProviderError);
-      const msg = (error as Error).message;
+      assert(error instanceof Error);
+      const msg = error.message;
       expect(msg).toContain("no response body");
       expect(msg).toContain("network proxy or egress filter");
       expect(msg).not.toContain("Gemini API error (404):");
@@ -1781,7 +1785,8 @@ describe("GeminiProvider", () => {
       throw new Error("expected sendMessage to throw");
     } catch (error) {
       expect(error).toBeInstanceOf(ProviderError);
-      const msg = (error as Error).message;
+      assert(error instanceof Error);
+      const msg = error.message;
       expect(msg).toBe(
         "Gemini API error (404): NOT_FOUND: model does not exist",
       );
@@ -1833,7 +1838,8 @@ describe("GeminiProvider", () => {
       throw new Error("expected sendMessage to throw");
     } catch (error) {
       expect(error).toBeInstanceOf(ContextOverflowError);
-      expect((error as ProviderError).reason).toBe("context_overflow");
+      assert(error instanceof ProviderError);
+      expect(error.reason).toBe("context_overflow");
     }
   });
 
@@ -1849,7 +1855,8 @@ describe("GeminiProvider", () => {
       throw new Error("expected sendMessage to throw");
     } catch (error) {
       expect(error).toBeInstanceOf(ContextOverflowError);
-      expect((error as ProviderError).reason).toBe("context_overflow");
+      assert(error instanceof ProviderError);
+      expect(error.reason).toBe("context_overflow");
     }
   });
 

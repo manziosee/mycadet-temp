@@ -7,6 +7,12 @@
  */
 import { beforeEach, describe, expect, mock, test } from "bun:test";
 
+import { z } from "zod";
+
+import {
+  cancelCallResponseSchema,
+  startCallResponseSchema,
+} from "../runtime/routes/call-routes.js";
 import { useMemorySecureKeys } from "./helpers/secure-keys.js";
 
 process.env.DISABLE_HTTP_AUTH = "true";
@@ -65,6 +71,19 @@ import { RuntimeHttpServer } from "../runtime/http-server.js";
 import { setConfig } from "./helpers/set-config.js";
 
 import "../calls/call-state.js";
+
+const errorResponseSchema = z.object({
+  error: z.object({ message: z.string(), code: z.string().optional() }),
+});
+
+const callStatusResponseSchema = z.object({
+  callSessionId: z.string(),
+  toNumber: z.string(),
+  fromNumber: z.string(),
+  status: z.string(),
+  task: z.string(),
+  pendingQuestion: z.object({}).passthrough().nullable(),
+});
 
 // Disable memory (skip background indexing of test messages) and seed the
 // ingress base URL that outbound-call URL building reads.
@@ -159,13 +178,7 @@ describe("runtime call routes — HTTP layer", () => {
 
     expect(res.status).toBe(201);
 
-    const body = (await res.json()) as {
-      callSessionId: string;
-      callSid: string;
-      status: string;
-      toNumber: string;
-      fromNumber: string;
-    };
+    const body = startCallResponseSchema.parse(await res.json());
 
     expect(body.callSessionId).toBeDefined();
     expect(body.callSid).toBe("CA_mock_sid_123");
@@ -189,9 +202,7 @@ describe("runtime call routes — HTTP layer", () => {
     });
 
     expect(res.status).toBe(400);
-    const body = (await res.json()) as {
-      error: { message: string; code?: string };
-    };
+    const body = errorResponseSchema.parse(await res.json());
     expect(body.error.message).toContain("conversationId");
 
     await stopServer();
@@ -212,9 +223,7 @@ describe("runtime call routes — HTTP layer", () => {
     });
 
     expect(res.status).toBe(400);
-    const body = (await res.json()) as {
-      error: { message: string; code?: string };
-    };
+    const body = errorResponseSchema.parse(await res.json());
     expect(body.error.message).toContain("E.164");
 
     await stopServer();
@@ -252,9 +261,7 @@ describe("runtime call routes — HTTP layer", () => {
     // user_number mode requires a configured user phone number;
     // since we haven't set one, this should return a 400 explaining why
     expect(res.status).toBe(400);
-    const body = (await res.json()) as {
-      error: { message: string; code?: string };
-    };
+    const body = errorResponseSchema.parse(await res.json());
     expect(body.error.message).toContain("user_number");
 
     await stopServer();
@@ -276,14 +283,7 @@ describe("runtime call routes — HTTP layer", () => {
 
     expect(res.status).toBe(201);
 
-    const body = (await res.json()) as {
-      callSessionId: string;
-      callSid: string;
-      status: string;
-      toNumber: string;
-      fromNumber: string;
-      callerIdentityMode: string;
-    };
+    const body = startCallResponseSchema.parse(await res.json());
 
     expect(body.callSessionId).toBeDefined();
     expect(body.callSid).toBe("CA_mock_sid_123");
@@ -309,9 +309,7 @@ describe("runtime call routes — HTTP layer", () => {
     });
 
     expect(res.status).toBe(400);
-    const body = (await res.json()) as {
-      error: { message: string; code?: string };
-    };
+    const body = errorResponseSchema.parse(await res.json());
     expect(body.error.message).toContain("Invalid callerIdentityMode");
     expect(body.error.message).toContain("bogus");
     expect(body.error.message).toContain("assistant_number");
@@ -340,14 +338,7 @@ describe("runtime call routes — HTTP layer", () => {
 
     expect(res.status).toBe(200);
 
-    const body = (await res.json()) as {
-      callSessionId: string;
-      status: string;
-      toNumber: string;
-      fromNumber: string;
-      task: string;
-      pendingQuestion: null;
-    };
+    const body = callStatusResponseSchema.parse(await res.json());
 
     expect(body.callSessionId).toBe(session.id);
     expect(body.status).toBe("initiated");
@@ -392,10 +383,7 @@ describe("runtime call routes — HTTP layer", () => {
 
     expect(res.status).toBe(200);
 
-    const body = (await res.json()) as {
-      callSessionId: string;
-      status: string;
-    };
+    const body = cancelCallResponseSchema.parse(await res.json());
     expect(body.callSessionId).toBe(session.id);
     expect(body.status).toBe("cancelled");
 
@@ -482,9 +470,7 @@ describe("runtime call routes — HTTP layer", () => {
     });
 
     expect(res.status).toBe(409);
-    const body = (await res.json()) as {
-      error: { message: string; code?: string };
-    };
+    const body = errorResponseSchema.parse(await res.json());
     expect(body.error.message).toContain("No active controller");
 
     await stopServer();
@@ -533,9 +519,7 @@ describe("runtime call routes — HTTP layer", () => {
     });
 
     expect(res.status).toBe(409);
-    const body = (await res.json()) as {
-      error: { message: string; code?: string };
-    };
+    const body = errorResponseSchema.parse(await res.json());
     expect(body.error.message).toContain("No active controller");
 
     await stopServer();
@@ -583,9 +567,7 @@ describe("runtime call routes — HTTP layer", () => {
     });
 
     expect(res.status).toBe(400);
-    const body = (await res.json()) as {
-      error: { message: string; code?: string };
-    };
+    const body = errorResponseSchema.parse(await res.json());
     expect(body.error.message).toContain("instructionText");
 
     await stopServer();
@@ -609,9 +591,7 @@ describe("runtime call routes — HTTP layer", () => {
     });
 
     expect(res.status).toBe(400);
-    const body = (await res.json()) as {
-      error: { message: string; code?: string };
-    };
+    const body = errorResponseSchema.parse(await res.json());
     expect(body.error.message).toContain("instructionText");
 
     await stopServer();
@@ -627,9 +607,7 @@ describe("runtime call routes — HTTP layer", () => {
     });
 
     expect(res.status).toBe(404);
-    const body = (await res.json()) as {
-      error: { message: string; code?: string };
-    };
+    const body = errorResponseSchema.parse(await res.json());
     expect(body.error.message).toContain("No call session found");
 
     await stopServer();
@@ -655,9 +633,7 @@ describe("runtime call routes — HTTP layer", () => {
     });
 
     expect(res.status).toBe(409);
-    const body = (await res.json()) as {
-      error: { message: string; code?: string };
-    };
+    const body = errorResponseSchema.parse(await res.json());
     expect(body.error.message).toContain("not active");
 
     await stopServer();
@@ -681,9 +657,7 @@ describe("runtime call routes — HTTP layer", () => {
     });
 
     expect(res.status).toBe(409);
-    const body = (await res.json()) as {
-      error: { message: string; code?: string };
-    };
+    const body = errorResponseSchema.parse(await res.json());
     expect(body.error.message).toContain("No active controller");
 
     await stopServer();

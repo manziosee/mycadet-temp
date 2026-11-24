@@ -93,7 +93,7 @@ function handleDeleteBookmarkByMessage({ pathParams = {} }: RouteHandlerArgs): {
 // Route definitions
 // ---------------------------------------------------------------------------
 
-const bookmarkSummarySchema = z.object({
+export const bookmarkSummarySchema = z.object({
   id: z.string(),
   messageId: z.string(),
   conversationId: z.string(),
@@ -102,6 +102,13 @@ const bookmarkSummarySchema = z.object({
   messageRole: z.string(),
   messageCreatedAt: z.number(),
   createdAt: z.number(),
+});
+
+export const bookmarkListResponseSchema = z.object({
+  bookmarks: z.array(bookmarkSummarySchema),
+});
+export const bookmarkDeleteResponseSchema = z.object({
+  success: z.literal(true),
 });
 
 export const ROUTES: RouteDefinition[] = [
@@ -117,7 +124,7 @@ export const ROUTES: RouteDefinition[] = [
     description:
       "Return all bookmarks (newest first), joined with their parent message and conversation.",
     tags: ["bookmarks"],
-    responseBody: z.object({ bookmarks: z.array(bookmarkSummarySchema) }),
+    responseBody: bookmarkListResponseSchema,
     handler: handleListBookmarks,
   },
   {
@@ -151,7 +158,7 @@ export const ROUTES: RouteDefinition[] = [
     description:
       "Delete the bookmark (if any) attached to the given message. Succeeds even if no row matched.",
     tags: ["bookmarks"],
-    responseBody: z.object({ success: z.literal(true) }),
+    responseBody: bookmarkDeleteResponseSchema,
     handler: handleDeleteBookmarkByMessage,
   },
 ];

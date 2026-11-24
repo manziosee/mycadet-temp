@@ -20,19 +20,18 @@ import type {
 // ---------------------------------------------------------------------------
 
 // Mock the STT resolve module
+const mockResolveTelephonySttCapability = jest.fn();
+const mockResolveBatchTranscriber = jest.fn();
+const mockResolveStreamingTranscriber = jest.fn();
+
 mock.module("../../providers/speech-to-text/resolve.js", () => ({
-  resolveTelephonySttCapability: jest.fn(),
-  resolveBatchTranscriber: jest.fn(),
-  resolveStreamingTranscriber: jest.fn(),
+  resolveTelephonySttCapability: mockResolveTelephonySttCapability,
+  resolveBatchTranscriber: mockResolveBatchTranscriber,
+  resolveStreamingTranscriber: mockResolveStreamingTranscriber,
 }));
 
 // Now import the mocked modules and the module under test.
 import { setConfig } from "../../__tests__/helpers/set-config.js";
-import {
-  resolveBatchTranscriber,
-  resolveStreamingTranscriber,
-  resolveTelephonySttCapability,
-} from "../../providers/speech-to-text/resolve.js";
 import { MediaStreamSttSession } from "../media-stream-stt-session.js";
 
 /**
@@ -202,15 +201,13 @@ describe("MediaStreamSttSession", () => {
     seedCallsVoice(false);
 
     // Default: provider is supported and transcriber is available
-    (resolveTelephonySttCapability as jest.Mock).mockResolvedValue({
+    mockResolveTelephonySttCapability.mockResolvedValue({
       status: "supported",
       providerId: "openai-whisper",
       telephonyMode: "batch-only",
     });
-    (resolveBatchTranscriber as jest.Mock).mockResolvedValue(
-      makeMockTranscriber(),
-    );
-    (resolveStreamingTranscriber as jest.Mock).mockResolvedValue(null);
+    mockResolveBatchTranscriber.mockResolvedValue(makeMockTranscriber());
+    mockResolveStreamingTranscriber.mockResolvedValue(null);
   });
 
   afterEach(() => {
@@ -309,7 +306,7 @@ describe("MediaStreamSttSession", () => {
 
   test("fires onTranscriptFinal after silence ends a turn with audio", async () => {
     const mockTranscriber = makeMockTranscriber("hello world");
-    (resolveBatchTranscriber as jest.Mock).mockResolvedValue(mockTranscriber);
+    mockResolveBatchTranscriber.mockResolvedValue(mockTranscriber);
 
     const onTranscriptFinal = jest.fn();
     const session = new MediaStreamSttSession(
@@ -341,7 +338,7 @@ describe("MediaStreamSttSession", () => {
   // ── onError: unconfigured provider ───────────────────────────────
 
   test("fires onError when telephony capability is unconfigured", async () => {
-    (resolveTelephonySttCapability as jest.Mock).mockResolvedValue({
+    mockResolveTelephonySttCapability.mockResolvedValue({
       status: "unconfigured",
       reason: "STT provider is not in the catalog",
     });
@@ -372,7 +369,7 @@ describe("MediaStreamSttSession", () => {
   // ── onError: unsupported provider ────────────────────────────────
 
   test("fires onError when telephony capability is unsupported", async () => {
-    (resolveTelephonySttCapability as jest.Mock).mockResolvedValue({
+    mockResolveTelephonySttCapability.mockResolvedValue({
       status: "unsupported",
       providerId: "some-provider",
       reason: "Provider does not support telephony",
@@ -404,7 +401,7 @@ describe("MediaStreamSttSession", () => {
   // ── onError: missing credentials ─────────────────────────────────
 
   test("fires onError when credentials are missing", async () => {
-    (resolveTelephonySttCapability as jest.Mock).mockResolvedValue({
+    mockResolveTelephonySttCapability.mockResolvedValue({
       status: "missing-credentials",
       providerId: "openai-whisper",
       credentialProvider: "openai",
@@ -437,7 +434,7 @@ describe("MediaStreamSttSession", () => {
   // ── onError: no batch transcriber available ──────────────────────
 
   test("fires onError when resolveBatchTranscriber returns null", async () => {
-    (resolveBatchTranscriber as jest.Mock).mockResolvedValue(null);
+    mockResolveBatchTranscriber.mockResolvedValue(null);
 
     const onError = jest.fn();
     const session = new MediaStreamSttSession(
@@ -481,7 +478,7 @@ describe("MediaStreamSttSession", () => {
           }),
       ),
     };
-    (resolveBatchTranscriber as jest.Mock).mockResolvedValue(slowTranscriber);
+    mockResolveBatchTranscriber.mockResolvedValue(slowTranscriber);
 
     const onError = jest.fn();
     const session = new MediaStreamSttSession(
@@ -626,7 +623,7 @@ describe("MediaStreamSttSession", () => {
   describe("speech-aware turn segmentation", () => {
     test("long-running media stream can emit onTranscriptFinal before call end when speech is present", async () => {
       const mockTranscriber = makeMockTranscriber("hello from mid-call");
-      (resolveBatchTranscriber as jest.Mock).mockResolvedValue(mockTranscriber);
+      mockResolveBatchTranscriber.mockResolvedValue(mockTranscriber);
 
       const onTranscriptFinal = jest.fn();
       const onSpeechStart = jest.fn();
@@ -740,7 +737,7 @@ describe("MediaStreamSttSession", () => {
     session.handleMessage(makeStartMessage());
     await flushAsync();
 
-    expect(resolveStreamingTranscriber).not.toHaveBeenCalled();
+    expect(mockResolveStreamingTranscriber).not.toHaveBeenCalled();
     session.dispose();
   });
 
@@ -760,7 +757,7 @@ describe("MediaStreamSttSession", () => {
       fake: FakeStreamingTranscriber;
     }> {
       const fake = new FakeStreamingTranscriber();
-      (resolveStreamingTranscriber as jest.Mock).mockResolvedValue(fake);
+      mockResolveStreamingTranscriber.mockResolvedValue(fake);
 
       const session = new MediaStreamSttSession(config, callbacks);
       session.handleMessage(makeStartMessage());
@@ -772,8 +769,8 @@ describe("MediaStreamSttSession", () => {
     test("resolves the streaming transcriber at 16 kHz with boundary finals", async () => {
       const { session } = await startStreamingSession();
 
-      expect(resolveStreamingTranscriber).toHaveBeenCalledTimes(1);
-      expect(resolveStreamingTranscriber).toHaveBeenCalledWith({
+      expect(mockResolveStreamingTranscriber).toHaveBeenCalledTimes(1);
+      expect(mockResolveStreamingTranscriber).toHaveBeenCalledWith({
         role: "telephony",
         sampleRate: 16_000,
         utteranceBoundaryFinals: true,
@@ -787,7 +784,7 @@ describe("MediaStreamSttSession", () => {
       seedCallsVoice(true, 2500);
       const { session } = await startStreamingSession();
 
-      expect(resolveStreamingTranscriber).toHaveBeenCalledWith({
+      expect(mockResolveStreamingTranscriber).toHaveBeenCalledWith({
         role: "telephony",
         sampleRate: 16_000,
         utteranceBoundaryFinals: true,
@@ -799,7 +796,7 @@ describe("MediaStreamSttSession", () => {
 
     test("buffers frames until start() resolves, then flushes in order", async () => {
       const fake = new FakeStreamingTranscriber({ deferStart: true });
-      (resolveStreamingTranscriber as jest.Mock).mockResolvedValue(fake);
+      mockResolveStreamingTranscriber.mockResolvedValue(fake);
 
       const session = new MediaStreamSttSession({}, {});
       session.handleMessage(makeStartMessage());
@@ -830,7 +827,7 @@ describe("MediaStreamSttSession", () => {
 
     test("startup buffer overflow drops oldest frames and counts them", async () => {
       const fake = new FakeStreamingTranscriber({ deferStart: true });
-      (resolveStreamingTranscriber as jest.Mock).mockResolvedValue(fake);
+      mockResolveStreamingTranscriber.mockResolvedValue(fake);
 
       const session = new MediaStreamSttSession(
         { streamingStartupBufferFrames: 2 },
@@ -1010,7 +1007,7 @@ describe("MediaStreamSttSession", () => {
       jest.advanceTimersByTime(400);
       await flushAsync();
 
-      expect(resolveBatchTranscriber).not.toHaveBeenCalled();
+      expect(mockResolveBatchTranscriber).not.toHaveBeenCalled();
       expect(onTranscriptFinal).not.toHaveBeenCalled();
 
       session.dispose();
@@ -1058,7 +1055,7 @@ describe("MediaStreamSttSession", () => {
     });
 
     test("falls back to batch when no streaming transcriber is available", async () => {
-      (resolveStreamingTranscriber as jest.Mock).mockResolvedValue(null);
+      mockResolveStreamingTranscriber.mockResolvedValue(null);
       const onTranscriptFinal = jest.fn();
       const session = new MediaStreamSttSession(
         { turnDetector: { silenceThresholdMs: 300 } },
@@ -1096,7 +1093,7 @@ describe("MediaStreamSttSession", () => {
       jest.advanceTimersByTime(400);
       await flushAsync();
 
-      expect(resolveBatchTranscriber).toHaveBeenCalledTimes(1);
+      expect(mockResolveBatchTranscriber).toHaveBeenCalledTimes(1);
       expect(onTranscriptFinal).toHaveBeenCalledTimes(1);
       expect(onTranscriptFinal).toHaveBeenCalledWith(
         "hello world",
@@ -1123,8 +1120,8 @@ describe("MediaStreamSttSession", () => {
       await flushAsync();
 
       expect(onStop).toHaveBeenCalledTimes(1);
-      expect(resolveTelephonySttCapability).not.toHaveBeenCalled();
-      expect(resolveBatchTranscriber).not.toHaveBeenCalled();
+      expect(mockResolveTelephonySttCapability).not.toHaveBeenCalled();
+      expect(mockResolveBatchTranscriber).not.toHaveBeenCalled();
       expect(onTranscriptFinal).not.toHaveBeenCalled();
 
       session.dispose();
@@ -1136,12 +1133,12 @@ describe("MediaStreamSttSession", () => {
       session.dispose();
       fake.emit({ type: "closed" });
 
-      expect(resolveTelephonySttCapability).not.toHaveBeenCalled();
+      expect(mockResolveTelephonySttCapability).not.toHaveBeenCalled();
     });
 
     test("turn completed during transcriber startup is transcribed on batch fallback", async () => {
       const fake = new FakeStreamingTranscriber({ deferStart: true });
-      (resolveStreamingTranscriber as jest.Mock).mockResolvedValue(fake);
+      mockResolveStreamingTranscriber.mockResolvedValue(fake);
 
       const onTranscriptFinal = jest.fn();
       const session = new MediaStreamSttSession(
@@ -1174,14 +1171,14 @@ describe("MediaStreamSttSession", () => {
 
     test("multiple turns completed during transcriber startup are transcribed in order on batch fallback", async () => {
       const fake = new FakeStreamingTranscriber({ deferStart: true });
-      (resolveStreamingTranscriber as jest.Mock).mockResolvedValue(fake);
+      mockResolveStreamingTranscriber.mockResolvedValue(fake);
 
       // Echo the audio byte count so each turn's transcript is
       // distinguishable and ordering is observable.
       const transcribe = jest.fn(async (req: SttTranscribeRequest) => ({
         text: `bytes-${req.audio.length}`,
       }));
-      (resolveBatchTranscriber as jest.Mock).mockResolvedValue({
+      mockResolveBatchTranscriber.mockResolvedValue({
         providerId: "openai-whisper",
         boundaryId: "daemon-batch",
         transcribe,
@@ -1237,7 +1234,7 @@ describe("MediaStreamSttSession", () => {
 
     test("falls back to batch when the streaming transcriber fails to start", async () => {
       const fake = new FakeStreamingTranscriber({ deferStart: true });
-      (resolveStreamingTranscriber as jest.Mock).mockResolvedValue(fake);
+      mockResolveStreamingTranscriber.mockResolvedValue(fake);
 
       const onTranscriptFinal = jest.fn();
       const session = new MediaStreamSttSession(

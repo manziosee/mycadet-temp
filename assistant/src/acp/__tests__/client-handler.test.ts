@@ -1,3 +1,4 @@
+import assert from "node:assert/strict";
 import { describe, expect, test } from "bun:test";
 
 import type {
@@ -5,6 +6,7 @@ import type {
   SessionNotification,
 } from "@agentclientprotocol/sdk";
 
+import { AcpSessionUpdateEventSchema } from "../../api/events/acp-session-update.js";
 import type { AssistantEvent } from "../../api/index.js";
 import { CadetAcpClientHandler } from "../client-handler.js";
 import { modelOption } from "./helpers/acp-model-option.js";
@@ -128,7 +130,9 @@ describe("CadetAcpClientHandler replay suppression", () => {
     await handler.sessionUpdate(messageChunk("live one"));
     await handler.sessionUpdate(messageChunk("live two"));
 
-    expect(sent.map((m) => (m as { seq: number }).seq)).toEqual([1, 2]);
+    expect(sent.map((m) => AcpSessionUpdateEventSchema.parse(m).seq)).toEqual([
+      1, 2,
+    ]);
   });
 });
 
@@ -158,7 +162,9 @@ describe("CadetAcpClientHandler seq + enriched fields", () => {
       },
     });
 
-    expect(sent.map((m) => (m as { seq: number }).seq)).toEqual([1, 2, 3]);
+    expect(sent.map((m) => AcpSessionUpdateEventSchema.parse(m).seq)).toEqual([
+      1, 2, 3,
+    ]);
   });
 
   test("seedSeq continues seq past the persisted max after resume", async () => {
@@ -178,7 +184,7 @@ describe("CadetAcpClientHandler seq + enriched fields", () => {
 
     // The first live update must continue at 6 (N + 1), not reset to 1, so
     // the web client's highWaterMark de-dupe doesn't drop it.
-    expect((sent[0] as { seq: number }).seq).toBe(6);
+    expect(AcpSessionUpdateEventSchema.parse(sent[0]).seq).toBe(6);
   });
 
   test("seedSeq ignores smaller or non-finite values", async () => {
@@ -203,7 +209,9 @@ describe("CadetAcpClientHandler seq + enriched fields", () => {
       },
     });
 
-    expect(sent.map((m) => (m as { seq: number }).seq)).toEqual([1, 2]);
+    expect(sent.map((m) => AcpSessionUpdateEventSchema.parse(m).seq)).toEqual([
+      1, 2,
+    ]);
   });
 
   test("forwards ContentChunk messageId on message chunks", async () => {
@@ -295,7 +303,7 @@ describe("CadetAcpClientHandler seq + enriched fields", () => {
     });
 
     // The first real update must still start at seq 1.
-    expect((sent[1] as { seq: number }).seq).toBe(1);
+    expect(AcpSessionUpdateEventSchema.parse(sent[1]).seq).toBe(1);
   });
 
   test("usage_update is dropped during replay suppression", async () => {
@@ -461,7 +469,7 @@ describe("CadetAcpClientHandler seq + enriched fields", () => {
     });
 
     expect(sent).toHaveLength(1);
-    const msg = sent[0] as { rawInput?: unknown; rawOutput?: unknown };
+    const msg = AcpSessionUpdateEventSchema.parse(sent[0]);
     expect(msg.rawInput).toBeUndefined();
     expect(msg.rawOutput).toBeUndefined();
   });
@@ -510,7 +518,7 @@ describe("CadetAcpClientHandler seq + enriched fields", () => {
     });
 
     expect(sent).toHaveLength(1);
-    const msg = sent[0] as { rawOutput?: unknown };
+    const msg = AcpSessionUpdateEventSchema.parse(sent[0]);
     // Under the 16 KiB cap — forwarded structurally, unchanged.
     expect(msg.rawOutput).toEqual({ ok: true });
   });
@@ -534,11 +542,12 @@ describe("CadetAcpClientHandler seq + enriched fields", () => {
     });
 
     expect(sent).toHaveLength(1);
-    const msg = sent[0] as { rawOutput?: unknown };
+    const msg = AcpSessionUpdateEventSchema.parse(sent[0]);
     // Oversize payloads are replaced with a short marker so a single large
     // rawOutput can't evict real transcript events from the session buffer.
     expect(typeof msg.rawOutput).toBe("string");
-    expect(msg.rawOutput as string).toStartWith("[raw payload omitted:");
+    assert(typeof msg.rawOutput === "string");
+    expect(msg.rawOutput).toStartWith("[raw payload omitted:");
     // The original large value must not survive into the forwarded event.
     expect(JSON.stringify(sent[0])).not.toContain(huge);
   });
@@ -562,9 +571,10 @@ describe("CadetAcpClientHandler seq + enriched fields", () => {
     });
 
     expect(sent).toHaveLength(1);
-    const msg = sent[0] as { rawInput?: unknown };
+    const msg = AcpSessionUpdateEventSchema.parse(sent[0]);
     expect(typeof msg.rawInput).toBe("string");
-    expect(msg.rawInput as string).toStartWith("[raw payload omitted:");
+    assert(typeof msg.rawInput === "string");
+    expect(msg.rawInput).toStartWith("[raw payload omitted:");
     expect(JSON.stringify(sent[0])).not.toContain(huge);
   });
 
@@ -581,7 +591,7 @@ describe("CadetAcpClientHandler seq + enriched fields", () => {
     });
 
     expect(sent).toHaveLength(1);
-    const msg = sent[0] as { rawInput?: unknown; rawOutput?: unknown };
+    const msg = AcpSessionUpdateEventSchema.parse(sent[0]);
     expect(msg.rawInput).toBeUndefined();
     expect(msg.rawOutput).toBeUndefined();
   });
@@ -622,7 +632,7 @@ describe("CadetAcpClientHandler seq + enriched fields", () => {
     });
 
     expect(sent).toHaveLength(1);
-    const msg = sent[0] as { locations?: unknown };
+    const msg = AcpSessionUpdateEventSchema.parse(sent[0]);
     expect(msg.locations).toBeUndefined();
     expect("locations" in msg && msg.locations !== undefined).toBe(false);
   });
@@ -650,7 +660,7 @@ describe("CadetAcpClientHandler seq + enriched fields", () => {
     // The raw secret must not survive into the forwarded event, which flows
     // into the session buffer and the persisted event_log_json.
     expect(JSON.stringify(sent[0])).not.toContain(secret);
-    const msg = sent[0] as { rawInput?: unknown; rawOutput?: unknown };
+    const msg = AcpSessionUpdateEventSchema.parse(sent[0]);
     expect(JSON.stringify(msg.rawInput)).toContain("<redacted");
     expect(JSON.stringify(msg.rawOutput)).toContain("<redacted");
   });
@@ -673,7 +683,7 @@ describe("CadetAcpClientHandler seq + enriched fields", () => {
 
     expect(sent).toHaveLength(1);
     expect(JSON.stringify(sent[0])).not.toContain(secret);
-    const msg = sent[0] as { rawInput?: unknown; rawOutput?: unknown };
+    const msg = AcpSessionUpdateEventSchema.parse(sent[0]);
     expect(JSON.stringify(msg.rawInput)).toContain("<redacted");
     expect(JSON.stringify(msg.rawOutput)).toContain("<redacted");
   });
@@ -767,7 +777,7 @@ describe("CadetAcpClientHandler seq + enriched fields", () => {
     });
 
     expect(sent).toHaveLength(1);
-    const msg = sent[0] as { toolTitle?: string };
+    const msg = AcpSessionUpdateEventSchema.parse(sent[0]);
     expect(msg.toolTitle).not.toContain("AKIAQ7XK4PNZ3RJD2WTV");
     expect(msg.toolTitle).toContain("<redacted");
   });
@@ -786,7 +796,7 @@ describe("CadetAcpClientHandler seq + enriched fields", () => {
     });
 
     expect(sent).toHaveLength(1);
-    const msg = sent[0] as { toolTitle?: string };
+    const msg = AcpSessionUpdateEventSchema.parse(sent[0]);
     expect(msg.toolTitle).not.toContain("AKIAFA01L49X7HW9DM2Y");
     expect(msg.toolTitle).toContain("<redacted");
   });

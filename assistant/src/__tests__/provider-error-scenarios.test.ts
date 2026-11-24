@@ -66,13 +66,13 @@ mock.module("../util/retry.js", () => {
       "ETIMEDOUT",
       "EPIPE",
     ]);
-    const code = (error as NodeJS.ErrnoException).code;
-    if (code && retryableCodes.has(code)) {
+    const code = "code" in error ? error.code : undefined;
+    if (typeof code === "string" && retryableCodes.has(code)) {
       return true;
     }
     if (error.cause instanceof Error) {
-      const causeCode = (error.cause as NodeJS.ErrnoException).code;
-      if (causeCode && retryableCodes.has(causeCode)) {
+      const causeCode = "code" in error.cause ? error.cause.code : undefined;
+      if (typeof causeCode === "string" && retryableCodes.has(causeCode)) {
         return true;
       }
     }
@@ -93,11 +93,13 @@ mock.module("../util/retry.js", () => {
     if (!headers) {
       return undefined;
     }
-    let raw: string | null | undefined;
-    if (typeof (headers as { get?: unknown }).get === "function") {
-      raw = (headers as { get(k: string): string | null }).get("retry-after");
-    } else if (typeof headers === "object") {
-      raw = (headers as Record<string, string>)["retry-after"];
+    let raw: unknown;
+    if (typeof headers === "object") {
+      if ("get" in headers && typeof headers.get === "function") {
+        raw = headers.get("retry-after");
+      } else if ("retry-after" in headers) {
+        raw = headers["retry-after"];
+      }
     }
     if (typeof raw === "string") {
       return parseRetryAfterMs(raw);
@@ -271,8 +273,8 @@ describe("RetryProvider — rate limit backoff", () => {
       await provider.sendMessage(MESSAGES);
       expect(true).toBe(false);
     } catch (err) {
-      const flag = (err as Error & { retriesExhausted?: boolean })
-        .retriesExhausted;
+      assert(err instanceof Error);
+      const flag = "retriesExhausted" in err ? err.retriesExhausted : undefined;
       expect(flag).toBe(true);
       // Retry loop should have used all attempts before surrendering.
       expect(inner.calls).toBe(DEFAULT_MAX_RETRIES + 1);
@@ -290,8 +292,8 @@ describe("RetryProvider — rate limit backoff", () => {
       await provider.sendMessage(MESSAGES);
       expect(true).toBe(false);
     } catch (err) {
-      const flag = (err as Error & { retriesExhausted?: boolean })
-        .retriesExhausted;
+      assert(err instanceof Error);
+      const flag = "retriesExhausted" in err ? err.retriesExhausted : undefined;
       expect(flag).toBeUndefined();
       expect(inner.calls).toBe(1);
     }
@@ -658,8 +660,9 @@ describe("RetryProvider — reason-driven retryability", () => {
 
 describe("RetryProvider — network error retries", () => {
   test("retries on ECONNRESET", async () => {
-    const err = new Error("connection reset");
-    (err as NodeJS.ErrnoException).code = "ECONNRESET";
+    const err = Object.assign(new Error("connection reset"), {
+      code: "ECONNRESET",
+    });
     const inner = makeFlaky(1, err);
     const provider = new RetryProvider(inner);
 
@@ -669,8 +672,9 @@ describe("RetryProvider — network error retries", () => {
   });
 
   test("retries on ECONNREFUSED", async () => {
-    const err = new Error("connection refused");
-    (err as NodeJS.ErrnoException).code = "ECONNREFUSED";
+    const err = Object.assign(new Error("connection refused"), {
+      code: "ECONNREFUSED",
+    });
     const inner = makeFlaky(1, err);
     const provider = new RetryProvider(inner);
 
@@ -680,8 +684,7 @@ describe("RetryProvider — network error retries", () => {
   });
 
   test("retries on ETIMEDOUT", async () => {
-    const err = new Error("timed out");
-    (err as NodeJS.ErrnoException).code = "ETIMEDOUT";
+    const err = Object.assign(new Error("timed out"), { code: "ETIMEDOUT" });
     const inner = makeFlaky(1, err);
     const provider = new RetryProvider(inner);
 
@@ -690,8 +693,9 @@ describe("RetryProvider — network error retries", () => {
   });
 
   test("retries on ECONNRESET in error cause chain", async () => {
-    const cause = new Error("socket hangup");
-    (cause as NodeJS.ErrnoException).code = "ECONNRESET";
+    const cause = Object.assign(new Error("socket hangup"), {
+      code: "ECONNRESET",
+    });
     const outer = new Error("fetch failed", { cause });
     const inner = makeFlaky(1, outer);
     const provider = new RetryProvider(inner);
@@ -923,7 +927,8 @@ describe("RetryProvider — streaming corruption retries", () => {
     const lastMessage = retried[retried.length - 1]!;
     expect(lastMessage.role).toBe("user");
     expect(lastMessage.content).toHaveLength(2);
-    const hint = lastMessage.content[1] as { type: string; text: string };
+    const hint = lastMessage.content[1];
+    assert(hint.type === "text");
     expect(hint.type).toBe("text");
     expect(hint.text).toContain("strict JSON");
     // The caller's array is never mutated.
@@ -966,7 +971,8 @@ describe("RetryProvider — streaming corruption retries", () => {
     const lastMessage = retried[retried.length - 1]!;
     expect(lastMessage.role).toBe("user");
     expect(lastMessage.content).toHaveLength(2);
-    const hint = lastMessage.content[1] as { type: string; text: string };
+    const hint = lastMessage.content[1];
+    assert(hint.type === "text");
     expect(hint.type).toBe("text");
     expect(hint.text).toContain("did not parse");
     expect(MESSAGES[MESSAGES.length - 1]!.content).toHaveLength(1);
@@ -1255,7 +1261,8 @@ describe("createStreamTimeout — edge cases", () => {
 
     expect(signal.aborted).toBe(true);
     expect(signal.reason).toBeInstanceOf(Error);
-    expect((signal.reason as Error).message).toBe("already cancelled");
+    assert(signal.reason instanceof Error);
+    expect(signal.reason.message).toBe("already cancelled");
     cleanup();
   });
 
@@ -1286,7 +1293,8 @@ describe("createStreamTimeout — edge cases", () => {
     });
 
     expect(signal.reason).toBeInstanceOf(Error);
-    expect((signal.reason as Error).message).toContain("0.1s");
+    assert(signal.reason instanceof Error);
+    expect(signal.reason.message).toContain("0.1s");
     cleanup();
   });
 });
