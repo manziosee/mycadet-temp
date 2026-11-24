@@ -12,6 +12,8 @@
  */
 import { describe, expect, test } from "bun:test";
 
+import { z } from "zod";
+
 import type { Message } from "../../types.js";
 import { OpenAIChatCompletionsProvider } from "../chat-completions-provider.js";
 import { OpenAIResponsesProvider } from "../responses-provider.js";
@@ -19,6 +21,16 @@ import { OpenAIResponsesProvider } from "../responses-provider.js";
 // ---------------------------------------------------------------------------
 // Responses transport harness
 // ---------------------------------------------------------------------------
+
+type WireContentPart = { type: string; text?: string; [key: string]: unknown };
+type ResponsesInputItem = {
+  type?: string;
+  role?: string;
+  content?: WireContentPart[];
+  [key: string]: unknown;
+};
+type ResponsesRequest = { input: ResponsesInputItem[] };
+type ChatRequest = { messages: ChatMessageParam[] };
 
 type ResponsesStreamEvent = { type: string; [key: string]: unknown };
 
@@ -49,14 +61,14 @@ function makeEventStream(
 
 /** Swap `responses.create` for a canned stream that records request params. */
 function stubResponsesCreate(provider: OpenAIResponsesProvider): {
-  input: () => unknown[];
+  input: () => ResponsesInputItem[];
 } {
-  let captured: unknown;
+  let captured: ResponsesRequest | undefined;
   const inner = provider as unknown as {
     client: {
       responses: {
         create: (
-          params: unknown,
+          params: ResponsesRequest,
         ) => Promise<AsyncIterable<ResponsesStreamEvent>>;
       };
     };
@@ -66,7 +78,7 @@ function stubResponsesCreate(provider: OpenAIResponsesProvider): {
     return makeEventStream(RESPONSES_OK_EVENTS);
   };
   return {
-    input: () => (captured as { input: unknown[] }).input,
+    input: () => captured!.input,
   };
 }
 
@@ -101,7 +113,7 @@ function makeChunkStream(chunks: ChatChunk[]): AsyncIterable<ChatChunk> {
 
 type ChatMessageParam = {
   role: string;
-  content: string | Array<Record<string, unknown>>;
+  content: string | WireContentPart[];
   tool_call_id?: string;
 };
 
@@ -109,12 +121,12 @@ type ChatMessageParam = {
 function stubChatCreate(provider: OpenAIChatCompletionsProvider): {
   messages: () => ChatMessageParam[];
 } {
-  let captured: unknown;
+  let captured: ChatRequest | undefined;
   const inner = provider as unknown as {
     client: {
       chat: {
         completions: {
-          create: (params: unknown) => Promise<AsyncIterable<ChatChunk>>;
+          create: (params: ChatRequest) => Promise<AsyncIterable<ChatChunk>>;
         };
       };
     };
@@ -124,7 +136,7 @@ function stubChatCreate(provider: OpenAIChatCompletionsProvider): {
     return makeChunkStream(CHAT_OK_CHUNKS);
   };
   return {
-    messages: () => (captured as { messages: ChatMessageParam[] }).messages,
+    messages: () => captured!.messages,
   };
 }
 
@@ -247,7 +259,7 @@ describe("OpenAIResponsesProvider orphan tool_result guard", () => {
 
       await provider.sendMessage(pairedHistory(shape.pairedId));
 
-      const input = stub.input() as Array<Record<string, unknown>>;
+      const input = stub.input();
       expect(input).toHaveLength(3);
       expect(input[1]).toEqual({
         type: "function_call",
@@ -268,7 +280,7 @@ describe("OpenAIResponsesProvider orphan tool_result guard", () => {
 
       await provider.sendMessage(orphanHistory(shape.orphanId));
 
-      const input = stub.input() as Array<Record<string, unknown>>;
+      const input = stub.input();
       // No function_call_output items at all: the only tool_result was
       // orphaned.
       expect(input.some((item) => item.type === "function_call_output")).toBe(
@@ -277,14 +289,10 @@ describe("OpenAIResponsesProvider orphan tool_result guard", () => {
 
       // The orphan's content is preserved as prefixed text inside the user
       // message, alongside the message's own text.
-      const firstUser = input[0] as {
-        type: string;
-        role: string;
-        content: Array<{ type: string; text?: string }>;
-      };
+      const firstUser = input[0];
       expect(firstUser.type).toBe("message");
       expect(firstUser.role).toBe("user");
-      const texts = firstUser.content.map((part) => part.text ?? "");
+      const texts = firstUser.content!.map((part) => part.text ?? "");
       expect(texts).toContain("continue from here");
       expect(texts).toContain("[orphaned tool result] stranded output");
     });
@@ -296,7 +304,7 @@ describe("OpenAIResponsesProvider orphan tool_result guard", () => {
 
     await provider.sendMessage(forwardReferenceHistory());
 
-    const input = stub.input() as Array<Record<string, unknown>>;
+    const input = stub.input();
     const outputs = input.filter(
       (item) => item.type === "function_call_output",
     );
@@ -309,10 +317,8 @@ describe("OpenAIResponsesProvider orphan tool_result guard", () => {
       },
     ]);
     // The premature result is degraded into the first user message.
-    const firstUser = input[0] as {
-      content: Array<{ type: string; text?: string }>;
-    };
-    const texts = firstUser.content.map((part) => part.text ?? "");
+    const firstUser = input[0];
+    const texts = firstUser.content!.map((part) => part.text ?? "");
     expect(texts).toContain("[orphaned tool result] premature output");
   });
 });
@@ -360,7 +366,7 @@ describe("OpenAIChatCompletionsProvider orphan tool_result guard", () => {
       expect(firstUser).toBeDefined();
       const content = firstUser!.content;
       const texts = Array.isArray(content)
-        ? content.map((part) => (part.text as string) ?? "")
+        ? content.map((part) => part.text ?? "")
         : [content];
       expect(texts).toContain("continue from here");
       expect(texts).toContain("[orphaned tool result] stranded output");
@@ -399,7 +405,7 @@ describe("OpenAIChatCompletionsProvider orphan tool_result guard", () => {
     const sent = stub.messages();
     const toolMessage = sent.find((message) => message.role === "tool");
     expect(toolMessage).toBeDefined();
-    expect(JSON.parse(toolMessage!.content as string)).toEqual({
+    expect(JSON.parse(z.string().parse(toolMessage?.content))).toEqual({
       output: schemaResult,
     });
   });
@@ -427,12 +433,10 @@ describe("orphan degradation agrees across both OpenAI transports", () => {
     const provider = new OpenAIResponsesProvider("sk-test", "gpt-5.2");
     const stub = stubResponsesCreate(provider);
     await provider.sendMessage(history);
-    const input = stub.input() as Array<Record<string, unknown>>;
+    const input = stub.input();
     return input
-      .flatMap((item) =>
-        Array.isArray(item.content) ? (item.content as unknown[]) : [],
-      )
-      .map((part) => (part as { text?: string }).text ?? "")
+      .flatMap((item) => (Array.isArray(item.content) ? item.content : []))
+      .map((part) => part.text ?? "")
       .filter((text) => text.startsWith("[orphaned"));
   }
 
@@ -454,9 +458,7 @@ describe("orphan degradation agrees across both OpenAI transports", () => {
         // string on this transport rather than a one-element array.
         .flatMap((message) =>
           Array.isArray(message.content)
-            ? (message.content as unknown[]).map(
-                (part) => (part as { text?: string }).text ?? "",
-              )
+            ? message.content.map((part) => part.text ?? "")
             : [String(message.content ?? "")],
         )
         .filter((text) => text.startsWith("[orphaned"))

@@ -1,5 +1,6 @@
 import { afterAll, beforeEach, describe, expect, mock, test } from "bun:test";
 
+import { AssistantConfigSchema } from "../../../config/schema.js";
 import type { SparseEmbedding } from "../embedding-types.js";
 
 // ---------------------------------------------------------------------------
@@ -29,11 +30,16 @@ interface InitCall {
   embeddingModel?: string;
 }
 
-const calls = {
-  init: [] as InitCall[],
-  upserts: [] as Array<{ targetType: string; targetId: string }>,
-  get: [] as Array<{ targetId: string }>,
-  deleteScoped: [] as Array<{ targetId: string }>,
+const calls: {
+  init: InitCall[];
+  upserts: Array<{ targetType: string; targetId: string }>;
+  get: Array<{ targetId: string }>;
+  deleteScoped: Array<{ targetId: string }>;
+} = {
+  init: [],
+  upserts: [],
+  get: [],
+  deleteScoped: [],
 };
 
 const fakeQdrant = {
@@ -78,20 +84,23 @@ mock.module("../qdrant-circuit-breaker.js", () => ({
 mock.module("../embed.js", () => ({
   embedWithRetry: async () => ({
     provider: "gemini",
-    model: "test-embed-model",
+    geminiModel: "test-embed-model",
     vectors: [[0.1, 0.2, 0.3]],
   }),
 }));
 mock.module("../embedding-backend.js", () => ({
   selectEmbeddingBackend: async () => ({
-    backend: { provider: "gemini", model: liveConfig.memory.embeddings.model },
+    backend: {
+      provider: "gemini",
+      model: liveConfig.memory.embeddings.geminiModel,
+    },
     reason: null,
   }),
   getMemoryBackendStatus: async () => ({
     enabled: true,
     degraded: false,
     provider: "gemini",
-    model: liveConfig.memory.embeddings.model,
+    model: liveConfig.memory.embeddings.geminiModel,
     reason: null,
   }),
   generateSparseEmbedding: (): SparseEmbedding => ({
@@ -101,7 +110,7 @@ mock.module("../embedding-backend.js", () => ({
 }));
 
 /** The workspace config `getConfig()` returns; mutated to simulate a reload. */
-let liveConfig = {
+let liveConfig = AssistantConfigSchema.parse({
   memory: {
     qdrant: {
       collection: "cadet_memory",
@@ -109,9 +118,9 @@ let liveConfig = {
       onDisk: true,
       quantization: "scalar",
     },
-    embeddings: { provider: "gemini", model: "test-embed-model" },
+    embeddings: { provider: "gemini", geminiModel: "test-embed-model" },
   },
-};
+});
 
 mock.module("../../../config/loader.js", () => ({
   getConfig: () => liveConfig,
@@ -133,11 +142,7 @@ afterAll(() => {
 
 describe("plugin index without a pre-initialized Qdrant client", () => {
   test("indexDocument initializes the client from config instead of throwing", async () => {
-    const res = await indexDocument(
-      liveConfig as never,
-      "ledger",
-      "Morning coffee",
-    );
+    const res = await indexDocument(liveConfig, "ledger", "Morning coffee");
 
     expect(res.documentId).toBeTruthy();
     expect(calls.upserts).toEqual([
@@ -158,9 +163,9 @@ describe("plugin index without a pre-initialized Qdrant client", () => {
   });
 
   test("query/get/remove also work without a pre-initialized client", async () => {
-    await expect(
-      queryIndex(liveConfig as never, "ledger", "coffee"),
-    ).resolves.toEqual([]);
+    await expect(queryIndex(liveConfig, "ledger", "coffee")).resolves.toEqual(
+      [],
+    );
     await expect(getDocument("ledger", "doc-1")).resolves.toBeNull();
     await expect(removeDocument("ledger", "doc-1")).resolves.toBeUndefined();
 
@@ -169,8 +174,8 @@ describe("plugin index without a pre-initialized Qdrant client", () => {
   });
 
   test("an unchanged config reuses the client instead of rebuilding it", async () => {
-    await indexDocument(liveConfig as never, "ledger", "one");
-    await indexDocument(liveConfig as never, "ledger", "two");
+    await indexDocument(liveConfig, "ledger", "one");
+    await indexDocument(liveConfig, "ledger", "two");
     await getDocument("ledger", "doc-1");
 
     expect(calls.upserts).toHaveLength(2);
@@ -178,19 +183,23 @@ describe("plugin index without a pre-initialized Qdrant client", () => {
   });
 
   test("a live embedding-config change rebuilds the client", async () => {
-    await indexDocument(liveConfig as never, "ledger", "before");
+    await indexDocument(liveConfig, "ledger", "before");
     expect(calls.init).toHaveLength(0);
 
     // A model swap at the same dimension: the client's captured model identity
     // is now wrong, so reusing it would mix two models' vectors in one
     // collection without tripping the sentinel migration.
     liveConfig = {
+      ...liveConfig,
       memory: {
         ...liveConfig.memory,
-        embeddings: { provider: "gemini", model: "swapped-embed-model" },
+        embeddings: {
+          ...liveConfig.memory.embeddings,
+          geminiModel: "swapped-embed-model",
+        },
       },
     };
-    await indexDocument(liveConfig as never, "ledger", "after");
+    await indexDocument(liveConfig, "ledger", "after");
 
     expect(calls.init).toEqual([
       {
@@ -206,12 +215,13 @@ describe("plugin index without a pre-initialized Qdrant client", () => {
 
   test("a dimension change rebuilds the client", async () => {
     liveConfig = {
+      ...liveConfig,
       memory: {
         ...liveConfig.memory,
         qdrant: { ...liveConfig.memory.qdrant, vectorSize: 1536 },
       },
     };
-    await indexDocument(liveConfig as never, "ledger", "resized");
+    await indexDocument(liveConfig, "ledger", "resized");
 
     expect(calls.init).toHaveLength(1);
     expect(calls.init[0].vectorSize).toBe(1536);

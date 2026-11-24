@@ -33,27 +33,37 @@ mock.module("../../../../../persistence/embeddings/qdrant-client.js", () => ({
   resolveQdrantUrl: () => "http://127.0.0.1:6333",
 }));
 
-const state = {
-  embedCalls: [] as Array<{ inputs: unknown[] }>,
-  sparseCalls: [] as string[],
-  embedReturn: [[0.1, 0.2, 0.3]] as number[][],
-  dimensionAvailable: true,
-  // Programmable Qdrant query response — one entry per `using` channel,
-  // shifted in order so each test can stage dense + sparse results.
+const state: {
+  embedCalls: Array<{ inputs: unknown[] }>;
+  sparseCalls: string[];
+  embedReturn: number[][];
+  dimensionAvailable: boolean;
   queryResponses: {
-    dense: [] as Array<{
+    dense: Array<{
       points: Array<{ score?: number; payload: Record<string, unknown> }>;
-    }>,
-    sparse: [] as Array<{
+    }>;
+    sparse: Array<{
       points: Array<{ score?: number; payload: Record<string, unknown> }>;
-    }>,
-  },
-  queryCalls: [] as Array<{
+    }>;
+  };
+  queryCalls: Array<{
     collection: string;
     using: string;
     limit: number;
     filter: unknown;
-  }>,
+  }>;
+} = {
+  embedCalls: [],
+  sparseCalls: [],
+  embedReturn: [[0.1, 0.2, 0.3]],
+  dimensionAvailable: true,
+  // Programmable Qdrant query response — one entry per `using` channel,
+  // shifted in order so each test can stage dense + sparse results.
+  queryResponses: {
+    dense: [],
+    sparse: [],
+  },
+  queryCalls: [],
 };
 
 // Re-export every real symbol from the embedding-backend module, overriding

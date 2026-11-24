@@ -61,6 +61,10 @@ import {
 } from "../persistence/conversation-crud.js";
 import { getDb } from "../persistence/db-connection.js";
 import { initializeDb } from "../persistence/db-init.js";
+import {
+  conversations,
+  messages,
+} from "../persistence/schema/conversations.js";
 import { providerConnections } from "../persistence/schema/inference.js";
 import { asConversation } from "./helpers/mock-conversation.js";
 import { setConfig } from "./helpers/set-config.js";
@@ -96,8 +100,8 @@ import {
 
 function resetDb() {
   const db = getDb();
-  db.run(`DELETE FROM messages`);
-  db.run(`DELETE FROM conversations`);
+  db.delete(messages).run();
+  db.delete(conversations).run();
 }
 
 /**
@@ -109,9 +113,9 @@ function resetDb() {
 function makeLiveConversationStub(conversationId: string): Conversation {
   return asConversation({
     conversationId,
-    inferenceProfile: null as string | null,
-    inferenceProfileSessionId: null as string | null,
-    inferenceProfileExpiresAt: null as number | null,
+    inferenceProfile: null,
+    inferenceProfileSessionId: null,
+    inferenceProfileExpiresAt: null,
     applyInferenceProfileState(
       this: {
         inferenceProfile: string | null;
@@ -335,7 +339,7 @@ describe("setInferenceProfileSession", () => {
 
     // No DB write occurred — `updatedAt` is unchanged.
     const after = getConversation(conv.id);
-    expect(after?.updatedAt).toBe(updatedAtBefore as number);
+    expect(after?.updatedAt).toBe(updatedAtBefore);
   });
 
   test("clear after sticky non-session override — still writes and publishes", async () => {

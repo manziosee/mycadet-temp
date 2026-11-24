@@ -16,7 +16,10 @@
 
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 
-import { AssistantConfig } from "../../../../../config/schema.js";
+import {
+  type AssistantConfig,
+  AssistantConfigSchema,
+} from "../../../../../config/schema.js";
 
 // ---------------------------------------------------------------------------
 // Module-level mocks (registered before `await import("../activation.js")`).
@@ -29,9 +32,27 @@ mock.module("../../../../../persistence/embeddings/qdrant-client.js", () => ({
   resolveQdrantUrl: () => "http://127.0.0.1:6333",
 }));
 
-const state = {
-  embedCalls: [] as Array<{ inputs: unknown[] }>,
-  embedReturn: [[0.1, 0.2, 0.3]] as number[][],
+const state: {
+  embedCalls: Array<{ inputs: unknown[] }>;
+  embedReturn: number[][];
+  dimensionAvailable: boolean;
+  queryResponses: {
+    dense: Array<{
+      points: Array<{ score?: number; payload: Record<string, unknown> }>;
+    }>;
+    sparse: Array<{
+      points: Array<{ score?: number; payload: Record<string, unknown> }>;
+    }>;
+  };
+  queryCalls: Array<{
+    collection: string;
+    using: string;
+    limit: number;
+    filter: unknown;
+  }>;
+} = {
+  embedCalls: [],
+  embedReturn: [[0.1, 0.2, 0.3]],
   dimensionAvailable: true,
   /**
    * Programmable Qdrant query response queues — one per channel. Each test
@@ -39,19 +60,10 @@ const state = {
    * `selectCandidates` drain them.
    */
   queryResponses: {
-    dense: [] as Array<{
-      points: Array<{ score?: number; payload: Record<string, unknown> }>;
-    }>,
-    sparse: [] as Array<{
-      points: Array<{ score?: number; payload: Record<string, unknown> }>;
-    }>,
+    dense: [],
+    sparse: [],
   },
-  queryCalls: [] as Array<{
-    collection: string;
-    using: string;
-    limit: number;
-    filter: unknown;
-  }>,
+  queryCalls: [],
 };
 
 const realEmbeddingBackend =
@@ -110,9 +122,12 @@ mock.module("@qdrant/js-client-rest", () => ({
 // program the boost outcome. The activation pipeline now passes both the
 // user-channel and assistant-channel queries into a single rerank call, so
 // `rerankState.calls` records the full `queries` array per invocation.
-const rerankState = {
-  scores: null as Map<string, number> | null,
-  calls: [] as Array<{ queries: string[]; candidates: string[] }>,
+const rerankState: {
+  scores: Map<string, number> | null;
+  calls: Array<{ queries: string[]; candidates: string[] }>;
+} = {
+  scores: null,
+  calls: [],
 };
 mock.module("../reranker.js", () => ({
   rerankCandidates: async (
@@ -187,7 +202,7 @@ function makeConfig(
     ann_candidate_limit: number | null;
   }> = {},
 ): AssistantConfig {
-  return {
+  const config = AssistantConfigSchema.parse({
     memory: {
       v2: {
         d: 0.3,
@@ -198,10 +213,12 @@ function makeConfig(
         dense_weight: 1.0,
         sparse_weight: 0.0,
         ann_candidate_limit: null,
-        ...overrides,
       },
     },
-  } as unknown as AssistantConfig;
+  });
+  // Scoring tests also exercise out-of-range weights after config validation.
+  Object.assign(config.memory.v2, overrides);
+  return config;
 }
 
 /**
@@ -632,7 +649,7 @@ describe("computeOwnActivation", () => {
       ["semantic", 0.95],
     ]);
 
-    const config = {
+    const config = AssistantConfigSchema.parse({
       memory: {
         v2: {
           d: 0.0,
@@ -649,7 +666,7 @@ describe("computeOwnActivation", () => {
           },
         },
       },
-    } as unknown as AssistantConfig;
+    });
 
     const out = await computeOwnActivation({
       candidates: new Set(["lexical", "semantic"]),
@@ -702,7 +719,7 @@ describe("computeOwnActivation", () => {
       ["c", 0.5],
     ]);
 
-    const config = {
+    const config = AssistantConfigSchema.parse({
       memory: {
         v2: {
           d: 0.0,
@@ -719,7 +736,7 @@ describe("computeOwnActivation", () => {
           },
         },
       },
-    } as unknown as AssistantConfig;
+    });
 
     await computeOwnActivation({
       candidates: new Set(["a", "b", "c"]),
@@ -758,7 +775,7 @@ describe("computeOwnActivation", () => {
       ["loser", 0.5],
     ]);
 
-    const config = {
+    const config = AssistantConfigSchema.parse({
       memory: {
         v2: {
           d: 0.0,
@@ -775,7 +792,7 @@ describe("computeOwnActivation", () => {
           },
         },
       },
-    } as unknown as AssistantConfig;
+    });
 
     const out = await computeOwnActivation({
       candidates: new Set(["winner", "loser"]),
@@ -828,7 +845,7 @@ describe("computeOwnActivation", () => {
     stageHybridResponse([]); // now
     rerankState.scores = new Map([["a", 0.8]]);
 
-    const config = {
+    const config = AssistantConfigSchema.parse({
       memory: {
         v2: {
           d: 0.0,
@@ -845,7 +862,7 @@ describe("computeOwnActivation", () => {
           },
         },
       },
-    } as unknown as AssistantConfig;
+    });
 
     const out = await computeOwnActivation({
       candidates: new Set(["a"]),

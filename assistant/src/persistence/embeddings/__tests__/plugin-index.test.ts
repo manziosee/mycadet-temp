@@ -1,5 +1,8 @@
 import { afterAll, beforeEach, describe, expect, mock, test } from "bun:test";
 
+import { z } from "zod";
+
+import { AssistantConfigSchema } from "../../../config/schema.js";
 import type { SparseEmbedding } from "../embedding-types.js";
 
 // ---------------------------------------------------------------------------
@@ -22,27 +25,39 @@ interface UpsertCall {
   sparse?: SparseEmbedding;
 }
 
-const calls = {
-  upserts: [] as UpsertCall[],
-  hybrid: [] as Array<{ filter?: unknown }>,
-  search: [] as Array<{ limit: number; filter: unknown }>,
-  get: [] as Array<{ targetId: string; plugin?: string }>,
-  deleteScoped: [] as Array<{ targetId: string; plugin: string }>,
-  deletePlugin: [] as string[],
+const calls: {
+  upserts: UpsertCall[];
+  hybrid: Array<{ filter?: unknown }>;
+  search: Array<{ limit: number; filter: unknown }>;
+  get: Array<{ targetId: string; plugin?: string }>;
+  deleteScoped: Array<{ targetId: string; plugin: string }>;
+  deletePlugin: string[];
+} = {
+  upserts: [],
+  hybrid: [],
+  search: [],
+  get: [],
+  deleteScoped: [],
+  deletePlugin: [],
 };
 // Keyed by the (globally unique, namespace-qualified) target_id.
 const store = new Map<string, StoredPoint>();
 
-/** Extract a matched value for `key` from a Qdrant-style must filter. */
+const mustFilterSchema = z.object({
+  must: z
+    .array(
+      z.object({
+        key: z.string(),
+        match: z.object({ value: z.unknown() }),
+      }),
+    )
+    .optional(),
+});
+
 function mustValue(filter: unknown, key: string): unknown {
-  const must =
-    (filter as { must?: Array<Record<string, unknown>> })?.must ?? [];
-  for (const cond of must) {
-    if (cond.key === key) {
-      return (cond.match as { value?: unknown } | undefined)?.value;
-    }
-  }
-  return undefined;
+  return mustFilterSchema
+    .parse(filter ?? {})
+    .must?.find((clause) => clause.key === key)?.match.value;
 }
 
 function pointsMatchingFilter(filter: unknown): StoredPoint[] {
@@ -186,7 +201,7 @@ const {
 } = await import("../plugin-index.js");
 
 // A stand-in config; every host boundary that reads it is mocked above.
-const CONFIG = {} as never;
+const CONFIG = AssistantConfigSchema.parse({});
 
 beforeEach(() => {
   store.clear();
@@ -280,9 +295,7 @@ describe("plugin-owned index", () => {
     });
     const hits = await queryIndex(CONFIG, "ledger", "budget");
     expect(calls.hybrid).toHaveLength(1);
-    const filter = calls.hybrid[0].filter as {
-      must: Array<Record<string, { value: string }>>;
-    };
+    const filter = mustFilterSchema.parse(calls.hybrid[0].filter);
     expect(filter.must).toEqual(
       expect.arrayContaining([
         { key: "target_type", match: { value: "plugin_index" } },

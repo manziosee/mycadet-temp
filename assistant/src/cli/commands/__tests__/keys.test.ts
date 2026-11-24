@@ -12,12 +12,15 @@
  *   - delete forwards the caller's force choice to the daemon client
  *   - an in-use refusal points at the --force escape hatch
  */
-
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 
 import { Command } from "commander";
 
 import { useMemorySecureKeys } from "../../../__tests__/helpers/secure-keys.js";
+import type {
+  deleteSecureKeyViaDaemon,
+  setSecureKeyViaDaemon,
+} from "../../lib/daemon-credential-client.js";
 
 // ---------------------------------------------------------------------------
 // Mock state
@@ -29,8 +32,10 @@ interface DeleteResultStub {
   code?: string;
 }
 
-let mockSetSecureKeyViaDaemon = mock(() => Promise.resolve({ ok: true }));
-let mockDeleteSecureKeyViaDaemon = mock(
+let mockSetSecureKeyViaDaemon = mock<typeof setSecureKeyViaDaemon>(() =>
+  Promise.resolve({ ok: true }),
+);
+let mockDeleteSecureKeyViaDaemon = mock<typeof deleteSecureKeyViaDaemon>(
   (): Promise<DeleteResultStub> => Promise.resolve({ result: "deleted" }),
 );
 
@@ -72,8 +77,10 @@ let savedSkillContextJson: string | undefined;
 beforeEach(() => {
   // Any stray direct secure-keys write lands in memory, not the vault.
   useMemorySecureKeys();
-  mockSetSecureKeyViaDaemon = mock(() => Promise.resolve({ ok: true }));
-  mockDeleteSecureKeyViaDaemon = mock(
+  mockSetSecureKeyViaDaemon = mock<typeof setSecureKeyViaDaemon>(() =>
+    Promise.resolve({ ok: true }),
+  );
+  mockDeleteSecureKeyViaDaemon = mock<typeof deleteSecureKeyViaDaemon>(
     (): Promise<DeleteResultStub> => Promise.resolve({ result: "deleted" }),
   );
   loggedErrors.length = 0;
@@ -114,14 +121,14 @@ async function runKeysCommand(...args: string[]) {
   const stderrChunks: string[] = [];
   const origStdoutWrite = process.stdout.write.bind(process.stdout);
   const origStderrWrite = process.stderr.write.bind(process.stderr);
-  process.stdout.write = ((chunk: unknown) => {
+  process.stdout.write = (chunk: unknown) => {
     stdoutChunks.push(typeof chunk === "string" ? chunk : String(chunk));
     return true;
-  }) as typeof process.stdout.write;
-  process.stderr.write = ((chunk: unknown) => {
+  };
+  process.stderr.write = (chunk: unknown) => {
     stderrChunks.push(typeof chunk === "string" ? chunk : String(chunk));
     return true;
-  }) as typeof process.stderr.write;
+  };
 
   try {
     const program = new Command();
@@ -187,8 +194,7 @@ describe("assistant keys set (agent-shell guard)", () => {
     );
 
     expect(mockSetSecureKeyViaDaemon).toHaveBeenCalledTimes(1);
-    const [type, provider, value] = mockSetSecureKeyViaDaemon.mock
-      .calls[0] as unknown as [string, string, string];
+    const [type, provider, value] = mockSetSecureKeyViaDaemon.mock.calls[0];
     expect(type).toBe("api_key");
     expect(provider).toBe("acme");
     expect(value).toBe("machine-obtained-value");
@@ -199,8 +205,7 @@ describe("assistant keys set (agent-shell guard)", () => {
     await runKeysCommand("keys", "set", "acme", "user-terminal-value");
 
     expect(mockSetSecureKeyViaDaemon).toHaveBeenCalledTimes(1);
-    const [type, provider, value] = mockSetSecureKeyViaDaemon.mock
-      .calls[0] as unknown as [string, string, string];
+    const [type, provider, value] = mockSetSecureKeyViaDaemon.mock.calls[0];
     expect(type).toBe("api_key");
     expect(provider).toBe("acme");
     expect(value).toBe("user-terminal-value");
@@ -220,8 +225,7 @@ describe("assistant keys delete (in-use guard)", () => {
 
     // THEN the daemon is asked for a non-forced delete
     expect(mockDeleteSecureKeyViaDaemon).toHaveBeenCalledTimes(1);
-    const [type, provider, force] = mockDeleteSecureKeyViaDaemon.mock
-      .calls[0] as unknown as [string, string, boolean];
+    const [type, provider, force] = mockDeleteSecureKeyViaDaemon.mock.calls[0];
     expect(type).toBe("api_key");
     expect(provider).toBe("acme");
     expect(force).toBe(false);
@@ -234,8 +238,7 @@ describe("assistant keys delete (in-use guard)", () => {
     await runKeysCommand("keys", "delete", "acme", "--force");
 
     // THEN the daemon receives the force flag
-    const [, , force] = mockDeleteSecureKeyViaDaemon.mock
-      .calls[0] as unknown as [string, string, boolean];
+    const [, , force] = mockDeleteSecureKeyViaDaemon.mock.calls[0];
     expect(force).toBe(true);
   });
 
@@ -252,16 +255,16 @@ describe("assistant keys delete (in-use guard)", () => {
     );
     const exitCalls: number[] = [];
     const origExit = process.exit;
-    process.exit = ((code?: number) => {
-      exitCalls.push(code ?? 0);
+    process.exit = (code?: number | string | null): never => {
+      exitCalls.push(typeof code === "number" ? code : 0);
       throw new Error("__exit__");
-    }) as typeof process.exit;
+    };
 
     // WHEN the delete is attempted without --force
     try {
       await runKeysCommand("keys", "delete", "acme");
     } catch (err) {
-      expect((err as Error).message).toBe("__exit__");
+      expect(err).toHaveProperty("message", "__exit__");
     } finally {
       process.exit = origExit;
     }
