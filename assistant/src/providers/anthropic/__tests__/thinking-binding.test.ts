@@ -1,10 +1,8 @@
 import { describe, expect, test } from "bun:test";
 
-import type Anthropic from "@anthropic-ai/sdk";
-
 import { AnthropicProvider } from "../client.js";
 
-function makeMessage(): Anthropic.Message {
+function makeMessage() {
   return {
     id: "msg_test",
     type: "message",
@@ -19,7 +17,7 @@ function makeMessage(): Anthropic.Message {
       cache_creation_input_tokens: null,
       cache_read_input_tokens: null,
     },
-  } as Anthropic.Message;
+  };
 }
 
 /**
@@ -27,14 +25,15 @@ function makeMessage(): Anthropic.Message {
  * merged params (the client spreads `betas` into them for the beta endpoint)
  * and resolves to an end_turn message.
  */
-function stubProvider(model: string): {
-  provider: AnthropicProvider;
-  calls: Array<Record<string, unknown>>;
-} {
+interface CapturedParams {
+  betas?: string[];
+  thinking?: { type?: string; budget_tokens?: number; block_binding?: unknown };
+}
+function stubProvider(model: string) {
   const provider = new AnthropicProvider("test-key", model);
-  const calls: Array<Record<string, unknown>> = [];
-  const stream = (params: unknown) => {
-    calls.push(params as Record<string, unknown>);
+  const calls: CapturedParams[] = [];
+  const stream = (params: CapturedParams) => {
+    calls.push(params);
     return {
       on() {
         return this;
@@ -61,7 +60,7 @@ describe("thinking-block binding controls", () => {
     );
     expect(calls.length).toBe(1);
     expect(calls[0].betas).toContain("thinking-binding-controls-2026-08-01");
-    const thinking = calls[0].thinking as Record<string, unknown>;
+    const thinking = calls[0].thinking!;
     expect(thinking.block_binding).toEqual({
       prefix_mismatch_behavior: "drop_block",
     });
@@ -73,7 +72,7 @@ describe("thinking-block binding controls", () => {
       [{ role: "user", content: [{ type: "text", text: "hi" }] }],
       { config: { thinking: { type: "enabled", budget_tokens: 2048 } } },
     );
-    const thinking = calls[0].thinking as Record<string, unknown>;
+    const thinking = calls[0].thinking!;
     expect(thinking.type).toBe("enabled");
     expect(thinking.budget_tokens).toBe(2048);
     expect(thinking.block_binding).toEqual({
@@ -98,7 +97,7 @@ describe("thinking-block binding controls", () => {
       { config: { thinking: { type: "adaptive" } } },
     );
     expect(calls[0].betas).toBeUndefined();
-    const thinking = calls[0].thinking as Record<string, unknown> | undefined;
+    const thinking = calls[0].thinking;
     expect(thinking?.block_binding).toBeUndefined();
   });
 });

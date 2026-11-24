@@ -1,4 +1,6 @@
-import { describe, expect, jest, mock, test } from "bun:test";
+import { afterEach, describe, expect, jest, mock, spyOn, test } from "bun:test";
+
+import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 
 // Mock secure-keys so McpOAuthProvider doesn't try to access the credential store
 import { useMemorySecureKeyMap } from "./helpers/secure-keys.js";
@@ -41,21 +43,27 @@ const httpTransport = {
   url: "https://example.com/mcp",
 };
 
+let connectSpy: ReturnType<typeof mockSdkConnect> | undefined;
+
+function mockSdkConnect(impl: (this: Client) => Promise<void>) {
+  return spyOn(Client.prototype, "connect").mockImplementation(impl);
+}
+
+afterEach(() => {
+  connectSpy?.mockRestore();
+  connectSpy = undefined;
+});
+
 describe("McpClient auth error detection", () => {
   test("treats StreamableHTTPError with code 401 as auth error (does not throw)", async () => {
     const client = new McpClient("test-server");
 
-    // Monkey-patch createTransport to throw a 401 StreamableHTTPError
-    (client as any).createTransport = () => ({});
-    (client as any).client = {
-      connect: () => {
-        throw new FakeStreamableHTTPError(
-          401,
-          'Error POSTing to endpoint: {"error":"invalid_token"}',
-        );
-      },
-      close: async () => {},
-    };
+    connectSpy = mockSdkConnect(async () => {
+      throw new FakeStreamableHTTPError(
+        401,
+        'Error POSTing to endpoint: {"error":"invalid_token"}',
+      );
+    });
 
     // Should NOT throw — auth errors are swallowed, isConnected stays false
     await client.connect(httpTransport);
@@ -65,13 +73,9 @@ describe("McpClient auth error detection", () => {
   test("treats StreamableHTTPError with code 403 as auth error (does not throw)", async () => {
     const client = new McpClient("test-server");
 
-    (client as any).createTransport = () => ({});
-    (client as any).client = {
-      connect: () => {
-        throw new FakeStreamableHTTPError(403, "Forbidden");
-      },
-      close: async () => {},
-    };
+    connectSpy = mockSdkConnect(async () => {
+      throw new FakeStreamableHTTPError(403, "Forbidden");
+    });
 
     await client.connect(httpTransport);
     expect(client.isConnected).toBe(false);
@@ -80,13 +84,9 @@ describe("McpClient auth error detection", () => {
   test("swallows non-auth StreamableHTTPError (connect never throws)", async () => {
     const client = new McpClient("test-server");
 
-    (client as any).createTransport = () => ({});
-    (client as any).client = {
-      connect: () => {
-        throw new FakeStreamableHTTPError(500, "Internal Server Error");
-      },
-      close: async () => {},
-    };
+    connectSpy = mockSdkConnect(async () => {
+      throw new FakeStreamableHTTPError(500, "Internal Server Error");
+    });
 
     // Non-auth errors are logged but never propagated — daemon keeps running
     await client.connect(httpTransport);
@@ -96,13 +96,9 @@ describe("McpClient auth error detection", () => {
   test("treats error message containing 'unauthorized' as auth error", async () => {
     const client = new McpClient("test-server");
 
-    (client as any).createTransport = () => ({});
-    (client as any).client = {
-      connect: () => {
-        throw new Error("unauthorized request");
-      },
-      close: async () => {},
-    };
+    connectSpy = mockSdkConnect(async () => {
+      throw new Error("unauthorized request");
+    });
 
     await client.connect(httpTransport);
     expect(client.isConnected).toBe(false);
@@ -111,15 +107,11 @@ describe("McpClient auth error detection", () => {
   test("treats SDK fetchToken 'authorizationCode is required' error as auth error", async () => {
     const client = new McpClient("test-server");
 
-    (client as any).createTransport = () => ({});
-    (client as any).client = {
-      connect: () => {
-        throw new Error(
-          "Either provider.prepareTokenRequest() or authorizationCode is required",
-        );
-      },
-      close: async () => {},
-    };
+    connectSpy = mockSdkConnect(async () => {
+      throw new Error(
+        "Either provider.prepareTokenRequest() or authorizationCode is required",
+      );
+    });
 
     await client.connect(httpTransport);
     expect(client.isConnected).toBe(false);
@@ -131,17 +123,19 @@ describe("McpClient connection lifecycle", () => {
     const onUnexpectedClose = jest.fn();
     const client = new McpClient("test-server", "workspace", onUnexpectedClose);
     let finishConnect: (() => void) | undefined;
-    (client as any).createTransport = () => ({});
-    (client as any).client.connect = () =>
-      new Promise<void>((resolve) => {
+    let onClose: (() => void) | undefined;
+    connectSpy = mockSdkConnect(function () {
+      onClose = this.onclose?.bind(this);
+      return new Promise<void>((resolve) => {
         finishConnect = resolve;
       });
+    });
 
     const connecting = client.connect(httpTransport);
     while (!finishConnect) {
       await Promise.resolve();
     }
-    (client as any).client.onclose();
+    onClose!();
     finishConnect!();
     await connecting;
 
@@ -153,11 +147,13 @@ describe("McpClient connection lifecycle", () => {
   test("reports an unexpected close after connecting", async () => {
     const onUnexpectedClose = jest.fn();
     const client = new McpClient("test-server", "workspace", onUnexpectedClose);
-    (client as any).createTransport = () => ({});
-    (client as any).client.connect = async () => {};
+    let onClose: (() => void) | undefined;
+    connectSpy = mockSdkConnect(async function () {
+      onClose = this.onclose?.bind(this);
+    });
 
     await client.connect(httpTransport);
-    (client as any).client.onclose();
+    onClose!();
 
     expect(client.isConnected).toBe(false);
     expect(onUnexpectedClose).toHaveBeenCalledTimes(1);
@@ -166,14 +162,19 @@ describe("McpClient connection lifecycle", () => {
   test("does not report an intentional disconnect as a transport failure", async () => {
     const onUnexpectedClose = jest.fn();
     const client = new McpClient("test-server", "workspace", onUnexpectedClose);
-    (client as any).createTransport = () => ({});
-    (client as any).client.connect = async () => {};
-    (client as any).client.close = async () => {
-      (client as any).client.onclose();
-    };
+    connectSpy = mockSdkConnect(async () => {});
+    const closeSpy = spyOn(Client.prototype, "close").mockImplementation(
+      async function (this: Client) {
+        this.onclose?.();
+      },
+    );
 
     await client.connect(httpTransport);
-    await client.disconnect();
+    try {
+      await client.disconnect();
+    } finally {
+      closeSpy.mockRestore();
+    }
 
     expect(client.isConnected).toBe(false);
     expect(onUnexpectedClose).not.toHaveBeenCalled();

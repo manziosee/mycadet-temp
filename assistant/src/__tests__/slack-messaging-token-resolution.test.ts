@@ -10,12 +10,23 @@ const secureKeys = useMemorySecureKeyMap();
 const isProviderConnectedMock = mock(
   async (_service: string): Promise<boolean> => false,
 );
+function mockConnection(accessToken: string): OAuthConnection {
+  return {
+    id: "test-connection",
+    provider: "test-provider",
+    accountInfo: null,
+    request: async () => {
+      throw new Error("Unexpected OAuth request");
+    },
+    withToken: (fn) => fn(accessToken),
+  };
+}
+
 const resolveOAuthConnectionMock = mock(
   async (
     _service: string,
     _opts?: { account?: string },
-  ): Promise<OAuthConnection> =>
-    ({ accessToken: "oauth-token" }) as unknown as OAuthConnection,
+  ): Promise<OAuthConnection> => mockConnection("oauth-token"),
 );
 const getConnectionByProviderMock = mock(
   (_provider: string): { status: string } | undefined => undefined,
@@ -78,8 +89,8 @@ function resetAllMocks() {
   isProviderConnectedMock.mockReset();
   isProviderConnectedMock.mockImplementation(async () => false);
   resolveOAuthConnectionMock.mockReset();
-  resolveOAuthConnectionMock.mockImplementation(
-    async () => ({ accessToken: "oauth-token" }) as unknown as OAuthConnection,
+  resolveOAuthConnectionMock.mockImplementation(async () =>
+    mockConnection("oauth-token"),
   );
   getConnectionByProviderMock.mockReset();
   getConnectionByProviderMock.mockImplementation(() => undefined);
@@ -146,9 +157,7 @@ describe("Slack messaging token resolution", () => {
 
     test("returns OAuthConnection when only OAuth slack credentials exist (backwards compat)", async () => {
       // no credentials configured
-      const oauthConn = {
-        accessToken: "xoxp-oauth-token",
-      } as unknown as OAuthConnection;
+      const oauthConn = mockConnection("xoxp-oauth-token");
       resolveOAuthConnectionMock.mockImplementation(async () => oauthConn);
       getConnectionByProviderMock.mockImplementation(() => ({
         status: "active",
@@ -185,9 +194,7 @@ describe("Slack messaging token resolution", () => {
 
     test("returns OAuthConnection for Slack when only OAuth credentials exist (backwards compat)", async () => {
       // no credentials configured
-      const oauthConn = {
-        accessToken: "xoxp-oauth-token",
-      } as unknown as OAuthConnection;
+      const oauthConn = mockConnection("xoxp-oauth-token");
       resolveOAuthConnectionMock.mockImplementation(async () => oauthConn);
       getConnectionByProviderMock.mockImplementation(() => ({
         status: "active",
@@ -224,9 +231,7 @@ describe("Slack messaging token resolution", () => {
     test("Gmail still calls resolveOAuthConnection (no resolveConnection, no isConnected — regression check)", async () => {
       // Gmail has neither resolveConnection nor isConnected.
       // getProviderConnection falls through to resolveOAuthConnection.
-      const oauthConn = {
-        accessToken: "gmail-oauth-token",
-      } as unknown as OAuthConnection;
+      const oauthConn = mockConnection("gmail-oauth-token");
       resolveOAuthConnectionMock.mockImplementation(async () => oauthConn);
 
       const result = await getProviderConnection(gmailMessagingProvider);

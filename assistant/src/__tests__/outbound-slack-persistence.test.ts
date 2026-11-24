@@ -13,9 +13,12 @@
  */
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 
+import pino from "pino";
 import { z } from "zod";
 
+import type { TrustContext } from "../daemon/trust-context-types.js";
 import { jsonObjectSchema } from "./helpers/json-object-schema.js";
+import { createMockProvider, textResponse } from "./helpers/mock-provider.js";
 
 // ── Shared mock plumbing (must precede module-under-test imports) ──────────
 
@@ -191,7 +194,10 @@ import {
 } from "../daemon/conversation-agent-loop-handlers.js";
 import { readSlackMetadataFromMessageMetadata } from "../messaging/providers/slack/message-metadata.js";
 import { deliverReplyViaCallback } from "../runtime/channel-reply-delivery.js";
-import { mockUnownedModeSessions } from "./helpers/mock-conversation.js";
+import {
+  asConversation,
+  mockUnownedModeSessions,
+} from "./helpers/mock-conversation.js";
 import { setConfig } from "./helpers/set-config.js";
 
 // ── Helpers ────────────────────────────────────────────────────────────────
@@ -205,14 +211,14 @@ function makeDeps(
     clientTimezone?: string;
     sourceThreadId?: string;
     /** Turn-local trust; when set, the live slot below diverges from it. */
-    currentTurnTrustContext?: Record<string, unknown>;
+    currentTurnTrustContext?: TrustContext;
   } = {},
 ): EventHandlerDeps {
   const assistantMessageChannel = overrides.assistantMessageChannel ?? "slack";
   return {
-    ctx: {
+    ctx: asConversation({
       conversationId,
-      provider: { name: "anthropic" },
+      provider: createMockProvider([textResponse("")], "anthropic").provider,
       currentTurnSurfaces: [],
       currentTurnTrustContext: overrides.currentTurnTrustContext,
       trustContext: {
@@ -224,25 +230,24 @@ function makeDeps(
       },
       clientTimezone: overrides.clientTimezone,
       modeSessions: mockUnownedModeSessions(),
-    } as unknown as EventHandlerDeps["ctx"],
+    }),
     onEvent: (_msg: AssistantEvent) => {},
     reqId: "test-req-id",
     isFirstMessage: false,
     shouldGenerateTitle: false,
-    rlog: new Proxy({} as Record<string, unknown>, {
-      get: () => () => {},
-    }) as unknown as EventHandlerDeps["rlog"],
+    rlog: pino({ enabled: false }),
     turnChannelContext: {
       userMessageChannel: assistantMessageChannel,
       assistantMessageChannel,
-    } as EventHandlerDeps["turnChannelContext"],
+    },
     turnInterfaceContext: {
       userMessageInterface:
         assistantMessageChannel === "cadet" ? "macos" : assistantMessageChannel,
       assistantMessageInterface:
         assistantMessageChannel === "cadet" ? "macos" : assistantMessageChannel,
-    } as EventHandlerDeps["turnInterfaceContext"],
-  } as EventHandlerDeps;
+    },
+    applyCompaction: async () => {},
+  };
 }
 
 function makeMessageCompleteEvent(
@@ -309,9 +314,9 @@ describe("outbound assistant Slack metadata persistence", () => {
     const providerMetaRaw = persisted.metadata?.providerMeta;
     expect(typeof providerMetaRaw).toBe("string");
 
-    const providerMeta = JSON.parse(
-      capturedStringSchema.parse(providerMetaRaw),
-    ) as Record<string, unknown>;
+    const providerMeta = jsonObjectSchema.parse(
+      JSON.parse(capturedStringSchema.parse(providerMetaRaw)),
+    );
     expect(providerMeta.source).toBe("slack");
     expect(providerMeta.eventKind).toBe("message");
     expect(providerMeta.conversationExternalId).toBe(channelId);
@@ -551,9 +556,9 @@ describe("outbound assistant Slack metadata persistence", () => {
     const persisted = lastAssistantPersisted();
     const providerMetaRaw = persisted.metadata?.providerMeta;
     expect(typeof providerMetaRaw).toBe("string");
-    const providerMeta = JSON.parse(
-      capturedStringSchema.parse(providerMetaRaw),
-    ) as Record<string, unknown>;
+    const providerMeta = jsonObjectSchema.parse(
+      JSON.parse(capturedStringSchema.parse(providerMetaRaw)),
+    );
     expect(providerMeta.source).toBe("discord");
     expect(providerMeta.conversationExternalId).toBe("9990001112223334445");
     expect(providerMeta.eventKind).toBe("message");
@@ -595,9 +600,9 @@ describe("outbound assistant Slack metadata persistence", () => {
     );
     expect(typeof row?.metadata).toBe("string");
     const envelope = jsonObjectSchema.parse(JSON.parse(row!.metadata!));
-    const reconciled = JSON.parse(
-      capturedStringSchema.parse(envelope.providerMeta),
-    ) as Record<string, unknown>;
+    const reconciled = jsonObjectSchema.parse(
+      JSON.parse(capturedStringSchema.parse(envelope.providerMeta)),
+    );
     expect(reconciled.messageId).toBe("1234567890123456789");
     expect(reconciled.source).toBe("discord");
     expect(reconciled.conversationExternalId).toBe(chatId);

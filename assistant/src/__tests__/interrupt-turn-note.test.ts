@@ -7,47 +7,54 @@
  */
 import { beforeEach, describe, expect, test } from "bun:test";
 
+import { eq } from "drizzle-orm";
+
 import { reinjectInterruptTurnNote } from "../daemon/conversation-lifecycle.js";
 import type { MessagingConversationContext } from "../daemon/conversation-messaging.js";
 import { persistQueuedMessageBody } from "../daemon/conversation-messaging.js";
 import { createConversation } from "../persistence/conversation-crud.js";
 import { getDb } from "../persistence/db-connection.js";
 import { initializeDb } from "../persistence/db-init.js";
-import { rawGet } from "../persistence/raw-query.js";
-import type { ContentBlock } from "../providers/types.js";
+import {
+  attachments,
+  conversations,
+  messageAttachments,
+  messages,
+} from "../persistence/schema/conversations.js";
+import { contentBlockArraySchema } from "../providers/content-block-schema.js";
 import { INTERRUPTED_TURN_NOTE_TEXT } from "../util/abort-reasons.js";
+import { asConversation } from "./helpers/mock-conversation.js";
 
 await initializeDb();
 
 function resetTables() {
   const db = getDb();
-  db.run("DELETE FROM message_attachments");
-  db.run("DELETE FROM attachments");
-  db.run("DELETE FROM messages");
-  db.run("DELETE FROM conversations");
+  db.delete(messageAttachments).run();
+  db.delete(attachments).run();
+  db.delete(messages).run();
+  db.delete(conversations).run();
 }
 
 function makeCtx(conversationId: string): MessagingConversationContext {
-  return {
+  return asConversation({
     conversationId,
     messages: [],
     abortController: null,
     currentRequestId: undefined,
-    queue: {} as never,
     pendingInterruptNote: false,
     isProcessing: () => false,
     setProcessing: () => {},
     getTurnChannelContext: () => null,
     getTurnInterfaceContext: () => null,
-  } as unknown as MessagingConversationContext;
+  });
 }
 
 function messageRow(id: string): { content: string; metadata: string | null } {
-  return rawGet<{ content: string; metadata: string | null }>(
-    "test:interruptNoteMessage",
-    "SELECT content, metadata FROM messages WHERE id = ?",
-    id,
-  )!;
+  return getDb()
+    .select({ content: messages.content, metadata: messages.metadata })
+    .from(messages)
+    .where(eq(messages.id, id))
+    .get()!;
 }
 
 describe("interrupted-turn note on the interrupting message", () => {
@@ -88,14 +95,11 @@ describe("interrupted-turn note on the interrupting message", () => {
     const persisted = await persistQueuedMessageBody(ctx, {
       content: "hold on",
     });
-    const live = ctx.messages[0].content.at(-1) as {
-      type: "text";
-      text: string;
-    };
+    const live = ctx.messages[0].content.at(-1);
 
     const row = messageRow(persisted.id);
     const rebuilt = reinjectInterruptTurnNote(
-      JSON.parse(row.content) as ContentBlock[],
+      contentBlockArraySchema.parse(JSON.parse(row.content)),
       "user",
       row.metadata,
     );
@@ -121,7 +125,7 @@ describe("interrupted-turn note on the interrupting message", () => {
     ).toBeUndefined();
     expect(
       reinjectInterruptTurnNote(
-        JSON.parse(row.content) as ContentBlock[],
+        contentBlockArraySchema.parse(JSON.parse(row.content)),
         "user",
         row.metadata,
       ),
@@ -157,8 +161,11 @@ describe("interrupted-turn note on the interrupting message", () => {
     const llmContent = ctx.messages[0].content;
     const note = llmContent.at(-1) as { type: "text"; text: string };
     const annotation = llmContent.at(-2) as { type: "text"; text: string };
-    expect(note.text).toBe(INTERRUPTED_TURN_NOTE_TEXT);
-    expect(annotation.text).toContain("is stored at:");
+    expect(note).toHaveProperty("text", INTERRUPTED_TURN_NOTE_TEXT);
+    expect(annotation).toHaveProperty(
+      "text",
+      expect.stringContaining("is stored at:"),
+    );
 
     const row = messageRow(persisted.id);
     expect(row.content).not.toContain("interrupted_turn");

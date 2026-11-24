@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 
+import { fetchMock } from "../__tests__/helpers/fetch-mock.js";
 import {
   reseedMemorySecureKeys,
   useMemorySecureKeys,
@@ -291,39 +292,41 @@ describe("CadetCloudClient", () => {
 
   describe("fetch()", () => {
     test("prepends base URL to path", async () => {
-      globalThis.fetch = mock(async (url: string | URL | Request) => {
-        expect(String(url)).toBe(
-          "https://platform.example.com/v1/some/endpoint/",
-        );
-        return new Response("ok", { status: 200 });
-      }) as unknown as typeof globalThis.fetch;
+      globalThis.fetch = fetchMock(
+        mock(async (url: string | URL | Request) => {
+          expect(String(url)).toBe(
+            "https://platform.example.com/v1/some/endpoint/",
+          );
+          return new Response("ok", { status: 200 });
+        }),
+      );
 
       const client = await CadetCloudClient.create();
       await client!.fetch("/v1/some/endpoint/");
     });
 
     test("injects Api-Key auth header", async () => {
-      globalThis.fetch = mock(
-        async (_url: string | URL | Request, init?: RequestInit) => {
+      globalThis.fetch = fetchMock(
+        mock(async (_url: string | URL | Request, init?: RequestInit) => {
           const headers = new Headers(init?.headers);
           expect(headers.get("Authorization")).toBe("Api-Key sk-test-key");
           return new Response("ok", { status: 200 });
-        },
-      ) as unknown as typeof globalThis.fetch;
+        }),
+      );
 
       const client = await CadetCloudClient.create();
       await client!.fetch("/v1/test/");
     });
 
     test("preserves caller-provided headers", async () => {
-      globalThis.fetch = mock(
-        async (_url: string | URL | Request, init?: RequestInit) => {
+      globalThis.fetch = fetchMock(
+        mock(async (_url: string | URL | Request, init?: RequestInit) => {
           const headers = new Headers(init?.headers);
           expect(headers.get("Content-Type")).toBe("application/json");
           expect(headers.get("Authorization")).toBe("Api-Key sk-test-key");
           return new Response("ok", { status: 200 });
-        },
-      ) as unknown as typeof globalThis.fetch;
+        }),
+      );
 
       const client = await CadetCloudClient.create();
       await client!.fetch("/v1/test/", {
@@ -333,13 +336,13 @@ describe("CadetCloudClient", () => {
     });
 
     test("passes through request init options", async () => {
-      globalThis.fetch = mock(
-        async (_url: string | URL | Request, init?: RequestInit) => {
+      globalThis.fetch = fetchMock(
+        mock(async (_url: string | URL | Request, init?: RequestInit) => {
           expect(init?.method).toBe("POST");
           expect(init?.body).toBe('{"key":"value"}');
           return new Response("ok", { status: 200 });
-        },
-      ) as unknown as typeof globalThis.fetch;
+        }),
+      );
 
       const client = await CadetCloudClient.create();
       await client!.fetch("/v1/test/", {
