@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 
 import OpenAI from "openai";
 
+import { fetchMock } from "../../../__tests__/helpers/fetch-mock.js";
 import type { NormalizedOpenAIAPIError } from "../api-error-normalization.js";
 import {
   captureRawErrorBodyFetch,
@@ -18,14 +19,21 @@ import {
  */
 function apiError(
   status: number,
-  opts: { message?: string; sdkBody?: unknown; headers?: Headers } = {},
+  opts: {
+    message?: string;
+    sdkBody?: Record<string, unknown>;
+    headers?: Headers;
+  } = {},
 ): InstanceType<typeof OpenAI.APIError> {
-  return {
+  const message = opts.message ?? `${status} status code (no body)`;
+  const error = new OpenAI.APIError(
     status,
-    message: opts.message ?? `${status} status code (no body)`,
-    headers: opts.headers ?? new Headers(),
-    error: opts.sdkBody,
-  } as unknown as InstanceType<typeof OpenAI.APIError>;
+    opts.sdkBody,
+    message,
+    opts.headers ?? new Headers(),
+  );
+  error.message = message;
+  return error;
 }
 
 describe("normalizeOpenAIAPIError", () => {
@@ -216,17 +224,11 @@ describe("captureRawErrorBodyFetch", () => {
   // APIError.headers — so normalize() recovers it with no explicit rawBody
   // argument and nothing is written to a (loggable) header.
   function fakeFetch(body: string, status: number): typeof globalThis.fetch {
-    return (async () =>
-      new Response(body, { status })) as unknown as typeof globalThis.fetch;
+    return fetchMock(async () => new Response(body, { status }));
   }
 
   function errFor(res: Response, status: number) {
-    return {
-      status,
-      message: `${status} status code (no body)`,
-      headers: res.headers,
-      error: undefined,
-    } as unknown as InstanceType<typeof import("openai").APIError>;
+    return apiError(status, { headers: res.headers });
   }
 
   test("recovers a non-2xx body into normalize() via the headers WeakMap", async () => {
@@ -311,11 +313,13 @@ describe("captureRawErrorBodyFetch", () => {
       status: number,
       value: string,
     ): typeof globalThis.fetch =>
-      (async () =>
-        new Response(JSON.stringify({ detail: "header says so" }), {
-          status,
-          headers: { "x-should-retry": value },
-        })) as unknown as typeof globalThis.fetch;
+      fetchMock(
+        async () =>
+          new Response(JSON.stringify({ detail: "header says so" }), {
+            status,
+            headers: { "x-should-retry": value },
+          }),
+      );
     try {
       // x-should-retry:true on an otherwise-terminal 400 → SDK retries → skip.
       globalThis.fetch = withHeader(400, "true");

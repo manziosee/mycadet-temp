@@ -1,4 +1,15 @@
-import { describe, expect, jest, mock, test } from "bun:test";
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  jest,
+  mock,
+  spyOn,
+  test,
+} from "bun:test";
+
+import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 
 // Mock secure-keys so McpOAuthProvider doesn't try to access the credential store
 import { useMemorySecureKeyMap } from "./helpers/secure-keys.js";
@@ -27,17 +38,25 @@ const { createMcpTool } = await import("../tools/mcp/mcp-tool-factory.js");
 
 describe("MCP AbortSignal threading", () => {
   describe("McpClient.callTool", () => {
+    beforeEach(() => {
+      spyOn(Client.prototype, "connect").mockResolvedValue();
+    });
+
+    afterEach(() => {
+      mock.restore();
+    });
     test("forwards signal to the SDK client.callTool options", async () => {
       const client = new McpClient("test-server");
 
-      const callToolSpy = jest.fn().mockResolvedValue({
-        content: [{ type: "text", text: "ok" }],
-        isError: false,
-      });
+      const callToolSpy = spyOn(Client.prototype, "callTool").mockResolvedValue(
+        {
+          content: [{ type: "text", text: "ok" }],
+          isError: false,
+        },
+      );
 
       // Monkey-patch to mark as connected and capture callTool args
-      (client as any).connected = true;
-      (client as any).client = { callTool: callToolSpy };
+      await client.connect({ type: "stdio", command: "echo", args: [] });
 
       const ac = new AbortController();
       await client.callTool("my-tool", { foo: "bar" }, ac.signal);
@@ -52,13 +71,14 @@ describe("MCP AbortSignal threading", () => {
     test("passes undefined signal cleanly (no regression)", async () => {
       const client = new McpClient("test-server");
 
-      const callToolSpy = jest.fn().mockResolvedValue({
-        content: [{ type: "text", text: "ok" }],
-        isError: false,
-      });
+      const callToolSpy = spyOn(Client.prototype, "callTool").mockResolvedValue(
+        {
+          content: [{ type: "text", text: "ok" }],
+          isError: false,
+        },
+      );
 
-      (client as any).connected = true;
-      (client as any).client = { callTool: callToolSpy };
+      await client.connect({ type: "stdio", command: "echo", args: [] });
 
       await client.callTool("my-tool", { foo: "bar" });
 
@@ -70,9 +90,8 @@ describe("MCP AbortSignal threading", () => {
     test("already-aborted signal causes the SDK call to reject", async () => {
       const client = new McpClient("test-server");
 
-      const callToolSpy = jest
-        .fn()
-        .mockImplementation((_p: any, _r: any, opts: any) => {
+      spyOn(Client.prototype, "callTool").mockImplementation(
+        (_params, _schema, opts) => {
           if (opts?.signal?.aborted) {
             return Promise.reject(
               new DOMException("The operation was aborted.", "AbortError"),
@@ -82,10 +101,10 @@ describe("MCP AbortSignal threading", () => {
             content: [{ type: "text", text: "ok" }],
             isError: false,
           });
-        });
+        },
+      );
 
-      (client as any).connected = true;
-      (client as any).client = { callTool: callToolSpy };
+      await client.connect({ type: "stdio", command: "echo", args: [] });
 
       const ac = new AbortController();
       ac.abort();
@@ -133,7 +152,7 @@ describe("MCP AbortSignal threading", () => {
 
   describe("createMcpTool execute", () => {
     test("keeps safe MCP tool names unchanged", () => {
-      const fakeManager = { callTool: jest.fn() } as any;
+      const fakeManager = new McpServerManager();
 
       const tool = createMcpTool(
         {
@@ -154,7 +173,7 @@ describe("MCP AbortSignal threading", () => {
     });
 
     test("keeps MCP tool names with trailing whitespace distinct", () => {
-      const fakeManager = { callTool: jest.fn() } as any;
+      const fakeManager = new McpServerManager();
 
       const plain = createMcpTool(
         {
@@ -193,7 +212,8 @@ describe("MCP AbortSignal threading", () => {
         content: "tool result",
         isError: false,
       });
-      const fakeManager = { callTool: callToolSpy } as any;
+      const fakeManager = new McpServerManager();
+      fakeManager.callTool = callToolSpy;
 
       const tool = createMcpTool(
         {
@@ -233,7 +253,7 @@ describe("MCP AbortSignal threading", () => {
     });
 
     test("caps long MCP names at the provider limit", () => {
-      const fakeManager = { callTool: jest.fn() } as any;
+      const fakeManager = new McpServerManager();
       const tool = createMcpTool(
         {
           name: "x".repeat(180),
@@ -258,7 +278,8 @@ describe("MCP AbortSignal threading", () => {
         isError: false,
       });
 
-      const fakeManager = { callTool: callToolSpy } as any;
+      const fakeManager = new McpServerManager();
+      fakeManager.callTool = callToolSpy;
 
       const tool = createMcpTool(
         {
@@ -299,7 +320,8 @@ describe("MCP AbortSignal threading", () => {
         isError: false,
       });
 
-      const fakeManager = { callTool: callToolSpy } as any;
+      const fakeManager = new McpServerManager();
+      fakeManager.callTool = callToolSpy;
 
       const tool = createMcpTool(
         {

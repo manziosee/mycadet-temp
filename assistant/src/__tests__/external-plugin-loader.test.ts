@@ -9,11 +9,14 @@
  * tempdir. Surface files use plain TypeScript with default exports so
  * bun can dynamic-import them at runtime without a build step.
  */
-import { mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, beforeEach, describe, expect, test } from "bun:test";
 
+import pino from "pino";
+
+import type { InitContext } from "../plugin-api/types.js";
 import {
   loadExternalPlugin,
   parsePluginManifest,
@@ -354,6 +357,15 @@ describe("loadExternalPlugin — plugin-api peerDependency", () => {
   });
 });
 
+function hookContext(dir: string): InitContext {
+  return {
+    config: {},
+    logger: pino({ enabled: false }),
+    pluginStorageDir: dir,
+    assistantVersion: "9.9.9-test",
+  };
+}
+
 describe("loadExternalPlugin — hooks", () => {
   test("wires hooks/init.ts default export to plugin.hooks.init", async () => {
     const dir = freshPluginDir("with-init");
@@ -361,8 +373,9 @@ describe("loadExternalPlugin — hooks", () => {
     writeSurfaceFile(
       dir,
       "hooks/init.ts",
-      `export default async function init(_ctx: unknown): Promise<void> {
-  (globalThis as Record<string, unknown>).__externalInitCalled = true;
+      `import { writeFileSync } from "node:fs";
+export default async function init(): Promise<void> {
+  writeFileSync(${JSON.stringify(join(dir, "init-called"))}, "init");
 }
 `,
     );
@@ -373,11 +386,8 @@ describe("loadExternalPlugin — hooks", () => {
       (p) => p.manifest.name === "with-init",
     );
     expect(typeof registered?.hooks?.init).toBe("function");
-    await registered?.hooks?.init?.({} as never);
-    expect((globalThis as Record<string, unknown>).__externalInitCalled).toBe(
-      true,
-    );
-    delete (globalThis as Record<string, unknown>).__externalInitCalled;
+    await registered?.hooks?.init?.(hookContext(dir));
+    expect(readFileSync(join(dir, "init-called"), "utf8")).toBe("init");
   });
 
   test("wires hooks/shutdown.ts default export to plugin.hooks.shutdown", async () => {
@@ -386,10 +396,9 @@ describe("loadExternalPlugin — hooks", () => {
     writeSurfaceFile(
       dir,
       "hooks/shutdown.ts",
-      `export default async function shutdown(ctx: { assistantVersion: string }): Promise<void> {
-  (globalThis as Record<string, unknown>).__externalShutdownCalled = true;
-  (globalThis as Record<string, unknown>).__externalShutdownVersion =
-    ctx.assistantVersion;
+      `import { writeFileSync } from "node:fs";
+export default async function shutdown(ctx: { assistantVersion: string }): Promise<void> {
+  writeFileSync(${JSON.stringify(join(dir, "shutdown-called"))}, ctx.assistantVersion);
 }
 `,
     );
@@ -401,14 +410,9 @@ describe("loadExternalPlugin — hooks", () => {
     );
     expect(typeof registered?.hooks?.shutdown).toBe("function");
     await registered?.hooks?.shutdown?.({ assistantVersion: "9.9.9-test" });
-    expect(
-      (globalThis as Record<string, unknown>).__externalShutdownCalled,
-    ).toBe(true);
-    expect(
-      (globalThis as Record<string, unknown>).__externalShutdownVersion,
-    ).toBe("9.9.9-test");
-    delete (globalThis as Record<string, unknown>).__externalShutdownCalled;
-    delete (globalThis as Record<string, unknown>).__externalShutdownVersion;
+    expect(readFileSync(join(dir, "shutdown-called"), "utf8")).toBe(
+      "9.9.9-test",
+    );
   });
 
   test("ignores hooks/*.d.ts declaration files alongside hooks/*.js", async () => {
@@ -421,8 +425,9 @@ describe("loadExternalPlugin — hooks", () => {
     writeSurfaceFile(
       dir,
       "hooks/init.js",
-      `export default async function init(_ctx) {
-  (globalThis).__externalDtsInitCalled = true;
+      `import { writeFileSync } from "node:fs";
+export default async function init() {
+  writeFileSync(${JSON.stringify(join(dir, "init-called"))}, "init");
 }
 `,
     );
@@ -440,11 +445,8 @@ describe("loadExternalPlugin — hooks", () => {
     expect(registered).toBeDefined();
     expect(Object.keys(registered?.hooks ?? {})).toEqual(["init"]);
     expect(typeof registered?.hooks?.init).toBe("function");
-    await registered?.hooks?.init?.({} as never);
-    expect(
-      (globalThis as Record<string, unknown>).__externalDtsInitCalled,
-    ).toBe(true);
-    delete (globalThis as Record<string, unknown>).__externalDtsInitCalled;
+    await registered?.hooks?.init?.(hookContext(dir));
+    expect(readFileSync(join(dir, "init-called"), "utf8")).toBe("init");
   });
 
   test("plugin.hooks is undefined when neither hook file is present", async () => {
@@ -520,9 +522,7 @@ describe("loadExternalPlugin — tools", () => {
     const registered = getRegisteredPlugins().find(
       (p) => p.manifest.name === "two-tools",
     );
-    const names = (registered?.tools ?? []).map(
-      (t) => (t as { name: string }).name,
-    );
+    const names = (registered?.tools ?? []).map((t) => t.name);
     expect(names).toEqual(["alpha", "beta"]);
   });
 
@@ -566,21 +566,12 @@ describe("loadExternalPlugin — tools", () => {
       (p) => p.manifest.name === "tool-with-defaults",
     );
     expect(registered).toBeDefined();
-    const tools = (registered?.tools ?? []) as Array<{
-      name: string;
-      description: string;
-      defaultRiskLevel: string;
-      input_schema: Record<string, unknown>;
-      execute: (
-        input: Record<string, unknown>,
-        context: unknown,
-      ) => Promise<{ content: string; isError: boolean }>;
-    }>;
+    const tools = registered?.tools ?? [];
     expect(tools).toHaveLength(1);
     const empty = tools[0]!;
     expect(empty.name).toBe("empty");
     expect(empty.description).toBe("");
-    expect(empty.defaultRiskLevel).toBe("medium");
+    expect(empty).toHaveProperty("defaultRiskLevel", "medium");
     expect(empty.input_schema).toEqual({
       type: "object",
       properties: {},
@@ -588,7 +579,10 @@ describe("loadExternalPlugin — tools", () => {
     });
     expect(typeof empty.execute).toBe("function");
 
-    const result = await empty.execute({}, {} as unknown);
+    const result = await empty.execute(
+      {},
+      { conversationId: "test-conv", workingDir: dir, trustClass: "guardian" },
+    );
     expect(result.isError).toBe(true);
     expect(result.content).toContain("empty");
     expect(result.content).toContain("no execute implementation");
@@ -619,26 +613,19 @@ describe("loadExternalPlugin — tools", () => {
     const registered = getRegisteredPlugins().find(
       (p) => p.manifest.name === "tool-partial-defaults",
     );
-    const tool = (registered?.tools ?? [])[0] as
-      | {
-          description: string;
-          defaultRiskLevel: string;
-          input_schema: object;
-          execute: (
-            input: Record<string, unknown>,
-            context: unknown,
-          ) => Promise<{ content: string; isError: boolean }>;
-        }
-      | undefined;
+    const tool = registered?.tools?.[0];
     expect(tool).toBeDefined();
     expect(tool?.description).toBe("custom description");
-    expect(tool?.defaultRiskLevel).toBe("medium");
+    expect(tool).toHaveProperty("defaultRiskLevel", "medium");
     expect(tool?.input_schema).toEqual({
       type: "object",
       properties: {},
       additionalProperties: false,
     });
-    const result = await tool!.execute({}, {} as unknown);
+    const result = await tool!.execute(
+      {},
+      { conversationId: "test-conv", workingDir: dir, trustClass: "guardian" },
+    );
     expect(result.isError).toBe(false);
     expect(result.content).toBe("ran");
   });

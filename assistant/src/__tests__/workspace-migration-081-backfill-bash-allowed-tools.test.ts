@@ -33,7 +33,10 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
+import { z } from "zod";
+
 import { backfillBashAllowedToolsForInjectionCredentialsMigration } from "../workspace/migrations/081-backfill-bash-allowed-tools-for-injection-credentials.js";
+import { jsonObjectSchema } from "./helpers/json-object-schema.js";
 
 let workspaceDir: string;
 let metadataPath: string;
@@ -168,7 +171,7 @@ describe("workspace migration 081-backfill-bash-allowed-tools-for-injection-cred
     backfillBashAllowedToolsForInjectionCredentialsMigration.run(workspaceDir);
 
     const result = readMetadata();
-    const creds = result.credentials as Record<string, unknown>[];
+    const creds = z.array(jsonObjectSchema).parse(result.credentials);
     expect(creds).toHaveLength(1);
 
     const linear = creds[0];
@@ -176,7 +179,9 @@ describe("workspace migration 081-backfill-bash-allowed-tools-for-injection-cred
     expect(linear.allowedTools).toEqual(["bash"]);
     // injectionTemplates should be preserved (not removed).
     expect(linear.injectionTemplates).toBeDefined();
-    expect((linear.injectionTemplates as unknown[]).length).toBeGreaterThan(0);
+    expect(
+      z.array(z.unknown()).parse(linear.injectionTemplates).length,
+    ).toBeGreaterThan(0);
     // updatedAt should have been bumped.
     expect(linear.updatedAt).not.toBe(1700000000000);
     // createdAt should be preserved.
@@ -192,7 +197,7 @@ describe("workspace migration 081-backfill-bash-allowed-tools-for-injection-cred
     backfillBashAllowedToolsForInjectionCredentialsMigration.run(workspaceDir);
 
     const result = readMetadata();
-    const creds = result.credentials as Record<string, unknown>[];
+    const creds = z.array(jsonObjectSchema).parse(result.credentials);
     const resend = creds[0];
     expect(resend.service).toBe("resend");
     expect(resend.allowedTools).toEqual(["bash"]);
@@ -296,7 +301,7 @@ describe("workspace migration 081-backfill-bash-allowed-tools-for-injection-cred
     backfillBashAllowedToolsForInjectionCredentialsMigration.run(workspaceDir);
 
     const result = readMetadata();
-    const creds = result.credentials as Record<string, unknown>[];
+    const creds = z.array(jsonObjectSchema).parse(result.credentials);
     expect(creds).toHaveLength(5);
 
     // linear: should be backfilled.
@@ -362,7 +367,7 @@ describe("workspace migration 081-backfill-bash-allowed-tools-for-injection-cred
     backfillBashAllowedToolsForInjectionCredentialsMigration.run(workspaceDir);
 
     const result = readMetadata();
-    const creds = result.credentials as Record<string, unknown>[];
+    const creds = z.array(jsonObjectSchema).parse(result.credentials);
     const linear = creds.find((c) => c.service === "linear");
     expect(linear!.allowedTools).toEqual(["bash"]);
   });
@@ -396,7 +401,7 @@ describe("workspace migration 081-backfill-bash-allowed-tools-for-injection-cred
     backfillBashAllowedToolsForInjectionCredentialsMigration.run(workspaceDir);
 
     const result = readMetadata();
-    const creds = result.credentials as Record<string, unknown>[];
+    const creds = z.array(jsonObjectSchema).parse(result.credentials);
 
     // Vercel: should still have publish tools only, no bash.
     const vercel = creds.find((c) => c.service === "vercel");

@@ -14,8 +14,11 @@
  */
 import { beforeAll, describe, expect, test } from "bun:test";
 
+import pino from "pino";
+
 // ── Imports (after mocks) ─────────────────────────────────────────────────────
 import type { AnsweredQuestion } from "../api/events/question-answered.js";
+import type { AssistantEvent } from "../api/index.js";
 import type {
   EventHandlerDeps,
   EventHandlerState,
@@ -30,7 +33,11 @@ import {
   getMessageById,
 } from "../persistence/conversation-crud.js";
 import { initializeDb } from "../persistence/db-init.js";
-import { mockUnownedModeSessions } from "./helpers/mock-conversation.js";
+import {
+  asConversation,
+  mockUnownedModeSessions,
+} from "./helpers/mock-conversation.js";
+import { createMockProvider, textResponse } from "./helpers/mock-provider.js";
 beforeAll(async () => {
   await initializeDb();
 });
@@ -40,36 +47,34 @@ let currentRowId = "";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-const emitted: Array<Record<string, unknown>> = [];
+const emitted: AssistantEvent[] = [];
 
 function makeDeps(): EventHandlerDeps {
   return {
-    ctx: {
+    ctx: asConversation({
       conversationId: "test-conv",
-      provider: { name: "anthropic" },
+      provider: createMockProvider([textResponse("")], "anthropic").provider,
       streamThinking: false,
       emitActivityState: () => {},
       markWorkspaceTopLevelDirty: () => {},
       currentTurnSurfaces: [],
       modeSessions: mockUnownedModeSessions(),
-    } as unknown as EventHandlerDeps["ctx"],
-    onEvent: (event: unknown) => {
-      emitted.push(event as Record<string, unknown>);
+    }),
+    onEvent: (event) => {
+      emitted.push(event);
     },
     reqId: "test-req",
     isFirstMessage: false,
     shouldGenerateTitle: false,
-    rlog: new Proxy({} as Record<string, unknown>, {
-      get: () => () => {},
-    }) as unknown as EventHandlerDeps["rlog"],
+    rlog: pino({ enabled: false }),
     turnChannelContext: {
       userMessageChannel: "cadet",
       assistantMessageChannel: "cadet",
-    } as EventHandlerDeps["turnChannelContext"],
+    },
     turnInterfaceContext: {
       userMessageInterface: "web",
       assistantMessageInterface: "web",
-    } as EventHandlerDeps["turnInterfaceContext"],
+    },
     applyCompaction: async () => {},
   };
 }
@@ -105,16 +110,14 @@ async function setupState(toolUseIds: string[]): Promise<EventHandlerState> {
   return state;
 }
 
-function persistedToolUse(toolUseId: string): Record<string, unknown> {
+function persistedToolUse(toolUseId: string) {
   const row = getMessageById(currentRowId);
   if (!row) {
     throw new Error(`row ${currentRowId} not found`);
   }
-  const block = row.content.find(
-    (b) =>
-      b.type === "tool_use" &&
-      (b as unknown as Record<string, unknown>).id === toolUseId,
-  ) as unknown as Record<string, unknown> | undefined;
+  const block = row.content
+    .filter((entry) => entry.type === "tool_use")
+    .find((entry) => entry.id === toolUseId);
   if (!block) {
     throw new Error(`tool_use block ${toolUseId} not found`);
   }

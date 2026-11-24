@@ -36,13 +36,13 @@ mock.module("../../../runtime/sync/resource-sync-events.js", () => ({
   },
 }));
 
-import type { AssistantEventEnvelope } from "../../../api/index.js";
-import type { EventHandlerState } from "../../../daemon/conversation-agent-loop-handlers.js";
+import { createEventHandlerState } from "../../../daemon/conversation-agent-loop-handlers.js";
 import { DB_MIGRATION_READINESS_EXEMPT_OPERATIONS } from "../../../daemon/daemon-readiness.js";
 import {
   registerInflightTurn,
   unregisterInflightTurn,
 } from "../../../daemon/inflight-turn-registry.js";
+import { buildAssistantEvent } from "../../../runtime/assistant-event.js";
 import {
   _resetStreamStateForTesting,
   stampAndBuffer,
@@ -58,10 +58,9 @@ import {
 } from "../conversation-sync-ipc-routes.js";
 
 function stampEvent(): void {
-  stampAndBuffer({
-    conversationId: "conv-x",
-    message: { type: "assistant_text_delta", text: "x" },
-  } as unknown as AssistantEventEnvelope);
+  stampAndBuffer(
+    buildAssistantEvent({ type: "assistant_text_delta", text: "x" }, "conv-x"),
+  );
 }
 
 describe("conversation-sync IPC route", () => {
@@ -95,8 +94,9 @@ describe("conversation-sync IPC route", () => {
     // A daemon turn is streaming into conv-1 but has committed a flush only
     // through seq 2 — the live counter (3) is ahead of the durable rows.
     const state = {
+      ...createEventHandlerState(),
       flushedContentSeq: 2,
-    } as unknown as EventHandlerState;
+    };
     registerInflightTurn("conv-1", state);
     try {
       const result = handleNotifyConversationPersisted({
@@ -126,9 +126,10 @@ describe("conversation-sync IPC route", () => {
     // position, or the client discards the seq-4 delta as an already-covered
     // replay and the streamed text vanishes.
     const state = {
+      ...createEventHandlerState(),
       lastStreamedContentSeq: 4,
       flushedContentSeq: 2,
-    } as unknown as EventHandlerState;
+    };
     registerInflightTurn("conv-1", state);
     try {
       handleNotifyConversationPersisted({ body: { conversationId: "conv-1" } });
@@ -147,8 +148,9 @@ describe("conversation-sync IPC route", () => {
     // A turn is streaming but has committed no flush, so its watermark is
     // undefined; the ceiling is 0, capping the anchor below the un-flushed seq.
     const state = {
+      ...createEventHandlerState(),
       flushedContentSeq: undefined,
-    } as unknown as EventHandlerState;
+    };
     registerInflightTurn("conv-1", state);
     try {
       handleNotifyConversationPersisted({ body: { conversationId: "conv-1" } });
