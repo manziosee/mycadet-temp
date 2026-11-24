@@ -17,6 +17,7 @@ import { withLocalHatchLock } from "./hatch-lock";
 import { applyHatchConfig, buildHatchConfigValues } from "./hatch-config";
 import { waitForReady } from "../../daemon-readiness";
 import { generateInstanceName } from "../../naming";
+import { portsReservedByOthers } from "../../operations/lookup";
 import { mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { resolveAssistantsDir, resolveLogDir } from "../../config";
@@ -53,9 +54,10 @@ export async function allocateLocalPlacement(
   mkdirSync(instanceDir, { recursive: true });
 
   const basePorts = getDefaultPorts();
-  const daemonPort = await findAvailablePort(basePorts.daemon);
-  const gatewayPort = await findAvailablePort(basePorts.gateway);
-  const cesPort = await findAvailablePort(basePorts.ces);
+  const reserved = portsReservedByOthers();
+  const daemonPort = await findAvailablePort(basePorts.daemon, reserved);
+  const gatewayPort = await findAvailablePort(basePorts.gateway, reserved);
+  const cesPort = await findAvailablePort(basePorts.ces, reserved);
 
   return {
     instanceDir,
