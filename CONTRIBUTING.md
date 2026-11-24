@@ -72,21 +72,23 @@ bun run typecheck
 | `packages/`            | Shared internal packages                                                                    |
 | `skills/`              | Skill definitions                                                                           |
 
-## Personalizing Your Assistant vs. Changing the Core
+## Tips for submitting Contributions
+
+Here are a few things to keep in mind when submitting proposals to the repository.
+
+### Align with the VISION.md
+
+The `VISION.md` doc is actively maintained to paint the picture of the end state of this project. We want to ensure that all pull requests merged helps in attaining that vision as soon as possible.
+
+### Lead with your own User Stories
+
+The best contributions are ones derived from your own use of your Cadet. Outline that experience in the PR description. PRs that simply add a feature that "might be useful" will receive more pushback.
+
+### Personalizing Your Assistant vs. Changing the Core
 
 Before opening a PR, ask: **does this belong in everyone's assistant, or just mine?**
 
 A lot of "new feature" ideas are really *personal customization*: for example, a morning briefing, a recurring cleanup, a custom routine, or stitching existing capabilities together. These belong in **your assistant's own workspace**, not in the shared runtime. You don't need to fork the repo or wait for a review to get them, just ask your assistant to build it for you!
-
-### When a Core Change Is the Right Call
-
-Adding or changing a **core tool** (anything under `assistant/src/tools/` registered in the tool manifest) ships to **every** user and is loaded into the agent's context on every turn — always-loaded tools share a tight budget, so each one has to earn its place. Open a PR for core changes only when the change is:
-
-- a **new primitive** that can't be expressed as a skill composed from existing tools, or
-- a bug fix, performance, security, or developer-experience improvement to existing behavior, or
-- there is pre-existing discussion on GitHub or Discord with the core team on why it will be broadly useful to most users.
-
-If you can build it as a skill in your own workspace, do that first. If you think a personal skill would genuinely benefit others, contribute it to [`skills/`](skills/) (see [`skills/AGENTS.md`](skills/AGENTS.md)) rather than adding a core tool. When in doubt, [open an issue](https://github.com/vargasjr-dev/mycadet/issues) or ask on [Discord](https://mycadet.ai/community) before writing new core capabilities.
 
 ## Submitting a Pull Request
 

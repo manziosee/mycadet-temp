@@ -1,49 +1,70 @@
-Cadet's north star is a two-machine architecture: one hardened core that thinks, remembers, schedules, and holds every key — and one disposable workbench where your assistant experiments, holding nothing precious.
+This page outlines the Cadet north star we're building towards. All external contribution will be evaluated against this doc.
 
-The worst thing that can happen inside the workbench is losing the workbench.
-
+<!-- TODO: Add colors to the edges for RW, RO, RM -->
+<!-- TODO: Make Tools a subgraph that also includes definitions, skills, and MCPs -->
 ```mermaid
 flowchart LR
-  You["You"]
+  You["Outside World"]
 
-  subgraph Harness["harness — an always alive server managing guardian driven data and the agent loop"]
+  subgraph Harness["Harness\nAn always alive server managing guardian driven data and the agent loop"]
     direction TB
-    KLoop["Session loop — interpretation + planning"]
-    KClock["Clock — schedules + wakes live here"]
-    KKeys["Credential broker — every key, audited"]
-    KSpawn["Syscalls — spawn · wake · budget"]
-    KHooks["Hook admission — validates every patch"]
+    WebServer["Web Server"]
+    AgentLoop["Agent Loop"]
+    Scheduler["Scheduler"]
+    HarnessFS["Harness File System"]
+    HarnessIpc["IPC Server"]
   end
 
-  subgraph Sandbox["sandbox — disposable workspace where the assistant performs all of its work is the most volatile, untrusted region of the architecture."]
+  subgraph Sandbox["Sandbox\nDisposable workspace where the assistant performs all of its work."]
     direction TB
-    Tools["Tool server — bash · files"]
-    Handlers["Plugin + hook handlers — untrusted plane"]
-    Egress["Egress enforcement point"]
+    SandboxIpc["Sandbox IPC Server"]
+    Tools["Tools"]
+    Hooks["Hooks"]
+    Workspace["Workspace File System"]
+  end
+
+  subgraph Vault["Vault\nCredential Store managing access to the internet"]
+    direction TB
+    CredStore["Credential Store"]
+    Egress["Egress"]
   end
 
   Net["The internet"]
 
-  You --> KLoop
-  KLoop --> Tools
-  KLoop --> KSpawn
-  KClock --> KLoop
-  Handlers -->|"typed patches only"| KHooks
-  KKeys -->|"brokered creds, scoped + logged"| Egress
+  You --> WebServer
+  WebServer --> AgentLoop
+  WebServer --> HarnessFS
+  AgentLoop --> HarnessFS
+  HarnessIpc --> HarnessFS
+  Scheduler --> AgentLoop
+  Scheduler --> HarnessFS
+  AgentLoop --> Egress
+  AgentLoop --> SandboxIpc
+  Scheduler --> SandboxIpc
+  SandboxIpc --> Tools
+  SandboxIpc --> Hooks
+  Tools --> Egress
+  Tools --> Workspace
+  Tools --> HarnessIpc
+  Hooks --> Workspace
+  Egress --> CredStore 
   Egress --> Net
 
 ```
 
-Follow the story: [Cadet today](/docs/architecture), the [roadmap](/docs/roadmap), and the [Credential Execution Service](/docs/developer-guide/internals/credential-execution-service).
+## The Harness
 
-## The harness
+The Harness becomes the merged gateway + assistant. It controls agent loop, the clock that fires schedules, and is the admission point for all incoming requests to the assistant. It continues to manage all guardian write only data in its own Harness File System.
 
-The harness is the merged gateway + assistant: the session loop, the clock that fires schedules and wakes, the credential broker, and the admission point that validates every patch a plugin or hook proposes. It is the only thing that can spend a key, fire a timer, or grant a capability — and everything it does is auditable.
+The Harness File system will include data surrounding:
+- Contacts - who the assistant is allowed to interact with.
+- Trust rules - what actions the assistant is allowed to take.
+- Agent Loop Configuration - which model profiles the assistant acts as in any given moment.
 
-The plugin rule carries over unchanged from today: editing code is free, raising capabilities is gated. Plugins keep their powers; they just stop holding keys.
+## The Sandbox
 
-## The sandbox
+A disposable execution plane that keeps the parts the assistant physically needs to perform work. It holds zero authority: no keys, no clock, no authority over the loop. It cannot write back to the Harness' File System, but can read its data via the read-only Harness IPC Server.
 
-A disposable execution plane that keeps the parts the assistant physically needs — the tool server for bash and files, the plugin and hook handlers, the egress enforcement point. It holds zero authority: no keys, no clock, no authority over the loop. Untrusted content can do its worst in here and the blast radius is a replaced container.
+## The Vault
 
-For how we get there, see the [roadmap](/docs/roadmap).
+A credential store that ensures that the Agent Loop can never read the value of credentials, enforcing all use through an Egress proxy.
