@@ -240,6 +240,20 @@ async function handleInstructionCall({ pathParams, body }: RouteHandlerArgs) {
 // Route definitions
 // ---------------------------------------------------------------------------
 
+export const startCallResponseSchema = z.object({
+  callSessionId: z.string(),
+  callSid: z.string(),
+  status: z.string(),
+  toNumber: z.string(),
+  fromNumber: z.string(),
+  callerIdentityMode: z.string(),
+});
+
+export const cancelCallResponseSchema = z.object({
+  callSessionId: z.string(),
+  status: z.string(),
+});
+
 export const ROUTES: RouteDefinition[] = [
   {
     operationId: "calls_start",
@@ -271,14 +285,7 @@ export const ROUTES: RouteDefinition[] = [
         .describe("Idempotency key to prevent duplicate calls")
         .optional(),
     }),
-    responseBody: z.object({
-      callSessionId: z.string(),
-      callSid: z.string(),
-      status: z.string(),
-      toNumber: z.string(),
-      fromNumber: z.string(),
-      callerIdentityMode: z.string(),
-    }),
+    responseBody: startCallResponseSchema,
     handler: handleStartCall,
   },
   {
@@ -295,10 +302,7 @@ export const ROUTES: RouteDefinition[] = [
     requestBody: z.object({
       reason: z.string().describe("Cancellation reason").optional(),
     }),
-    responseBody: z.object({
-      callSessionId: z.string(),
-      status: z.string(),
-    }),
+    responseBody: cancelCallResponseSchema,
     handler: handleCancelCall,
   },
   {

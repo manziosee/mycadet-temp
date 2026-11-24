@@ -11,6 +11,9 @@ import {
   test,
 } from "bun:test";
 
+import { fetchMock } from "./helpers/fetch-mock.js";
+import { jsonObjectSchema } from "./helpers/json-object-schema.js";
+
 const testDir = process.env.CADET_WORKSPACE_DIR!;
 const secureStorePath = join(testDir, "keys.enc");
 const metadataPath = join(testDir, "metadata.json");
@@ -250,7 +253,7 @@ describe("Slack channel config handler", () => {
   });
 
   test("POST validates bot token via Slack auth.test API and writes config", async () => {
-    globalThis.fetch = (async () => {
+    globalThis.fetch = fetchMock(async () => {
       return new Response(
         JSON.stringify({
           ok: true,
@@ -265,7 +268,7 @@ describe("Slack channel config handler", () => {
           headers: { "content-type": "application/json" },
         },
       );
-    }) as unknown as typeof globalThis.fetch;
+    });
 
     const result = await setSlackChannelConfig("xoxb-valid-bot-token");
     expect(result.success).toBe(true);
@@ -275,7 +278,7 @@ describe("Slack channel config handler", () => {
     expect(result.teamUrl).toBe("https://myteam.slack.com/");
 
     // Assert metadata was written to config (not credential metadata)
-    const slack = loadRawConfig().slack as Record<string, unknown>;
+    const slack = jsonObjectSchema.parse(loadRawConfig().slack);
     expect(slack.teamId).toBe("T_TEAM");
     expect(slack.teamName).toBe("MyTeam");
     expect(slack.teamUrl).toBe("https://myteam.slack.com/");
@@ -284,7 +287,7 @@ describe("Slack channel config handler", () => {
   });
 
   test("POST returns error when Slack auth.test rejects bot token", async () => {
-    globalThis.fetch = (async () => {
+    globalThis.fetch = fetchMock(async () => {
       return new Response(
         JSON.stringify({
           ok: false,
@@ -295,7 +298,7 @@ describe("Slack channel config handler", () => {
           headers: { "content-type": "application/json" },
         },
       );
-    }) as unknown as typeof globalThis.fetch;
+    });
 
     const result = await setSlackChannelConfig("xoxb-bad-token");
     expect(result.success).toBe(false);
@@ -337,7 +340,7 @@ describe("Slack channel config handler", () => {
     expect(listCredentialMetadata()).toHaveLength(0);
 
     // Assert config values were cleared
-    const slack = loadRawConfig().slack as Record<string, unknown>;
+    const slack = jsonObjectSchema.parse(loadRawConfig().slack);
     expect(slack.teamId).toBe("");
     expect(slack.teamName).toBe("");
     expect(slack.teamUrl).toBe("");
@@ -346,7 +349,7 @@ describe("Slack channel config handler", () => {
   });
 
   test("POST accepts valid user token and stores injection templates", async () => {
-    globalThis.fetch = (async () => {
+    globalThis.fetch = fetchMock(async () => {
       return new Response(
         JSON.stringify({
           ok: true,
@@ -357,7 +360,7 @@ describe("Slack channel config handler", () => {
           headers: { "content-type": "application/json" },
         },
       );
-    }) as unknown as typeof globalThis.fetch;
+    });
 
     const result = await setSlackChannelConfig(
       undefined,
@@ -405,35 +408,34 @@ describe("Slack channel config handler", () => {
     // fetch is called twice: once to validate the new bot_token (workspace B),
     // once to auth.test the persisted user_token (workspace A).
     const calls: string[] = [];
-    globalThis.fetch = (async (
-      _url: string,
-      init?: { headers?: Record<string, string> },
-    ) => {
-      const auth = init?.headers?.["Authorization"] ?? "";
-      calls.push(auth);
-      if (auth === "Bearer xoxb-workspace-b") {
-        return new Response(
-          JSON.stringify({
-            ok: true,
-            team_id: "T_B",
-            team: "TeamB",
-            user_id: "U_BOT_B",
-            user: "botb",
-          }),
-          { status: 200, headers: { "content-type": "application/json" } },
-        );
-      }
-      if (auth === "Bearer xoxp-workspace-a") {
-        return new Response(
-          JSON.stringify({
-            ok: true,
-            team_id: "T_A",
-          }),
-          { status: 200, headers: { "content-type": "application/json" } },
-        );
-      }
-      throw new Error(`Unexpected auth header: ${auth}`);
-    }) as typeof globalThis.fetch;
+    globalThis.fetch = fetchMock(
+      async (_url: RequestInfo | URL, init?: RequestInit) => {
+        const auth = new Headers(init?.headers).get("Authorization") ?? "";
+        calls.push(auth);
+        if (auth === "Bearer xoxb-workspace-b") {
+          return new Response(
+            JSON.stringify({
+              ok: true,
+              team_id: "T_B",
+              team: "TeamB",
+              user_id: "U_BOT_B",
+              user: "botb",
+            }),
+            { status: 200, headers: { "content-type": "application/json" } },
+          );
+        }
+        if (auth === "Bearer xoxp-workspace-a") {
+          return new Response(
+            JSON.stringify({
+              ok: true,
+              team_id: "T_A",
+            }),
+            { status: 200, headers: { "content-type": "application/json" } },
+          );
+        }
+        throw new Error(`Unexpected auth header: ${auth}`);
+      },
+    );
 
     const result = await setSlackChannelConfig("xoxb-workspace-b");
 
@@ -465,34 +467,33 @@ describe("Slack channel config handler", () => {
     );
     upsertCredentialMetadata("slack_channel", "user_token", {});
 
-    globalThis.fetch = (async (
-      _url: string,
-      init?: { headers?: Record<string, string> },
-    ) => {
-      const auth = init?.headers?.["Authorization"] ?? "";
-      if (auth === "Bearer xoxb-workspace-a") {
-        return new Response(
-          JSON.stringify({
-            ok: true,
-            team_id: "T_A",
-            team: "TeamA",
-            user_id: "U_BOT_A",
-            user: "bota",
-          }),
-          { status: 200, headers: { "content-type": "application/json" } },
-        );
-      }
-      if (auth === "Bearer xoxp-workspace-a") {
-        return new Response(
-          JSON.stringify({
-            ok: true,
-            team_id: "T_A",
-          }),
-          { status: 200, headers: { "content-type": "application/json" } },
-        );
-      }
-      throw new Error(`Unexpected auth header: ${auth}`);
-    }) as typeof globalThis.fetch;
+    globalThis.fetch = fetchMock(
+      async (_url: RequestInfo | URL, init?: RequestInit) => {
+        const auth = new Headers(init?.headers).get("Authorization") ?? "";
+        if (auth === "Bearer xoxb-workspace-a") {
+          return new Response(
+            JSON.stringify({
+              ok: true,
+              team_id: "T_A",
+              team: "TeamA",
+              user_id: "U_BOT_A",
+              user: "bota",
+            }),
+            { status: 200, headers: { "content-type": "application/json" } },
+          );
+        }
+        if (auth === "Bearer xoxp-workspace-a") {
+          return new Response(
+            JSON.stringify({
+              ok: true,
+              team_id: "T_A",
+            }),
+            { status: 200, headers: { "content-type": "application/json" } },
+          );
+        }
+        throw new Error(`Unexpected auth header: ${auth}`);
+      },
+    );
 
     const result = await setSlackChannelConfig("xoxb-workspace-a");
 
@@ -515,31 +516,30 @@ describe("Slack channel config handler", () => {
     );
     upsertCredentialMetadata("slack_channel", "user_token", {});
 
-    globalThis.fetch = (async (
-      _url: string,
-      init?: { headers?: Record<string, string> },
-    ) => {
-      const auth = init?.headers?.["Authorization"] ?? "";
-      if (auth === "Bearer xoxb-workspace-a") {
-        return new Response(
-          JSON.stringify({
-            ok: true,
-            team_id: "T_A",
-            team: "TeamA",
-            user_id: "U_BOT_A",
-            user: "bota",
-          }),
-          { status: 200, headers: { "content-type": "application/json" } },
-        );
-      }
-      if (auth === "Bearer xoxp-revoked") {
-        return new Response(
-          JSON.stringify({ ok: false, error: "token_revoked" }),
-          { status: 200, headers: { "content-type": "application/json" } },
-        );
-      }
-      throw new Error(`Unexpected auth header: ${auth}`);
-    }) as typeof globalThis.fetch;
+    globalThis.fetch = fetchMock(
+      async (_url: RequestInfo | URL, init?: RequestInit) => {
+        const auth = new Headers(init?.headers).get("Authorization") ?? "";
+        if (auth === "Bearer xoxb-workspace-a") {
+          return new Response(
+            JSON.stringify({
+              ok: true,
+              team_id: "T_A",
+              team: "TeamA",
+              user_id: "U_BOT_A",
+              user: "bota",
+            }),
+            { status: 200, headers: { "content-type": "application/json" } },
+          );
+        }
+        if (auth === "Bearer xoxp-revoked") {
+          return new Response(
+            JSON.stringify({ ok: false, error: "token_revoked" }),
+            { status: 200, headers: { "content-type": "application/json" } },
+          );
+        }
+        throw new Error(`Unexpected auth header: ${auth}`);
+      },
+    );
 
     const result = await setSlackChannelConfig("xoxb-workspace-a");
 
@@ -564,28 +564,27 @@ describe("Slack channel config handler", () => {
     );
     upsertCredentialMetadata("slack_channel", "user_token", {});
 
-    globalThis.fetch = (async (
-      _url: string,
-      init?: { headers?: Record<string, string> },
-    ) => {
-      const auth = init?.headers?.["Authorization"] ?? "";
-      if (auth === "Bearer xoxb-workspace-a") {
-        return new Response(
-          JSON.stringify({
-            ok: true,
-            team_id: "T_A",
-            team: "TeamA",
-            user_id: "U_BOT_A",
-            user: "bota",
-          }),
-          { status: 200, headers: { "content-type": "application/json" } },
-        );
-      }
-      if (auth === "Bearer xoxp-still-valid") {
-        throw new Error("network down");
-      }
-      throw new Error(`Unexpected auth header: ${auth}`);
-    }) as typeof globalThis.fetch;
+    globalThis.fetch = fetchMock(
+      async (_url: RequestInfo | URL, init?: RequestInit) => {
+        const auth = new Headers(init?.headers).get("Authorization") ?? "";
+        if (auth === "Bearer xoxb-workspace-a") {
+          return new Response(
+            JSON.stringify({
+              ok: true,
+              team_id: "T_A",
+              team: "TeamA",
+              user_id: "U_BOT_A",
+              user: "bota",
+            }),
+            { status: 200, headers: { "content-type": "application/json" } },
+          );
+        }
+        if (auth === "Bearer xoxp-still-valid") {
+          throw new Error("network down");
+        }
+        throw new Error(`Unexpected auth header: ${auth}`);
+      },
+    );
 
     const result = await setSlackChannelConfig("xoxb-workspace-a");
 
@@ -615,32 +614,31 @@ describe("Slack channel config handler", () => {
     );
     upsertCredentialMetadata("slack_channel", "user_token", {});
 
-    globalThis.fetch = (async (
-      _url: string,
-      init?: { headers?: Record<string, string> },
-    ) => {
-      const auth = init?.headers?.["Authorization"] ?? "";
-      if (auth === "Bearer xoxb-workspace-b") {
-        return new Response(
-          JSON.stringify({
-            ok: true,
-            team_id: "T_B",
-            team: "TeamB",
-            user_id: "U_BOT_B",
-            user: "botb",
-          }),
-          { status: 200, headers: { "content-type": "application/json" } },
-        );
-      }
-      if (auth === "Bearer xoxp-workspace-a") {
-        // Workspace mismatch — handler will try to clear the user_token.
-        return new Response(JSON.stringify({ ok: true, team_id: "T_A" }), {
-          status: 200,
-          headers: { "content-type": "application/json" },
-        });
-      }
-      throw new Error(`Unexpected auth header: ${auth}`);
-    }) as typeof globalThis.fetch;
+    globalThis.fetch = fetchMock(
+      async (_url: RequestInfo | URL, init?: RequestInit) => {
+        const auth = new Headers(init?.headers).get("Authorization") ?? "";
+        if (auth === "Bearer xoxb-workspace-b") {
+          return new Response(
+            JSON.stringify({
+              ok: true,
+              team_id: "T_B",
+              team: "TeamB",
+              user_id: "U_BOT_B",
+              user: "botb",
+            }),
+            { status: 200, headers: { "content-type": "application/json" } },
+          );
+        }
+        if (auth === "Bearer xoxp-workspace-a") {
+          // Workspace mismatch — handler will try to clear the user_token.
+          return new Response(JSON.stringify({ ok: true, team_id: "T_A" }), {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          });
+        }
+        throw new Error(`Unexpected auth header: ${auth}`);
+      },
+    );
 
     // Force the user_token delete to fail. Other callers (e.g. bot_token
     // store during setSecureKeyAsync flow) are not delete calls so they are
@@ -692,7 +690,7 @@ describe("Slack channel config handler", () => {
       botUsername: "testbot",
     });
 
-    globalThis.fetch = (async () => {
+    globalThis.fetch = fetchMock(async () => {
       // User token's auth.test returns a different team_id.
       return new Response(
         JSON.stringify({
@@ -704,7 +702,7 @@ describe("Slack channel config handler", () => {
           headers: { "content-type": "application/json" },
         },
       );
-    }) as unknown as typeof globalThis.fetch;
+    });
 
     const result = await setSlackChannelConfig(
       undefined,

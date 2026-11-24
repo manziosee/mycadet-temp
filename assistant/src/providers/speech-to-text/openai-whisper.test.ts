@@ -1,3 +1,4 @@
+import assert from "node:assert/strict";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
 import { fetchMock } from "../../__tests__/helpers/fetch-mock.js";
@@ -17,15 +18,14 @@ describe("OpenAIWhisperProvider", () => {
   });
 
   test("successful transcription returns text", async () => {
-    globalThis.fetch = (async (
-      _url: string | URL | Request,
-      _init?: RequestInit,
-    ) => {
-      return new Response(JSON.stringify({ text: "  Hello, world!  " }), {
-        status: 200,
-        headers: { "Content-Type": "application/json" },
-      });
-    }) as typeof fetch;
+    globalThis.fetch = fetchMock(
+      async (_url: string | URL | Request, _init?: RequestInit) => {
+        return new Response(JSON.stringify({ text: "  Hello, world!  " }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      },
+    );
 
     const provider = new OpenAIWhisperProvider(TEST_API_KEY);
     const result = await provider.transcribe(
@@ -44,15 +44,14 @@ describe("OpenAIWhisperProvider", () => {
       },
     });
 
-    globalThis.fetch = (async (
-      _url: string | URL | Request,
-      _init?: RequestInit,
-    ) => {
-      return new Response(errorBody, {
-        status: 401,
-        headers: { "Content-Type": "application/json" },
-      });
-    }) as typeof fetch;
+    globalThis.fetch = fetchMock(
+      async (_url: string | URL | Request, _init?: RequestInit) => {
+        return new Response(errorBody, {
+          status: 401,
+          headers: { "Content-Type": "application/json" },
+        });
+      },
+    );
 
     const provider = new OpenAIWhisperProvider(TEST_API_KEY);
 
@@ -65,20 +64,20 @@ describe("OpenAIWhisperProvider", () => {
     let capturedBody: FormData | undefined;
     let capturedHeaders: HeadersInit | undefined;
 
-    globalThis.fetch = (async (
-      url: string | URL | Request,
-      init?: RequestInit,
-    ) => {
-      capturedBody = init?.body as FormData;
-      capturedHeaders = init?.headers;
-      expect(url).toBe("https://api.openai.com/v1/audio/transcriptions");
-      expect(init?.method).toBe("POST");
+    globalThis.fetch = fetchMock(
+      async (url: string | URL | Request, init?: RequestInit) => {
+        assert(init?.body instanceof FormData);
+        capturedBody = init.body;
+        capturedHeaders = init?.headers;
+        expect(url).toBe("https://api.openai.com/v1/audio/transcriptions");
+        expect(init?.method).toBe("POST");
 
-      return new Response(JSON.stringify({ text: "transcribed" }), {
-        status: 200,
-        headers: { "Content-Type": "application/json" },
-      });
-    }) as typeof fetch;
+        return new Response(JSON.stringify({ text: "transcribed" }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      },
+    );
 
     const provider = new OpenAIWhisperProvider(TEST_API_KEY);
     await provider.transcribe(Buffer.from("fake-audio"), "audio/mpeg");
@@ -94,8 +93,8 @@ describe("OpenAIWhisperProvider", () => {
     expect(model).toBe("whisper-1");
 
     const file = capturedBody!.get("file");
-    expect(file).toBeInstanceOf(Blob);
-    expect((file as Blob).type).toBe("audio/mpeg");
+    assert(file instanceof Blob);
+    expect(file.type).toBe("audio/mpeg");
   });
 
   test("returns empty text when API returns empty text field", async () => {
@@ -145,7 +144,8 @@ describe("OpenAIWhisperProvider", () => {
       await provider.transcribe(Buffer.from("audio"), "audio/wav");
       expect.unreachable("should have thrown");
     } catch (err) {
-      const msg = (err as Error).message;
+      assert(err instanceof Error);
+      const msg = err.message;
       expect(msg).toContain("Whisper API error (500)");
       // The body portion should be at most 300 chars
       const bodyPart = msg.replace("Whisper API error (500): ", "");

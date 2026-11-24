@@ -7,7 +7,6 @@
  * default to "managed" at the schema level (per JARVIS-966), while every
  * other managed-capable service defaults to "your-own".
  */
-
 import {
   existsSync,
   mkdirSync,
@@ -26,6 +25,8 @@ import {
   mock,
   test,
 } from "bun:test";
+
+import { z } from "zod";
 
 // ---------------------------------------------------------------------------
 // Mocks — declared before imports that depend on platform/logger
@@ -67,6 +68,11 @@ function resetWorkspace(): void {
   }
   ensureTestDir();
 }
+
+const serviceSettingsSchema = z.looseObject({
+  mode: z.string().optional(),
+  provider: z.string().optional(),
+});
 
 function readConfig(): Record<string, unknown> {
   return JSON.parse(readFileSync(CONFIG_PATH, "utf-8"));
@@ -142,18 +148,17 @@ describe("cloud-managed config defaults", () => {
     expect(written.services).toBeDefined();
     const services = written.services!;
     for (const svc of MANAGED_SERVICES) {
-      expect((services[svc] as { mode?: string })?.mode).toBe("managed");
+      expect(serviceSettingsSchema.optional().parse(services[svc])?.mode).toBe(
+        "managed",
+      );
     }
-    expect((services["web-search"] as { provider?: string })?.provider).toBe(
-      "inference-provider-native",
-    );
+    expect(
+      serviceSettingsSchema.optional().parse(services["web-search"])?.provider,
+    ).toBe("inference-provider-native");
     // image-generation's managed axis is its provider: the cloud context
     // fills "cadet" and never injects a cloud mode (the persisted mode is
     // the schema default).
-    const imageGen = services["image-generation"] as {
-      provider?: string;
-      mode?: string;
-    };
+    const imageGen = serviceSettingsSchema.parse(services["image-generation"]);
     expect(imageGen?.provider).toBe("cadet");
     expect(imageGen?.mode).not.toBe("managed");
   });
@@ -168,10 +173,14 @@ describe("cloud-managed config defaults", () => {
     expect(written.services).toBeDefined();
     const services = written.services!;
     for (const svc of SCHEMA_YOUR_OWN_DEFAULT_SERVICES) {
-      expect((services[svc] as { mode?: string })?.mode).toBe("your-own");
+      expect(serviceSettingsSchema.optional().parse(services[svc])?.mode).toBe(
+        "your-own",
+      );
     }
     for (const svc of SCHEMA_MANAGED_DEFAULT_SERVICES) {
-      expect((services[svc] as { mode?: string })?.mode).toBe("managed");
+      expect(serviceSettingsSchema.optional().parse(services[svc])?.mode).toBe(
+        "managed",
+      );
     }
   });
 
@@ -185,10 +194,14 @@ describe("cloud-managed config defaults", () => {
     expect(written.services).toBeDefined();
     const services = written.services!;
     for (const svc of SCHEMA_YOUR_OWN_DEFAULT_SERVICES) {
-      expect((services[svc] as { mode?: string })?.mode).toBe("your-own");
+      expect(serviceSettingsSchema.optional().parse(services[svc])?.mode).toBe(
+        "your-own",
+      );
     }
     for (const svc of SCHEMA_MANAGED_DEFAULT_SERVICES) {
-      expect((services[svc] as { mode?: string })?.mode).toBe("managed");
+      expect(serviceSettingsSchema.optional().parse(services[svc])?.mode).toBe(
+        "managed",
+      );
     }
   });
 
@@ -217,7 +230,9 @@ describe("cloud-managed config defaults", () => {
     // (Migration 134 rewrites this legacy shape at daemon startup; the loader
     // itself must simply leave it alone.)
     expect(
-      (written.services!["image-generation"] as { mode?: string })?.mode,
+      serviceSettingsSchema
+        .optional()
+        .parse(written.services!["image-generation"])?.mode,
     ).toBe("your-own");
     // The parsed config strips the legacy key and carries the filled
     // provider; no mode survives the schema.
@@ -250,9 +265,10 @@ describe("cloud-managed config defaults", () => {
 
     const written: { services?: Record<string, unknown> } = readConfig();
     expect(written.services).toBeDefined();
-    expect((written.services!["notion-oauth"] as { mode?: string })?.mode).toBe(
-      "your-own",
-    );
+    expect(
+      serviceSettingsSchema.optional().parse(written.services!["notion-oauth"])
+        ?.mode,
+    ).toBe("your-own");
     expect(config.services["notion-oauth"].mode).toBe("your-own");
   });
 
@@ -286,10 +302,9 @@ describe("cloud-managed config defaults", () => {
     // In-memory config has the deployment-context defaults applied for the
     // missing service-mode fields.
     for (const svc of MANAGED_SERVICES) {
-      expect(
-        (config.services as unknown as Record<string, { mode: string }>)[svc]!
-          .mode,
-      ).toBe("managed");
+      expect(serviceSettingsSchema.parse(config.services[svc]).mode).toBe(
+        "managed",
+      );
     }
     // ...and for image-generation's provider, whose fill is "cadet".
     expect(config.services["image-generation"].provider).toBe("cadet");
@@ -353,16 +368,14 @@ describe("cloud-managed config defaults", () => {
     const config = getConfig();
 
     for (const svc of SCHEMA_YOUR_OWN_DEFAULT_SERVICES) {
-      expect(
-        (config.services as unknown as Record<string, { mode: string }>)[svc]!
-          .mode,
-      ).toBe("your-own");
+      expect(serviceSettingsSchema.parse(config.services[svc]).mode).toBe(
+        "your-own",
+      );
     }
     for (const svc of SCHEMA_MANAGED_DEFAULT_SERVICES) {
-      expect(
-        (config.services as unknown as Record<string, { mode: string }>)[svc]!
-          .mode,
-      ).toBe("managed");
+      expect(serviceSettingsSchema.parse(config.services[svc]).mode).toBe(
+        "managed",
+      );
     }
   });
 });

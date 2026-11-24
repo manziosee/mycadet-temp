@@ -550,9 +550,11 @@ interface RowSnapshot {
 }
 
 function listRows(): RowSnapshot[] {
-  return getSqlite()
-    .query("SELECT id, status FROM acp_session_history ORDER BY id")
-    .all() as RowSnapshot[];
+  return getDb()
+    .select({ id: acpSessionHistory.id, status: acpSessionHistory.status })
+    .from(acpSessionHistory)
+    .orderBy(acpSessionHistory.id)
+    .all();
 }
 
 describe("DELETE /v1/acp/sessions?status=completed", () => {

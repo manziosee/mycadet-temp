@@ -1,3 +1,4 @@
+import assert from "node:assert/strict";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
 import { fetchMock } from "../../__tests__/helpers/fetch-mock.js";
@@ -30,15 +31,14 @@ describe("DeepgramProvider", () => {
   // -----------------------------------------------------------------------
 
   test("successful transcription returns trimmed text", async () => {
-    globalThis.fetch = (async (
-      _url: string | URL | Request,
-      _init?: RequestInit,
-    ) => {
-      return new Response(deepgramResponse("  Hello from Deepgram!  "), {
-        status: 200,
-        headers: { "Content-Type": "application/json" },
-      });
-    }) as typeof fetch;
+    globalThis.fetch = fetchMock(
+      async (_url: string | URL | Request, _init?: RequestInit) => {
+        return new Response(deepgramResponse("  Hello from Deepgram!  "), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      },
+    );
 
     const provider = new DeepgramProvider(TEST_API_KEY);
     const result = await provider.transcribe(
@@ -148,15 +148,14 @@ describe("DeepgramProvider", () => {
       err_msg: "Invalid credentials",
     });
 
-    globalThis.fetch = (async (
-      _url: string | URL | Request,
-      _init?: RequestInit,
-    ) => {
-      return new Response(errorBody, {
-        status: 401,
-        headers: { "Content-Type": "application/json" },
-      });
-    }) as typeof fetch;
+    globalThis.fetch = fetchMock(
+      async (_url: string | URL | Request, _init?: RequestInit) => {
+        return new Response(errorBody, {
+          status: 401,
+          headers: { "Content-Type": "application/json" },
+        });
+      },
+    );
 
     const provider = new DeepgramProvider(TEST_API_KEY);
 
@@ -178,7 +177,8 @@ describe("DeepgramProvider", () => {
       await provider.transcribe(Buffer.from("audio"), "audio/wav");
       expect.unreachable("should have thrown");
     } catch (err) {
-      const msg = (err as Error).message;
+      assert(err instanceof Error);
+      const msg = err.message;
       expect(msg).toContain("Deepgram API error (500)");
       // The body portion should be at most 300 chars
       const bodyPart = msg.replace("Deepgram API error (500): ", "");
@@ -192,23 +192,22 @@ describe("DeepgramProvider", () => {
 
   test("sends correct URL with default query params (model, smart_format)", async () => {
     let capturedUrl: string | undefined;
-    let capturedHeaders: Record<string, string> | undefined;
+    let capturedHeaders: Headers | undefined;
     let capturedContentType: string | undefined;
 
-    globalThis.fetch = (async (
-      url: string | URL | Request,
-      init?: RequestInit,
-    ) => {
-      capturedUrl = String(url);
-      const headers = init?.headers as Record<string, string> | undefined;
-      capturedHeaders = headers;
-      capturedContentType = headers?.["Content-Type"];
+    globalThis.fetch = fetchMock(
+      async (url: string | URL | Request, init?: RequestInit) => {
+        capturedUrl = String(url);
+        const headers = new Headers(init?.headers);
+        capturedHeaders = headers;
+        capturedContentType = headers.get("Content-Type") ?? undefined;
 
-      return new Response(deepgramResponse("ok"), {
-        status: 200,
-        headers: { "Content-Type": "application/json" },
-      });
-    }) as typeof fetch;
+        return new Response(deepgramResponse("ok"), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      },
+    );
 
     const provider = new DeepgramProvider(TEST_API_KEY);
     await provider.transcribe(Buffer.from("fake-audio"), "audio/ogg");
@@ -221,7 +220,7 @@ describe("DeepgramProvider", () => {
     expect(url.searchParams.has("language")).toBe(false);
 
     // Auth header uses Token scheme
-    expect(capturedHeaders?.Authorization).toBe(`Token ${TEST_API_KEY}`);
+    expect(capturedHeaders?.get("Authorization")).toBe(`Token ${TEST_API_KEY}`);
 
     // Content-Type matches the input MIME
     expect(capturedContentType).toBe("audio/ogg");
@@ -230,13 +229,13 @@ describe("DeepgramProvider", () => {
   test("includes language param when specified", async () => {
     let capturedUrl: string | undefined;
 
-    globalThis.fetch = (async (url: string | URL | Request) => {
+    globalThis.fetch = fetchMock(async (url: string | URL | Request) => {
       capturedUrl = String(url);
       return new Response(deepgramResponse("hola"), {
         status: 200,
         headers: { "Content-Type": "application/json" },
       });
-    }) as typeof fetch;
+    });
 
     const provider = new DeepgramProvider(TEST_API_KEY, { language: "es" });
     await provider.transcribe(Buffer.from("audio"), "audio/wav");
@@ -248,13 +247,13 @@ describe("DeepgramProvider", () => {
   test("uses custom model when specified", async () => {
     let capturedUrl: string | undefined;
 
-    globalThis.fetch = (async (url: string | URL | Request) => {
+    globalThis.fetch = fetchMock(async (url: string | URL | Request) => {
       capturedUrl = String(url);
       return new Response(deepgramResponse("text"), {
         status: 200,
         headers: { "Content-Type": "application/json" },
       });
-    }) as typeof fetch;
+    });
 
     const provider = new DeepgramProvider(TEST_API_KEY, {
       model: "nova-2-medical",
@@ -268,13 +267,13 @@ describe("DeepgramProvider", () => {
   test("omits smart_format when smartFormatting is false", async () => {
     let capturedUrl: string | undefined;
 
-    globalThis.fetch = (async (url: string | URL | Request) => {
+    globalThis.fetch = fetchMock(async (url: string | URL | Request) => {
       capturedUrl = String(url);
       return new Response(deepgramResponse("text"), {
         status: 200,
         headers: { "Content-Type": "application/json" },
       });
-    }) as typeof fetch;
+    });
 
     const provider = new DeepgramProvider(TEST_API_KEY, {
       smartFormatting: false,
@@ -288,13 +287,13 @@ describe("DeepgramProvider", () => {
   test("uses custom base URL when specified", async () => {
     let capturedUrl: string | undefined;
 
-    globalThis.fetch = (async (url: string | URL | Request) => {
+    globalThis.fetch = fetchMock(async (url: string | URL | Request) => {
       capturedUrl = String(url);
       return new Response(deepgramResponse("text"), {
         status: 200,
         headers: { "Content-Type": "application/json" },
       });
-    }) as typeof fetch;
+    });
 
     const provider = new DeepgramProvider(TEST_API_KEY, {
       baseUrl: "https://custom-deepgram.example.com/",
@@ -309,25 +308,22 @@ describe("DeepgramProvider", () => {
   test("sends raw audio bytes as request body (not FormData)", async () => {
     let capturedBody: BodyInit | undefined;
 
-    globalThis.fetch = (async (
-      _url: string | URL | Request,
-      init?: RequestInit,
-    ) => {
-      capturedBody = init?.body as BodyInit;
-      return new Response(deepgramResponse("text"), {
-        status: 200,
-        headers: { "Content-Type": "application/json" },
-      });
-    }) as typeof fetch;
+    globalThis.fetch = fetchMock(
+      async (_url: string | URL | Request, init?: RequestInit) => {
+        capturedBody = init?.body ?? undefined;
+        return new Response(deepgramResponse("text"), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      },
+    );
 
     const audioData = Buffer.from("raw-audio-bytes");
     const provider = new DeepgramProvider(TEST_API_KEY);
     await provider.transcribe(audioData, "audio/wav");
 
     // Deepgram accepts raw bytes — verify we're not wrapping in FormData
-    expect(capturedBody).toBeInstanceOf(Uint8Array);
-    expect(
-      Buffer.compare(Buffer.from(capturedBody as Uint8Array), audioData),
-    ).toBe(0);
+    assert(capturedBody instanceof Uint8Array);
+    expect(Buffer.compare(Buffer.from(capturedBody), audioData)).toBe(0);
   });
 });

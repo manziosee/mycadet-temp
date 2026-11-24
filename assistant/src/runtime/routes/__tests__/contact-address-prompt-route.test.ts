@@ -1,3 +1,4 @@
+import assert from "node:assert/strict";
 /**
  * Unit tests for the daemon `contacts_prompt` route's binding target.
  *
@@ -10,6 +11,7 @@ import { beforeEach, describe, expect, mock, test } from "bun:test";
 
 import { z } from "zod";
 
+import { jsonObjectSchema } from "../../../__tests__/helpers/json-object-schema.js";
 import { setBroadcastOverrideForTesting } from "../../assistant-event-hub.js";
 
 const capturedStringSchema = z.string();
@@ -49,7 +51,8 @@ function parkedRequest(): Broadcast {
 }
 
 /** Settle the parked form so the test's pending call returns. */
-async function settle(pending: Promise<unknown>, requestId: string) {
+async function settle(pending: unknown, requestId: string) {
+  assert(pending instanceof Promise);
   resolvePrompt.handler({ body: { requestId, contactId: "ct_1" } });
   await pending;
 }
@@ -78,7 +81,7 @@ describe("contacts_prompt binding target", () => {
         contactId: "ct_1",
         contactDisplayName: "Alice",
       },
-    }) as Promise<Record<string, unknown>>;
+    });
 
     const message = parkedRequest();
     expect(message.contactId).toBe("ct_1");
@@ -92,7 +95,7 @@ describe("contacts_prompt binding target", () => {
   test("broadcasts a proposed name and notes for a contact to create", async () => {
     const pending = addressPrompt.handler({
       body: { channel: "email", displayName: "Bob", notes: "Plumber" },
-    }) as Promise<Record<string, unknown>>;
+    });
 
     const message = parkedRequest();
     expect(message.displayName).toBe("Bob");
@@ -105,7 +108,7 @@ describe("contacts_prompt binding target", () => {
   test("a plain prompt carries no target at all", async () => {
     const pending = addressPrompt.handler({
       body: { channel: "email" },
-    }) as Promise<Record<string, unknown>>;
+    });
 
     const message = parkedRequest();
     for (const key of [
@@ -129,7 +132,7 @@ describe("contacts_prompt binding target", () => {
   test("the gateway reads the target back off the parked form", async () => {
     const pending = addressPrompt.handler({
       body: { channel: "email", contactId: "ct_1", verify: true },
-    }) as Promise<Record<string, unknown>>;
+    });
     const requestId = capturedStringSchema.parse(parkedRequest().requestId);
 
     // Read from the daemon rather than the submission, so a client that
@@ -146,7 +149,7 @@ describe("contacts_prompt binding target", () => {
   test("the proposed name and notes are parked too", async () => {
     const pending = addressPrompt.handler({
       body: { channel: "email", displayName: "Bob", notes: "Plumber" },
-    }) as Promise<Record<string, unknown>>;
+    });
     const requestId = capturedStringSchema.parse(parkedRequest().requestId);
 
     expect(promptFlags.handler({ body: { requestId } })).toEqual({
@@ -170,9 +173,11 @@ describe("contacts_prompt binding target", () => {
   });
 
   test("naming a contact and proposing a new one is refused, and opens no form", async () => {
-    const result = (await addressPrompt.handler({
-      body: { channel: "email", contactId: "ct_1", displayName: "Bob" },
-    })) as Record<string, unknown>;
+    const result = jsonObjectSchema.parse(
+      await addressPrompt.handler({
+        body: { channel: "email", contactId: "ct_1", displayName: "Bob" },
+      }),
+    );
 
     expect(result.ok).toBe(false);
     expect(String(result.error)).toContain("contactId");
@@ -186,9 +191,11 @@ describe("contacts_prompt binding target", () => {
     void addressPrompt.handler({ body: { channel: "email" } });
     expect(broadcasts).toHaveLength(1);
 
-    const result = (await addressPrompt.handler({
-      body: { channel: "phone" },
-    })) as Record<string, unknown>;
+    const result = jsonObjectSchema.parse(
+      await addressPrompt.handler({
+        body: { channel: "phone" },
+      }),
+    );
 
     expect(result.ok).toBe(false);
     expect(String(result.error)).toContain(
@@ -220,9 +227,11 @@ describe("contacts_prompt binding target", () => {
   test("naming a contact and proposing notes is refused, and opens no form", async () => {
     // A targeted bind writes no record, so notes riding along would be
     // reported as saved and dropped.
-    const result = (await addressPrompt.handler({
-      body: { channel: "email", contactId: "ct_1", notes: "Met at the talk" },
-    })) as Record<string, unknown>;
+    const result = jsonObjectSchema.parse(
+      await addressPrompt.handler({
+        body: { channel: "email", contactId: "ct_1", notes: "Met at the talk" },
+      }),
+    );
 
     expect(result.ok).toBe(false);
     expect(String(result.error)).toContain("contactId");

@@ -1,3 +1,4 @@
+import assert from "node:assert/strict";
 /**
  * Tests for the bookmark route handlers in `bookmark-routes.ts`.
  *
@@ -8,8 +9,13 @@
  *   - DELETE /by-message/:messageId
  *   - SSE event publication on create AND delete
  */
-
 import { beforeEach, describe, expect, test } from "bun:test";
+
+import { z } from "zod";
+
+import { BookmarkCreatedEventSchema } from "../../../api/events/bookmark-created.js";
+import { BookmarkDeletedEventSchema } from "../../../api/events/bookmark-deleted.js";
+import { RouteError } from "../errors.js";
 
 // Capture publish() invocations so the tests can assert on emitted events
 // without spinning up real SSE infrastructure.
@@ -33,7 +39,12 @@ import {
   setBroadcastOverrideForTesting,
   setHubPublishOverrideForTesting,
 } from "../../assistant-event-hub.js";
-import { ROUTES as BOOKMARK_ROUTES } from "../bookmark-routes.js";
+import {
+  bookmarkDeleteResponseSchema,
+  bookmarkListResponseSchema,
+  bookmarkSummarySchema,
+  ROUTES as BOOKMARK_ROUTES,
+} from "../bookmark-routes.js";
 import type { RouteDefinition, RouteHandlerArgs } from "../types.js";
 
 // ---------------------------------------------------------------------------
@@ -103,12 +114,12 @@ async function call(
   return await handler(args);
 }
 
-interface EventEnvelope {
-  message: { type: string; [key: string]: unknown };
-}
+const eventEnvelopeSchema = z.object({
+  message: z.looseObject({ type: z.string() }),
+});
 
 function publishedTypes(): string[] {
-  return publishCalls.map((e) => (e as EventEnvelope).message.type);
+  return publishCalls.map((e) => eventEnvelopeSchema.parse(e).message.type);
 }
 
 beforeEach(() => {
@@ -129,16 +140,18 @@ describe("bookmark routes", () => {
       messageRole: "assistant",
     });
 
-    const created = (await call(createHandler, {
-      body: { messageId: "msg-1", conversationId: "conv-1" },
-    })) as { id: string; messageId: string; messagePreview: string };
+    const created = bookmarkSummarySchema.parse(
+      await call(createHandler, {
+        body: { messageId: "msg-1", conversationId: "conv-1" },
+      }),
+    );
 
     expect(created.messageId).toBe("msg-1");
     expect(created.messagePreview).toBe("first message body");
 
-    const listed = (await call(listHandler, {})) as {
-      bookmarks: Array<{ id: string; messageId: string }>;
-    };
+    const listed = bookmarkListResponseSchema.parse(
+      await call(listHandler, {}),
+    );
 
     expect(listed.bookmarks).toHaveLength(1);
     expect(listed.bookmarks[0]?.id).toBe(created.id);
@@ -151,18 +164,22 @@ describe("bookmark routes", () => {
       messageId: "msg-2",
     });
 
-    const first = (await call(createHandler, {
-      body: { messageId: "msg-2", conversationId: "conv-2" },
-    })) as { id: string };
-    const second = (await call(createHandler, {
-      body: { messageId: "msg-2", conversationId: "conv-2" },
-    })) as { id: string };
+    const first = bookmarkSummarySchema.parse(
+      await call(createHandler, {
+        body: { messageId: "msg-2", conversationId: "conv-2" },
+      }),
+    );
+    const second = bookmarkSummarySchema.parse(
+      await call(createHandler, {
+        body: { messageId: "msg-2", conversationId: "conv-2" },
+      }),
+    );
 
     expect(second.id).toBe(first.id);
 
-    const listed = (await call(listHandler, {})) as {
-      bookmarks: unknown[];
-    };
+    const listed = bookmarkListResponseSchema.parse(
+      await call(listHandler, {}),
+    );
     expect(listed.bookmarks).toHaveLength(1);
   });
 
@@ -186,7 +203,8 @@ describe("bookmark routes", () => {
     // `statusCode` field that the HTTP adapter forwards to the wire — assert
     // that we throw something in the 4xx range without coupling to the
     // specific subclass.
-    const statusCode = (caught as { statusCode?: number }).statusCode;
+    assert(caught instanceof RouteError);
+    const statusCode = caught.statusCode;
     expect(
       typeof statusCode === "number" && statusCode >= 400 && statusCode < 500,
     ).toBe(true);
@@ -201,12 +219,16 @@ describe("bookmark routes", () => {
       body: { messageId: "msg-5", conversationId: "conv-5" },
     });
 
-    const result = (await call(deleteByMessageHandler, {
-      pathParams: { messageId: "msg-5" },
-    })) as { success: boolean };
+    const result = bookmarkDeleteResponseSchema.parse(
+      await call(deleteByMessageHandler, {
+        pathParams: { messageId: "msg-5" },
+      }),
+    );
     expect(result.success).toBe(true);
 
-    const listed = (await call(listHandler, {})) as { bookmarks: unknown[] };
+    const listed = bookmarkListResponseSchema.parse(
+      await call(listHandler, {}),
+    );
     expect(listed.bookmarks).toHaveLength(0);
   });
 
@@ -216,20 +238,21 @@ describe("bookmark routes", () => {
       messageId: "msg-6",
     });
 
-    const created = (await call(createHandler, {
-      body: { messageId: "msg-6", conversationId: "conv-6" },
-    })) as { id: string };
+    const created = bookmarkSummarySchema.parse(
+      await call(createHandler, {
+        body: { messageId: "msg-6", conversationId: "conv-6" },
+      }),
+    );
 
     // Publishes are fire-and-forget (`.catch(...)`), so let any pending
     // microtasks settle before asserting.
     await new Promise((r) => setTimeout(r, 0));
 
     expect(publishedTypes()).toEqual(["bookmark.created"]);
-    const createdEvent = publishCalls[0] as EventEnvelope;
+    const createdEvent = eventEnvelopeSchema.parse(publishCalls[0]);
     expect(createdEvent.message.type).toBe("bookmark.created");
     expect(
-      (createdEvent.message as unknown as { bookmark: { id: string } }).bookmark
-        .id,
+      BookmarkCreatedEventSchema.parse(createdEvent.message).bookmark.id,
     ).toBe(created.id);
 
     publishCalls.length = 0;
@@ -238,9 +261,9 @@ describe("bookmark routes", () => {
     await new Promise((r) => setTimeout(r, 0));
 
     expect(publishedTypes()).toEqual(["bookmark.deleted"]);
-    const deletedEvent = publishCalls[0] as EventEnvelope;
+    const deletedEvent = eventEnvelopeSchema.parse(publishCalls[0]);
     expect(
-      (deletedEvent.message as unknown as { messageId?: string }).messageId,
+      BookmarkDeletedEventSchema.parse(deletedEvent.message).messageId,
     ).toBe("msg-6");
   });
 

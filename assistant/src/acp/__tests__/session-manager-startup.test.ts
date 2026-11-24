@@ -4,11 +4,13 @@
  * previous daemon process must be flipped to `cancelled` with a
  * `daemon_restarted` stop reason on the next manager construction.
  */
-
 import { beforeEach, describe, expect, test } from "bun:test";
 
-import { getSqlite } from "../../persistence/db-connection.js";
+import { eq } from "drizzle-orm";
+
+import { getDb, getSqlite } from "../../persistence/db-connection.js";
 import { initializeDb } from "../../persistence/db-init.js";
+import { acpSessionHistory } from "../../persistence/schema/acp.js";
 import { AcpSessionManager } from "../session-manager.js";
 await initializeDb();
 
@@ -25,12 +27,19 @@ interface HistoryRow {
 }
 
 function readHistoryRow(id: string): HistoryRow | null {
-  return getSqlite()
-    .query(
-      `SELECT id, status, stop_reason, completed_at, error
-       FROM acp_session_history WHERE id = ?`,
-    )
-    .get(id) as HistoryRow | null;
+  return (
+    getDb()
+      .select({
+        id: acpSessionHistory.id,
+        status: acpSessionHistory.status,
+        stop_reason: acpSessionHistory.stopReason,
+        completed_at: acpSessionHistory.completedAt,
+        error: acpSessionHistory.error,
+      })
+      .from(acpSessionHistory)
+      .where(eq(acpSessionHistory.id, id))
+      .get() ?? null
+  );
 }
 
 function insertRow(opts: {

@@ -37,21 +37,23 @@ function insertRow(
     .run(name, provider, auth);
 }
 
-function readRows(
-  sqlite: Database,
-): Array<{ name: string; provider: string; auth: string }> {
-  return sqlite
-    .query(
-      `SELECT name, provider, auth FROM provider_connections ORDER BY name`,
-    )
-    .all() as Array<{ name: string; provider: string; auth: string }>;
+function readRows(db: ReturnType<typeof createTestDb>["db"]) {
+  return db
+    .select({
+      name: schema.providerConnections.name,
+      provider: schema.providerConnections.provider,
+      auth: schema.providerConnections.auth,
+    })
+    .from(schema.providerConnections)
+    .orderBy(schema.providerConnections.name)
+    .all();
 }
 
 function readRow(
-  sqlite: Database,
+  db: ReturnType<typeof createTestDb>["db"],
   name: string,
 ): { provider: string; auth: string } {
-  const row = readRows(sqlite).find((r) => r.name === name);
+  const row = readRows(db).find((r) => r.name === name);
   if (!row) {
     throw new Error(`row "${name}" not found`);
   }
@@ -65,7 +67,7 @@ describe("migration 361: normalize cloud connection rows", () => {
 
     migrateNormalizeManagedConnectionRows(db);
 
-    const row = readRow(sqlite, "managed-openai");
+    const row = readRow(db, "managed-openai");
     expect(row.provider).toBe("cadet");
     expect(JSON.parse(row.auth)).toEqual({ type: "platform" });
   });
@@ -76,7 +78,7 @@ describe("migration 361: normalize cloud connection rows", () => {
 
     migrateNormalizeManagedConnectionRows(db);
 
-    expect(readRow(sqlite, "cadet").provider).toBe("cadet");
+    expect(readRow(db, "cadet").provider).toBe("cadet");
   });
 
   test("rewrites a cadet-provider row with non-cloud auth to platform auth", () => {
@@ -91,10 +93,10 @@ describe("migration 361: normalize cloud connection rows", () => {
 
     migrateNormalizeManagedConnectionRows(db);
 
-    expect(JSON.parse(readRow(sqlite, "keyed-cadet").auth)).toEqual({
+    expect(JSON.parse(readRow(db, "keyed-cadet").auth)).toEqual({
       type: "platform",
     });
-    expect(JSON.parse(readRow(sqlite, "none-cadet").auth)).toEqual({
+    expect(JSON.parse(readRow(db, "none-cadet").auth)).toEqual({
       type: "platform",
     });
   });
@@ -116,10 +118,10 @@ describe("migration 361: normalize cloud connection rows", () => {
     );
     insertRow(sqlite, "ollama-local", "ollama", '{"type":"none"}');
 
-    const before = readRows(sqlite);
+    const before = readRows(db);
     migrateNormalizeManagedConnectionRows(db);
 
-    expect(readRows(sqlite)).toEqual(before);
+    expect(readRows(db)).toEqual(before);
   });
 
   test("leaves a BYOK row claiming the canonical name untouched", () => {
@@ -133,7 +135,7 @@ describe("migration 361: normalize cloud connection rows", () => {
 
     migrateNormalizeManagedConnectionRows(db);
 
-    const row = readRow(sqlite, "cadet");
+    const row = readRow(db, "cadet");
     expect(row.provider).toBe("anthropic");
     expect(JSON.parse(row.auth).type).toBe("api_key");
   });
@@ -144,7 +146,7 @@ describe("migration 361: normalize cloud connection rows", () => {
 
     migrateNormalizeManagedConnectionRows(db);
 
-    expect(readRow(sqlite, "broken").auth).toBe("not json");
+    expect(readRow(db, "broken").auth).toBe("not json");
   });
 
   test("is idempotent", () => {
@@ -153,10 +155,10 @@ describe("migration 361: normalize cloud connection rows", () => {
     insertRow(sqlite, "keyed-cadet", "cadet", '{"type":"api_key"}');
 
     migrateNormalizeManagedConnectionRows(db);
-    const afterFirst = readRows(sqlite);
+    const afterFirst = readRows(db);
     migrateNormalizeManagedConnectionRows(db);
 
-    expect(readRows(sqlite)).toEqual(afterFirst);
+    expect(readRows(db)).toEqual(afterFirst);
   });
 
   test("no-ops on a database from before the provider_connections table", () => {
