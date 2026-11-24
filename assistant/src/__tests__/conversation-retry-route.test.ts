@@ -340,7 +340,7 @@ describe("POST /v1/conversations/:id/retry", () => {
       isInteractive: true,
     });
     expect(options).not.toHaveProperty("isHiddenPrompt");
-    expect(typeof (options as { onEvent?: unknown }).onEvent).toBe("function");
+    expect(typeof options?.onEvent).toBe("function");
   });
 
   // The re-run carries none of the anchor's original delivery orchestration,
@@ -514,7 +514,9 @@ describe("POST /v1/conversations/:id/retry", () => {
     );
 
     expect(res.status).toBe(409);
-    const body = (await res.json()) as { error: { message: string } };
+    const body = z
+      .object({ error: z.object({ message: z.string() }) })
+      .parse(await res.json());
     expect(body.error.message).toContain("currently responding");
     expect(ctx.setProcessing).not.toHaveBeenCalled();
     expect(discardMock).not.toHaveBeenCalled();
@@ -549,7 +551,9 @@ describe("POST /v1/conversations/:id/retry", () => {
     );
 
     expect(res.status).toBe(422);
-    const body = (await res.json()) as { error: { message: string } };
+    const body = z
+      .object({ error: z.object({ message: z.string() }) })
+      .parse(await res.json());
     expect(body.error.message).toContain("No user message to retry from");
     // Claimed, then released: true followed by false, controller cleared.
     expect(ctx.setProcessing.mock.calls.map((c) => c[0])).toEqual([
@@ -575,7 +579,8 @@ describe("POST /v1/conversations/:id/retry", () => {
 
     expect(res.status).toBe(202);
     expect(
-      ((await res.json()) as { discardedCount: number }).discardedCount,
+      z.object({ discardedCount: z.number() }).parse(await res.json())
+        .discardedCount,
     ).toBe(0);
     expect(publishConversationMessagesChangedMock).not.toHaveBeenCalled();
 

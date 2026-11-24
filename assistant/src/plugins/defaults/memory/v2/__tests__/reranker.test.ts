@@ -11,10 +11,14 @@ import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 import { AssistantConfig } from "../../../../../config/schema.js";
 
 // Spread the real module: the reranker reaches the plugin API, whose import
-const backendState = {
-  scores: [] as number[],
+const backendState: {
+  scores: number[];
+  shouldThrow: boolean;
+  calls: Array<{ queries: string[]; passages: string[] }>;
+} = {
+  scores: [],
   shouldThrow: false,
-  calls: [] as Array<{ queries: string[]; passages: string[] }>,
+  calls: [],
 };
 mock.module("../rerank-local.js", () => ({
   getOrCreateRerankBackend: (_model: string, _dtype: string) => ({

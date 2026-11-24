@@ -11,6 +11,8 @@
 
 import { beforeEach, describe, expect, mock, test } from "bun:test";
 
+import { z } from "zod";
+
 // ---------------------------------------------------------------------
 // Source + conversation-crud module mocks
 // ---------------------------------------------------------------------
@@ -19,6 +21,7 @@ import type {
   CompactionAgentLogRow,
   LogMetaRow,
 } from "../../../persistence/llm-request-log-store.js";
+import type { RouteHandlerArgs } from "../types.js";
 
 interface FakeSourceState {
   conversation: { id: string } | null;
@@ -42,22 +45,27 @@ const state: FakeSourceState = {
 
 // Records the inputs the handler passed to its collaborators so tests
 // can pin the windowing plumbing without relying on the projection.
-const sourceCalls = {
-  getRequestLogMetaByIdArgs: [] as string[],
-  getPreviousNonCompactionCallCreatedAtArgs: [] as Array<{
+const sourceCalls: {
+  getRequestLogMetaByIdArgs: string[];
+  getPreviousNonCompactionCallCreatedAtArgs: Array<{
     conversationId: string;
     beforeCreatedAt: number;
-  }>,
-  getCompactionLogsBetweenArgs: [] as Array<{
+  }>;
+  getCompactionLogsBetweenArgs: Array<{
     conversationId: string;
     afterCreatedAt: number | null;
     beforeCreatedAt: number;
-  }>,
-  getEventsBetweenArgs: [] as Array<{
+  }>;
+  getEventsBetweenArgs: Array<{
     conversationId: string;
     afterStartedAt: number | null;
     beforeStartedAt: number;
-  }>,
+  }>;
+} = {
+  getRequestLogMetaByIdArgs: [],
+  getPreviousNonCompactionCallCreatedAtArgs: [],
+  getCompactionLogsBetweenArgs: [],
+  getEventsBetweenArgs: [],
 };
 
 mock.module("../../../persistence/compaction-log-store-clickhouse.js", () => ({
@@ -141,9 +149,15 @@ import {
 const route = ROUTES.find(
   (r) => r.operationId === "conversations_compaction_trail_get",
 )!;
-const handler = route.handler as (
-  args: Record<string, unknown>,
-) => Promise<{ conversationId: string; events: unknown[] }>;
+const trailSchema = z.object({
+  conversationId: z.string(),
+  // Keep the full event shape visible to the wire-key assertion below.
+  events: z.array(z.object({ id: z.string() }).passthrough()),
+});
+
+async function handler(args: RouteHandlerArgs) {
+  return trailSchema.parse(await route.handler(args));
+}
 
 function fakeLogMetaRow(overrides: Partial<LogMetaRow> = {}): LogMetaRow {
   return {
@@ -417,7 +431,7 @@ describe("handleGetCompactionTrail — happy path", () => {
     // THEN it emits one event per row, each carrying the full wire shape
     expect(result.conversationId).toBe("conv-1");
     expect(result.events).toHaveLength(2);
-    expect(Object.keys(result.events[0] as object).sort()).toEqual([
+    expect(Object.keys(result.events[0]).sort()).toEqual([
       "compacted",
       "compactedMessages",
       "contextTokensAfter",
@@ -518,7 +532,7 @@ describe("handleGetCompactionTrail — compaction log store", () => {
     expect(sourceCalls.getEventsBetweenArgs).toHaveLength(1);
     expect(sourceCalls.getCompactionLogsBetweenArgs).toHaveLength(1);
     expect(result.events).toHaveLength(1);
-    expect((result.events[0] as { id: string }).id).toBe("compaction-legacy");
+    expect(result.events[0].id).toBe("compaction-legacy");
   });
 
   test("falls back to the legacy projection when the store read throws", async () => {
@@ -544,7 +558,7 @@ describe("handleGetCompactionTrail — compaction log store", () => {
     // THEN it falls through to the legacy projection
     expect(sourceCalls.getCompactionLogsBetweenArgs).toHaveLength(1);
     expect(result.events).toHaveLength(1);
-    expect((result.events[0] as { id: string }).id).toBe("compaction-legacy");
+    expect(result.events[0].id).toBe("compaction-legacy");
   });
 
   test("falls back to the legacy projection when any event is missing its end row", async () => {
@@ -580,7 +594,7 @@ describe("handleGetCompactionTrail — compaction log store", () => {
     expect(sourceCalls.getEventsBetweenArgs).toHaveLength(1);
     expect(sourceCalls.getCompactionLogsBetweenArgs).toHaveLength(1);
     expect(result.events).toHaveLength(1);
-    expect((result.events[0] as { id: string }).id).toBe("compaction-legacy");
+    expect(result.events[0].id).toBe("compaction-legacy");
   });
 });
 

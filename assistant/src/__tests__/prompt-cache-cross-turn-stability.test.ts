@@ -27,10 +27,18 @@ import type { Message } from "../providers/types.js";
 // Provider SDK mocks: must be registered before the transports are imported
 // ---------------------------------------------------------------------------
 
-let lastAnthropicParams: Record<string, unknown> | null = null;
+interface AnthropicWireParams {
+  messages?: AnthropicWireMessage[];
+}
+interface OpenAIWireParams {
+  prompt_cache_options?: unknown;
+  input?: WireItem[];
+}
+
+let lastAnthropicParams: AnthropicWireParams | null = null;
 
 mock.module("@anthropic-ai/sdk", () => {
-  const streamImpl = (params: Record<string, unknown>) => {
+  const streamImpl = (params: AnthropicWireParams) => {
     lastAnthropicParams = JSON.parse(JSON.stringify(params));
     return {
       on() {
@@ -60,12 +68,12 @@ interface FakeStreamEvent {
   [key: string]: unknown;
 }
 
-let lastOpenAIParams: Record<string, unknown> | null = null;
+let lastOpenAIParams: OpenAIWireParams | null = null;
 
 mock.module("openai", () => ({
   default: class MockOpenAI {
     responses = {
-      create: async (params: Record<string, unknown>) => {
+      create: async (params: OpenAIWireParams) => {
         lastOpenAIParams = JSON.parse(JSON.stringify(params));
         const events: FakeStreamEvent[] = [
           { type: "response.output_text.delta", delta: "ok" },
@@ -326,7 +334,7 @@ type WireItem = {
 
 /** A Responses input item with every cache marker removed. */
 function withoutOpenAIMarkers(item: WireItem): WireItem {
-  const clone = JSON.parse(JSON.stringify(item)) as WireItem;
+  const clone = structuredClone(item);
   for (const part of clone.content ?? []) {
     delete part.prompt_cache_breakpoint;
   }
@@ -334,8 +342,8 @@ function withoutOpenAIMarkers(item: WireItem): WireItem {
 }
 
 /** Indexes of Responses input items carrying a cache marker. */
-function openAIMarkedIndexes(params: Record<string, unknown> | null): number[] {
-  const input = (params?.input ?? []) as WireItem[];
+function openAIMarkedIndexes(params: OpenAIWireParams | null): number[] {
+  const input = params?.input ?? [];
   const marked: number[] = [];
   input.forEach((item, idx) => {
     if (item.content?.some((p) => p.prompt_cache_breakpoint !== undefined)) {
@@ -347,14 +355,16 @@ function openAIMarkedIndexes(params: Record<string, unknown> | null): number[] {
 
 type AnthropicWireMessage = {
   role: string;
-  content: Array<Record<string, unknown>>;
+  content: Array<
+    Record<string, unknown> & { cache_control?: { ttl?: string } }
+  >;
 };
 
 /** An Anthropic message with every `cache_control` block marker removed. */
 function withoutAnthropicMarkers(
   message: AnthropicWireMessage,
 ): AnthropicWireMessage {
-  const clone = JSON.parse(JSON.stringify(message)) as AnthropicWireMessage;
+  const clone = structuredClone(message);
   for (const block of clone.content ?? []) {
     delete block.cache_control;
   }
@@ -362,10 +372,8 @@ function withoutAnthropicMarkers(
 }
 
 /** Indexes of Anthropic messages carrying a `cache_control` marker. */
-function anthropicMarkedIndexes(
-  params: Record<string, unknown> | null,
-): number[] {
-  const messages = (params?.messages ?? []) as AnthropicWireMessage[];
+function anthropicMarkedIndexes(params: AnthropicWireParams | null): number[] {
+  const messages = params?.messages ?? [];
   const marked: number[] = [];
   messages.forEach((message, idx) => {
     if (message.content?.some((b) => b.cache_control !== undefined)) {
@@ -379,10 +387,8 @@ function anthropicMarkedIndexes(
  * TTLs marked on the turn-starting user message, the last user message
  * carrying text, which is the boundary the Anthropic client anchors on.
  */
-function anthropicTurnStartTtls(
-  params: Record<string, unknown> | null,
-): string[] {
-  const messages = (params?.messages ?? []) as AnthropicWireMessage[];
+function anthropicTurnStartTtls(params: AnthropicWireParams | null): string[] {
+  const messages = params?.messages ?? [];
   for (let i = messages.length - 1; i >= 0; i--) {
     const message = messages[i];
     if (message.role !== "user") {
@@ -392,7 +398,7 @@ function anthropicTurnStartTtls(
       continue;
     }
     return (message.content ?? [])
-      .map((b) => (b.cache_control as { ttl?: string } | undefined)?.ttl)
+      .map((b) => b.cache_control?.ttl)
       .filter((ttl): ttl is string => ttl !== undefined);
   }
   return [];
@@ -510,8 +516,8 @@ describe("prompt cache cross-turn stability: render pipeline", () => {
 });
 
 describe("prompt cache cross-turn stability: OpenAI Responses wire", () => {
-  let turn1Params: Record<string, unknown> | null = null;
-  let turn2Params: Record<string, unknown> | null = null;
+  let turn1Params: OpenAIWireParams | null = null;
+  let turn2Params: OpenAIWireParams | null = null;
 
   beforeAll(async () => {
     const provider = new OpenAIResponsesProvider(
@@ -535,8 +541,8 @@ describe("prompt cache cross-turn stability: OpenAI Responses wire", () => {
   });
 
   test("turn 1's input items recur identically as a prefix of turn 2's", () => {
-    const input1 = (turn1Params?.input ?? []) as WireItem[];
-    const input2 = (turn2Params?.input ?? []) as WireItem[];
+    const input1 = turn1Params?.input ?? [];
+    const input2 = turn2Params?.input ?? [];
     expect(input1.length).toBeGreaterThan(0);
     expect(input2.length).toBeGreaterThan(input1.length);
 
@@ -559,8 +565,8 @@ describe("prompt cache cross-turn stability: OpenAI Responses wire", () => {
 });
 
 describe("prompt cache cross-turn stability: Anthropic wire", () => {
-  let turn1Params: Record<string, unknown> | null = null;
-  let turn2Params: Record<string, unknown> | null = null;
+  let turn1Params: AnthropicWireParams | null = null;
+  let turn2Params: AnthropicWireParams | null = null;
 
   beforeAll(async () => {
     const provider = new AnthropicProvider("sk-ant-test", "claude-sonnet-4-6");
@@ -579,8 +585,8 @@ describe("prompt cache cross-turn stability: Anthropic wire", () => {
   });
 
   test("turn 1's messages recur identically as a prefix of turn 2's", () => {
-    const messages1 = (turn1Params?.messages ?? []) as AnthropicWireMessage[];
-    const messages2 = (turn2Params?.messages ?? []) as AnthropicWireMessage[];
+    const messages1 = turn1Params?.messages ?? [];
+    const messages2 = turn2Params?.messages ?? [];
     expect(messages1.length).toBeGreaterThan(0);
     expect(messages2.length).toBeGreaterThan(messages1.length);
 
@@ -662,7 +668,7 @@ describe("prompt cache cross-turn stability: volatile first turn", () => {
           role: "user",
           content: [{ type: "tool_result", tool_use_id: "t1", content: "ok" }],
         },
-      ] as unknown as Message[],
+      ],
       {
         systemPrompt: "system prompt",
         config: { mutableLatestUserMessage: true, cacheTtl: "1h" },
@@ -762,13 +768,11 @@ describe("prompt cache stability across daemon restart", () => {
     // is judged on what the provider is sent.
     const wire = new AnthropicProvider("sk-ant-test", "claude-sonnet-4-6");
     await wire.sendMessage(cachedHistory, { systemPrompt: "system prompt" });
-    cachedWire = (lastAnthropicParams?.messages ??
-      []) as AnthropicWireMessage[];
+    cachedWire = lastAnthropicParams?.messages ?? [];
     await wire.sendMessage(restarted.getMessages(), {
       systemPrompt: "system prompt",
     });
-    reloadedWire = (lastAnthropicParams?.messages ??
-      []) as AnthropicWireMessage[];
+    reloadedWire = lastAnthropicParams?.messages ?? [];
   });
 
   test("the cached history carries the per-turn wrapper blocks on both user turns", () => {
