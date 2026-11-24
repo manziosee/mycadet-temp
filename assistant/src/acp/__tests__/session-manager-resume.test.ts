@@ -13,6 +13,7 @@ import { afterAll, beforeEach, describe, expect, mock, test } from "bun:test";
 
 import type { SessionConfigOption } from "@agentclientprotocol/sdk";
 import { count } from "drizzle-orm";
+import { z } from "zod";
 
 import { acpSessionHistory } from "../../persistence/schema/acp.js";
 import {
@@ -707,7 +708,9 @@ describe("AcpSessionManager.resumeFromHistory", () => {
     expect(row.started_at).toBe(1234);
     expect(row.cwd).toBe("/tmp/proj");
 
-    const log = JSON.parse(row.event_log_json) as Array<{ content?: string }>;
+    const log = z
+      .array(z.looseObject({ content: z.string().optional() }))
+      .parse(JSON.parse(row.event_log_json));
     expect(log).toHaveLength(2);
     expect(log[0]!.content).toBe("original-run-chunk");
     expect(log[1]!.content).toBe("resumed-run-chunk");
@@ -1097,7 +1100,9 @@ describe("AcpSessionManager.resumeFromHistory", () => {
     expect(row.status).toBe("cancelled");
     expect(row.completed_at).not.toBeNull();
     // The re-seeded event log survived the cancel-side persistence.
-    const log = JSON.parse(row.event_log_json) as Array<{ content?: string }>;
+    const log = z
+      .array(z.looseObject({ content: z.string().optional() }))
+      .parse(JSON.parse(row.event_log_json));
     expect(log).toHaveLength(1);
     expect(log[0]!.content).toBe("original-run-chunk");
   });

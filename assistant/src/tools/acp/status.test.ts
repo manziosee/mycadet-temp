@@ -5,9 +5,11 @@
  * durable history, where the status tool must keep them discoverable for
  * follow-up work without making internal lifecycle guards treat them as live.
  */
-
 import { beforeEach, describe, expect, mock, test } from "bun:test";
 
+import { z } from "zod";
+
+import { jsonObjectSchema } from "../../__tests__/helpers/json-object-schema.js";
 import type { AcpSessionState } from "../../acp/types.js";
 import type { ToolContext } from "../types.js";
 
@@ -55,10 +57,11 @@ const { executeAcpStatus } = await import("./status.js");
 
 await initializeDb();
 
-const context = {
+const context: ToolContext = {
   conversationId: "conv-1",
   workingDir: "/tmp",
-} as unknown as ToolContext;
+  trustClass: "guardian",
+};
 
 beforeEach(() => {
   liveStates = [];
@@ -208,9 +211,7 @@ describe("executeAcpStatus", () => {
     });
 
     const result = await executeAcpStatus({}, context);
-    const payload = JSON.parse(result.content) as Array<
-      Record<string, unknown>
-    >;
+    const payload = z.array(jsonObjectSchema).parse(JSON.parse(result.content));
 
     expect(payload.map((entry) => [entry.id, entry.status])).toEqual([
       ["idle-1", "idle"],
@@ -333,10 +334,9 @@ describe("executeAcpStatus", () => {
     }
 
     const result = await executeAcpStatus({}, context);
-    const payload = JSON.parse(result.content) as Array<{
-      id: string;
-      status: string;
-    }>;
+    const payload = z
+      .array(z.looseObject({ id: z.string(), status: z.string() }))
+      .parse(JSON.parse(result.content));
 
     expect(payload).toHaveLength(50);
     expect(payload.some((entry) => entry.id === "old-live")).toBe(true);

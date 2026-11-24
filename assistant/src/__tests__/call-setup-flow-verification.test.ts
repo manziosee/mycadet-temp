@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
 import { TrustClass } from "@mycadet/gateway-client";
+import { z } from "zod";
 
 import {
   CallSetupFlow,
@@ -653,9 +654,9 @@ describe("CallSetupFlow verification sub-flows", () => {
       addedMessages: Array<{ content: string }>,
       codeLength: number,
     ): string {
-      const text = (
-        JSON.parse(addedMessages[0].content) as Array<{ text: string }>
-      )[0].text;
+      const text = z
+        .array(z.looseObject({ text: z.string() }))
+        .parse(JSON.parse(addedMessages[0].content))[0].text;
       const match = text.match(new RegExp(`(\\d{${codeLength}})$`));
       if (!match) {
         throw new Error(`No code found in posted message: ${text}`);

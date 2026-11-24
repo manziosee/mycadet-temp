@@ -1,5 +1,7 @@
 import { beforeAll, describe, expect, test } from "bun:test";
 
+import { z } from "zod";
+
 import type { AssistantEvent } from "../api/index.js";
 import { SurfaceType } from "../api/surfaces.js";
 import { initializeDb } from "../persistence/db-init.js";
@@ -134,10 +136,9 @@ describe("starter task surface actions", () => {
     });
 
     expect(result.isError).toBe(false);
-    const parsed = JSON.parse(String(result.content)) as {
-      surfaceId: string;
-      appId: string;
-    };
+    const parsed = z
+      .looseObject({ surfaceId: z.string(), appId: z.string() })
+      .parse(JSON.parse(String(result.content)));
     expect(parsed.appId).toBe("test-app");
     expect(ctx.pendingSurfaceActions.get(parsed.surfaceId)?.surfaceType).toBe(
       "dynamic_page",
@@ -151,7 +152,9 @@ describe("starter task surface actions", () => {
     const result = await surfaceProxyResolver(ctx, "app_open", {});
 
     expect(result.isError).toBe(false);
-    const parsed = JSON.parse(String(result.content)) as { appId: string };
+    const parsed = z
+      .looseObject({ appId: z.string() })
+      .parse(JSON.parse(String(result.content)));
     expect(parsed.appId).toBe("test-app");
   });
 });

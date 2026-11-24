@@ -23,6 +23,7 @@ import {
   getMessages,
 } from "../persistence/conversation-crud.js";
 import { initializeDb } from "../persistence/db-init.js";
+import { jsonObjectSchema } from "./helpers/json-object-schema.js";
 
 beforeAll(async () => {
   await initializeDb();
@@ -109,7 +110,7 @@ function lastPersistedMetadata(): Record<string, unknown> {
   expect(rows.length).toBeGreaterThan(0);
   const metadata = rows.at(-1)!.metadata;
   expect(metadata).not.toBeNull();
-  return JSON.parse(metadata!) as Record<string, unknown>;
+  return jsonObjectSchema.parse(JSON.parse(metadata!));
 }
 
 function readPersistedSlackMeta(): SlackMessageMetadata | null {

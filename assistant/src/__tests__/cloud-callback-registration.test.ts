@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 
 import type { RegisterWebhookRouteIpcParams } from "@mycadet/gateway-client";
+import { z } from "zod";
 
 import { setIngressPublicBaseUrl } from "../config/env.js";
 import type { IpcRegisterWebhookRouteResult } from "../ipc/gateway-client.js";
@@ -329,7 +330,9 @@ describe("platform callback registration", () => {
 
     globalThis.fetch = fetchMock(
       mock(async (_input: RequestInfo | URL, init?: RequestInit) => {
-        const body = JSON.parse(String(init?.body)) as Record<string, string>;
+        const body = z
+          .record(z.string(), z.string())
+          .parse(JSON.parse(String(init?.body)));
         expect(body).toEqual({
           assistant_id: "22222222-3333-4444-8555-666666666666",
           callback_path: "webhooks/telegram",
@@ -371,7 +374,9 @@ describe("platform callback registration", () => {
 
     globalThis.fetch = fetchMock(
       mock(async (_input: RequestInfo | URL, init?: RequestInit) => {
-        const body = JSON.parse(String(init?.body)) as Record<string, string>;
+        const body = z
+          .record(z.string(), z.string())
+          .parse(JSON.parse(String(init?.body)));
         expect(body).not.toHaveProperty("callback_base_url");
         expect(body).toEqual({
           assistant_id: "11111111-2222-4333-8444-555555555555",

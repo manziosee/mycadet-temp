@@ -9,10 +9,10 @@
  * (threaded via `runBackgroundJob({ skipPromptIndexing })` →
  * `processMessage({ skipUserMessageIndexing })`).
  */
-
 import { beforeEach, describe, expect, mock, test } from "bun:test";
 
 import { eq } from "drizzle-orm";
+import { z } from "zod";
 
 mock.module("../persistence/embeddings/qdrant-client.js", () => ({
   getQdrantClient: () => ({
@@ -141,7 +141,11 @@ describe("addMessage skipIndexing contract", () => {
       .from(memoryJobs)
       .where(eq(memoryJobs.type, "index_message_lexical"))
       .all()
-      .map((row) => JSON.parse(row.payload) as { messageId?: string });
+      .map((row) =>
+        z
+          .looseObject({ messageId: z.string().optional() })
+          .parse(JSON.parse(row.payload)),
+      );
     expect(lexicalPayloads).toEqual([{ messageId: saved.id }]);
   });
 

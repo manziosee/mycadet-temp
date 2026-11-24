@@ -4,8 +4,6 @@ import { setConfig } from "./helpers/set-config.js";
 
 setConfig("memory", { enabled: false });
 
-import type { ModeSessionDescriptor } from "../api/mode-session.js";
-import type { ConversationMessage } from "../api/responses/conversation-message.js";
 import { setModeSessionRecoveryHealthy } from "../config/session-groups-gate.js";
 import { ConversationModeSessionCoordinator } from "../daemon/conversation-mode-session.js";
 import {
@@ -26,11 +24,6 @@ import { handleListMessages } from "../runtime/routes/conversation-routes.js";
 import { asConversation } from "./helpers/mock-conversation.js";
 
 await initializeDb();
-
-interface MessagesResponse {
-  messages: ConversationMessage[];
-  modeSessions?: ModeSessionDescriptor[];
-}
 
 function registerCoordinator(
   conversationId: string,
@@ -81,9 +74,9 @@ describe("mode-session history projection", () => {
       endReason: "settled",
     });
     setModeSessionRecoveryHealthy(false);
-    const response = (await handleListMessages({
+    const response = await handleListMessages({
       queryParams: { conversationId: conversation.id },
-    })) as unknown as MessagesResponse;
+    });
     expect(response.modeSessions?.map(({ summary }) => summary.id)).toEqual([
       "terminal-session",
     ]);
@@ -123,12 +116,12 @@ describe("mode-session history projection", () => {
           new ConversationModeSessionCoordinator(conversation.id),
         );
       }
-      const response = (await handleListMessages({
+      const response = await handleListMessages({
         queryParams: {
           conversationId: conversation.id,
           modeSessionIds: "orphan-session",
         },
-      })) as unknown as MessagesResponse;
+      });
       expect(response.modeSessions).toBeUndefined();
       expect(response.messages[0]?.modeSession).toEqual({
         id: "orphan-session",
@@ -181,12 +174,12 @@ describe("mode-session history projection", () => {
       },
     );
 
-    const response = (await handleListMessages({
+    const response = await handleListMessages({
       queryParams: {
         conversationId: conversation.id,
         modeSessionIds: requestedSession.id,
       },
-    })) as unknown as MessagesResponse;
+    });
 
     expect(response.messages).toHaveLength(1);
     expect(response.messages[0]).toMatchObject({
@@ -223,9 +216,9 @@ describe("mode-session history projection", () => {
       },
     );
 
-    const response = (await handleListMessages({
+    const response = await handleListMessages({
       queryParams: { conversationId: child.id },
-    })) as unknown as MessagesResponse;
+    });
 
     expect(response.messages).toHaveLength(1);
     expect(response.messages[0]).not.toHaveProperty("modeSession");

@@ -1470,12 +1470,8 @@ describe("WorkspaceGitService", () => {
       // Since commitIfDirty re-checks the breaker after acquiring the lock,
       // a call that passes the pre-lock check but finds the breaker open
       // after acquiring the lock should bail out.
-      const internal = service as unknown as {
-        consecutiveFailures: number;
-        nextAllowedAttemptMs: number;
-      };
-      internal.consecutiveFailures = 5;
-      internal.nextAllowedAttemptMs = Date.now() + 60_000; // far in the future
+      service["consecutiveFailures"] = 5;
+      service["nextAllowedAttemptMs"] = Date.now() + 60_000; // far in the future
 
       // With breaker open, commitIfDirty should skip (pre-lock check)
       const result = await service.commitIfDirty(() => ({
@@ -1500,12 +1496,8 @@ describe("WorkspaceGitService", () => {
       writeFileSync(join(testDir, "test.txt"), "content");
 
       // Force breaker open with known failure count
-      const internal = service as unknown as {
-        consecutiveFailures: number;
-        nextAllowedAttemptMs: number;
-      };
-      internal.consecutiveFailures = 5;
-      internal.nextAllowedAttemptMs = Date.now() + 60_000;
+      service["consecutiveFailures"] = 5;
+      service["nextAllowedAttemptMs"] = Date.now() + 60_000;
 
       // Pre-lock check catches the open breaker and returns early.
       // Verify that consecutiveFailures is NOT reset to 0.
@@ -1523,14 +1515,10 @@ describe("WorkspaceGitService", () => {
       writeFileSync(join(testDir, "test.txt"), "content");
 
       // Set up prior failures (breaker closed but failures recorded)
-      const internal = service as unknown as {
-        consecutiveFailures: number;
-        nextAllowedAttemptMs: number;
-      };
-      internal.consecutiveFailures = 3;
+      service["consecutiveFailures"] = 3;
       // Set nextAllowedAttemptMs in the past so the breaker check passes
       // but consecutiveFailures is non-zero
-      internal.nextAllowedAttemptMs = Date.now() - 1000;
+      service["nextAllowedAttemptMs"] = Date.now() - 1000;
 
       // Use a deadline that has already passed — this triggers the pre-lock
       // deadline fast-path. consecutiveFailures should NOT be reset.
@@ -1549,12 +1537,8 @@ describe("WorkspaceGitService", () => {
       writeFileSync(join(testDir, "test.txt"), "content");
 
       // Set up prior failures with breaker closed (backoff expired)
-      const internal = service as unknown as {
-        consecutiveFailures: number;
-        nextAllowedAttemptMs: number;
-      };
-      internal.consecutiveFailures = 3;
-      internal.nextAllowedAttemptMs = Date.now() - 1000;
+      service["consecutiveFailures"] = 3;
+      service["nextAllowedAttemptMs"] = Date.now() - 1000;
 
       // Commit should succeed and reset the breaker
       const result = await service.commitIfDirty(() => ({
@@ -1571,12 +1555,8 @@ describe("WorkspaceGitService", () => {
       writeFileSync(join(testDir, "test.txt"), "content");
 
       // Force breaker open
-      const internal = service as unknown as {
-        consecutiveFailures: number;
-        nextAllowedAttemptMs: number;
-      };
-      internal.consecutiveFailures = 5;
-      internal.nextAllowedAttemptMs = Date.now() + 60_000;
+      service["consecutiveFailures"] = 5;
+      service["nextAllowedAttemptMs"] = Date.now() + 60_000;
 
       // With bypassBreaker, commit should succeed despite open breaker
       const result = await service.commitIfDirty(
@@ -1682,10 +1662,7 @@ describe("WorkspaceGitService", () => {
 
       // Second failure — expire the backoff window from the first failure
       // so the attempt actually runs (not blocked by breaker).
-      const internal = service as unknown as {
-        initNextAllowedAttemptMs: number;
-      };
-      internal.initNextAllowedAttemptMs = Date.now() - 1;
+      service["initNextAllowedAttemptMs"] = Date.now() - 1;
 
       await expect(service.ensureInitialized()).rejects.toThrow();
       expect(_getInitConsecutiveFailures(service)).toBe(2);
@@ -1703,12 +1680,8 @@ describe("WorkspaceGitService", () => {
       const service = new WorkspaceGitService(testDir);
 
       // Force the init breaker open
-      const internal = service as unknown as {
-        initConsecutiveFailures: number;
-        initNextAllowedAttemptMs: number;
-      };
-      internal.initConsecutiveFailures = 3;
-      internal.initNextAllowedAttemptMs = Date.now() + 60_000; // far in the future
+      service["initConsecutiveFailures"] = 3;
+      service["initNextAllowedAttemptMs"] = Date.now() + 60_000; // far in the future
 
       // ensureInitialized should throw with circuit breaker message
       await expect(service.ensureInitialized()).rejects.toThrow(
@@ -1723,13 +1696,9 @@ describe("WorkspaceGitService", () => {
       const service = new WorkspaceGitService(testDir);
 
       // Simulate prior init failures
-      const internal = service as unknown as {
-        initConsecutiveFailures: number;
-        initNextAllowedAttemptMs: number;
-      };
-      internal.initConsecutiveFailures = 3;
+      service["initConsecutiveFailures"] = 3;
       // Set backoff in the past so the breaker is closed and allows retry
-      internal.initNextAllowedAttemptMs = Date.now() - 1;
+      service["initNextAllowedAttemptMs"] = Date.now() - 1;
 
       // This should succeed and reset the init breaker
       await service.ensureInitialized();
@@ -1742,12 +1711,8 @@ describe("WorkspaceGitService", () => {
       const service = new WorkspaceGitService(testDir);
 
       // Simulate prior init failures with expired backoff
-      const internal = service as unknown as {
-        initConsecutiveFailures: number;
-        initNextAllowedAttemptMs: number;
-      };
-      internal.initConsecutiveFailures = 5;
-      internal.initNextAllowedAttemptMs = Date.now() - 1; // expired
+      service["initConsecutiveFailures"] = 5;
+      service["initNextAllowedAttemptMs"] = Date.now() - 1; // expired
 
       // Breaker should be closed (backoff expired), allowing init to proceed
       await service.ensureInitialized();
@@ -1761,12 +1726,8 @@ describe("WorkspaceGitService", () => {
       await service.ensureInitialized();
 
       // Force commit breaker open
-      const internal = service as unknown as {
-        consecutiveFailures: number;
-        nextAllowedAttemptMs: number;
-      };
-      internal.consecutiveFailures = 5;
-      internal.nextAllowedAttemptMs = Date.now() + 60_000;
+      service["consecutiveFailures"] = 5;
+      service["nextAllowedAttemptMs"] = Date.now() + 60_000;
 
       // Init breaker should still be clean
       expect(_getInitConsecutiveFailures(service)).toBe(0);
@@ -1778,12 +1739,8 @@ describe("WorkspaceGitService", () => {
       _resetBreaker(service);
 
       // Force init breaker open
-      const internal2 = service as unknown as {
-        initConsecutiveFailures: number;
-        initNextAllowedAttemptMs: number;
-      };
-      internal2.initConsecutiveFailures = 3;
-      internal2.initNextAllowedAttemptMs = Date.now() + 60_000;
+      service["initConsecutiveFailures"] = 3;
+      service["initNextAllowedAttemptMs"] = Date.now() + 60_000;
 
       // Commit breaker should be clean
       expect(_getConsecutiveFailures(service)).toBe(0);
@@ -1802,12 +1759,8 @@ describe("WorkspaceGitService", () => {
       expect(service.isInitialized()).toBe(true);
 
       // Force init breaker open
-      const internal = service as unknown as {
-        initConsecutiveFailures: number;
-        initNextAllowedAttemptMs: number;
-      };
-      internal.initConsecutiveFailures = 5;
-      internal.initNextAllowedAttemptMs = Date.now() + 60_000;
+      service["initConsecutiveFailures"] = 5;
+      service["initNextAllowedAttemptMs"] = Date.now() + 60_000;
 
       // ensureInitialized should succeed via the fast path (already initialized)
       // without hitting the breaker
@@ -2283,20 +2236,16 @@ describe("WorkspaceGitService", () => {
       const service = new WorkspaceGitService(testDir);
       await service.ensureInitialized();
 
-      const internal = service as unknown as {
-        scheduleHistoryCompaction: (delayMs?: number) => void;
-        historyCompactionDueAtMs: number;
-      };
-      internal.scheduleHistoryCompaction(24 * 60 * 60_000);
-      const farDueAt = internal.historyCompactionDueAtMs;
+      service["scheduleHistoryCompaction"](24 * 60 * 60_000);
+      const farDueAt = service["historyCompactionDueAtMs"];
 
-      internal.scheduleHistoryCompaction(60_000);
-      const nearDueAt = internal.historyCompactionDueAtMs;
+      service["scheduleHistoryCompaction"](60_000);
+      const nearDueAt = service["historyCompactionDueAtMs"];
       expect(nearDueAt).toBeLessThan(farDueAt);
 
       // A later request never displaces the sooner pending one
-      internal.scheduleHistoryCompaction(24 * 60 * 60_000);
-      expect(internal.historyCompactionDueAtMs).toBe(nearDueAt);
+      service["scheduleHistoryCompaction"](24 * 60 * 60_000);
+      expect(service["historyCompactionDueAtMs"]).toBe(nearDueAt);
     });
 
     test("history compaction prunes unreachable oversized blobs immediately", async () => {
@@ -2481,10 +2430,7 @@ describe("WorkspaceGitService", () => {
       await service.ensureInitialized();
 
       await withHistoryCompactionDisabled(async () => {
-        const internal = service as unknown as {
-          scheduleHistoryCompaction: (delayMs?: number) => void;
-        };
-        internal.scheduleHistoryCompaction(60_000);
+        service["scheduleHistoryCompaction"](60_000);
         expect(_hasPendingHistoryCompaction(service)).toBe(false);
       });
     });
@@ -2500,11 +2446,8 @@ describe("WorkspaceGitService", () => {
         encoding: "utf-8",
       }).trim();
 
-      const internal = service as unknown as {
-        scheduleHistoryCompaction: (delayMs?: number) => void;
-      };
       // Enabled at schedule time, disabled by the time the timer fires.
-      internal.scheduleHistoryCompaction(150);
+      service["scheduleHistoryCompaction"](150);
       await withHistoryCompactionDisabled(async () => {
         await new Promise((resolve) => setTimeout(resolve, 400));
         expect(_hasPendingHistoryCompaction(service)).toBe(false);

@@ -2,6 +2,8 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, mock, test } from "bun:test";
 
+import { z } from "zod";
+
 import { setConfig } from "./helpers/set-config.js";
 
 // Seed the non-catalog inference profiles these tests exercise: `disabled`
@@ -4084,7 +4086,9 @@ describe("subagent_status list-all past the in-memory window", () => {
   injectSubagent(listMergeManager, "list-merge-live", mergeParent, "running");
 
   function listedSubagents(content: string) {
-    return JSON.parse(content) as Array<{ subagentId: string; status: string }>;
+    return z
+      .array(z.looseObject({ subagentId: z.string(), status: z.string() }))
+      .parse(JSON.parse(content));
   }
 
   test("lists a swept subagent alongside the live one", async () => {
@@ -4142,9 +4146,10 @@ describe("subagent_status list-all bounds the terminal entries", () => {
   );
 
   function listedIds(content: string): string[] {
-    return (JSON.parse(content) as Array<{ subagentId: string }>).map(
-      (s) => s.subagentId,
-    );
+    return z
+      .array(z.looseObject({ subagentId: z.string() }))
+      .parse(JSON.parse(content))
+      .map((s) => s.subagentId);
   }
 
   test("reports only the most recently settled terminal children", async () => {

@@ -1,5 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
+import { z } from "zod";
+
 import type { RetryableCall } from "./retry-policy.js";
 import {
   computeRetryDelayMs,
@@ -164,7 +166,9 @@ describe("retryableCall", () => {
           doFetch: async () =>
             new Response('{"detail":"upstream on fire"}', { status: 503 }),
           detailFrom: (body) =>
-            (JSON.parse(body) as { detail?: string }).detail,
+            z
+              .looseObject({ detail: z.string().optional() })
+              .parse(JSON.parse(body)).detail,
         }),
       ),
     ).rejects.toThrow(/upstream on fire/);
@@ -223,7 +227,9 @@ describe("retryableCall", () => {
             : new Response("{}", { status: 200 });
         },
         retryAfterFrom: (_r, body) => {
-          const v = (JSON.parse(body) as { retry_after?: number }).retry_after;
+          const v = z
+            .looseObject({ retry_after: z.number().optional() })
+            .parse(JSON.parse(body)).retry_after;
           const picked = v != null ? String(v) : null;
           seen.push(picked);
           return picked;

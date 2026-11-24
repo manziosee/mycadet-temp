@@ -1,8 +1,11 @@
 import { beforeEach, describe, expect, mock, test } from "bun:test";
 
+import { z } from "zod";
+
 import type { UISurfaceCompleteEvent } from "../api/events/ui-surface-complete.js";
 import type { AssistantEvent } from "../api/index.js";
 import type { TrustContext } from "../daemon/trust-context-types.js";
+import { jsonObjectSchema } from "./helpers/json-object-schema.js";
 import {
   createMockLoggerModule,
   makeMockLogger,
@@ -73,7 +76,7 @@ mock.module("../persistence/conversation-crud.js", () => ({
     if (persistError) {
       throw persistError;
     }
-    const blocks = JSON.parse(content) as Array<Record<string, unknown>>;
+    const blocks = z.array(jsonObjectSchema).parse(JSON.parse(content));
     callOrder.push("persist");
     contentWrites.push({ id, blocks });
     const row = storedRows.find((r) => r.id === id);
@@ -677,7 +680,9 @@ describe("surfaces completed without ever awaiting an action", () => {
       },
     });
     expect(shown.isError).toBe(false);
-    const { surfaceId } = JSON.parse(shown.content) as { surfaceId: string };
+    const { surfaceId } = z
+      .looseObject({ surfaceId: z.string() })
+      .parse(JSON.parse(shown.content));
 
     // `ui_show` registers no pending entry when it is not awaiting an action,
     // so the action lands on the no-pending branch.

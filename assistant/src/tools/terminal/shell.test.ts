@@ -3,6 +3,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 
+import { z } from "zod";
+
 import { setConfig } from "../../__tests__/helpers/set-config.js";
 import { setBroadcastOverrideForTesting } from "../../runtime/assistant-event-hub.js";
 import {
@@ -72,7 +74,9 @@ async function startBackground(command: string): Promise<string> {
     { command, activity: "test", background: true },
     makeContext(),
   );
-  const parsed = JSON.parse(result.content) as { id: string };
+  const parsed = z
+    .looseObject({ id: z.string() })
+    .parse(JSON.parse(result.content));
   return parsed.id;
 }
 
@@ -141,7 +145,9 @@ describe("background bash lifecycle events", () => {
       },
       makeContext(),
     );
-    const { id } = JSON.parse(result.content) as { id: string };
+    const { id } = z
+      .looseObject({ id: z.string() })
+      .parse(JSON.parse(result.content));
 
     await waitFor(() => completedEvents().length > 0);
     const completed = completedEvents();

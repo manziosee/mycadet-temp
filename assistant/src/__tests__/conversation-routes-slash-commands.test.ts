@@ -10,6 +10,8 @@ import { existsSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 
+import { z } from "zod";
+
 import { setConfig } from "./helpers/set-config.js";
 
 process.env.DISABLE_HTTP_AUTH = "true";
@@ -354,10 +356,9 @@ describe("handleSendMessage slash command interception", () => {
     );
 
     expect(res.status).toBe(202);
-    const body = (await res.json()) as {
-      accepted: boolean;
-      messageId?: string;
-    };
+    const body = z
+      .looseObject({ accepted: z.boolean(), messageId: z.string().optional() })
+      .parse(await res.json());
     expect(body.accepted).toBe(true);
     expect(body.messageId).toBe("persisted-user-id");
 
@@ -380,10 +381,9 @@ describe("handleSendMessage slash command interception", () => {
     );
 
     expect(res.status).toBe(202);
-    const body = (await res.json()) as {
-      accepted: boolean;
-      messageId?: string;
-    };
+    const body = z
+      .looseObject({ accepted: z.boolean(), messageId: z.string().optional() })
+      .parse(await res.json());
     expect(body.accepted).toBe(true);
     expect(body.messageId).toBe("persisted-user-id");
 

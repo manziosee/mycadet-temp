@@ -10,8 +10,11 @@ import { join } from "node:path";
 import { Database } from "bun:sqlite";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
+import { z } from "zod";
+
 import { collapseProfileBindingsToEntriesMigration } from "../workspace/migrations/145-collapse-profile-bindings-to-entries.js";
 import { assertNotLiveDb } from "./assert-not-live-db.js";
+import { jsonObjectSchema } from "./helpers/json-object-schema.js";
 
 let workspaceDir: string;
 
@@ -23,9 +26,17 @@ function writeConfig(data: Record<string, unknown>): void {
 }
 
 function readProfiles(): Record<string, Record<string, unknown>> {
-  const raw = JSON.parse(
-    readFileSync(join(workspaceDir, "config.json"), "utf-8"),
-  ) as { llm?: { profiles?: Record<string, Record<string, unknown>> } };
+  const raw = z
+    .looseObject({
+      llm: z
+        .looseObject({
+          profiles: z.record(z.string(), jsonObjectSchema).optional(),
+        })
+        .optional(),
+    })
+    .parse(
+      JSON.parse(readFileSync(join(workspaceDir, "config.json"), "utf-8")),
+    );
   return raw.llm?.profiles ?? {};
 }
 

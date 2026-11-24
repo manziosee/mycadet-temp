@@ -25,6 +25,8 @@ import {
 
 import { jsonObjectSchema } from "./helpers/json-object-schema.js";
 
+import { jsonObjectSchema } from "./helpers/json-object-schema.js";
+
 // ---------------------------------------------------------------------------
 // Mocks (must precede module imports under test). Note: backfillThreadWindow is
 // stubbed via spyOn (below) rather than mock.module so the stub does not leak
@@ -354,16 +356,7 @@ function readPersistedSlackRows(conversationId: string): PersistedRow[] {
     }
     let envelope: Record<string, unknown>;
     try {
-      const parsed = JSON.parse(row.metadata) as unknown;
-      if (
-        parsed === null ||
-        typeof parsed !== "object" ||
-        Array.isArray(parsed)
-      ) {
-        out.push(blank);
-        continue;
-      }
-      envelope = parsed as Record<string, unknown>;
+      envelope = jsonObjectSchema.parse(JSON.parse(row.metadata));
     } catch {
       out.push(blank);
       continue;

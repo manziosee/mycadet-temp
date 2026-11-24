@@ -4,10 +4,7 @@ import { setConfig } from "./helpers/set-config.js";
 
 setConfig("memory", { enabled: false });
 
-import {
-  type ConversationMessage,
-  ConversationMessageSchema,
-} from "../api/responses/conversation-message.js";
+import { ConversationMessageSchema } from "../api/responses/conversation-message.js";
 import {
   addMessage,
   createConversation,
@@ -75,9 +72,9 @@ describe("handleListMessages camera-frame projection", () => {
       { metadata },
     );
 
-    const response = (await handleListMessages({
+    const response = await handleListMessages({
       queryParams: { conversationId: conv.id },
-    })) as { messages: ConversationMessage[] };
+    });
 
     expect(response.messages).toHaveLength(1);
     const projected = response.messages[0]!;
@@ -107,9 +104,9 @@ describe("handleListMessages camera-frame projection", () => {
         .$client.prepare("UPDATE messages SET metadata = ? WHERE id = ?")
         .run(metadata, row.id);
 
-      const response = (await handleListMessages({
+      const response = await handleListMessages({
         queryParams: { conversationId: conv.id },
-      })) as { messages: ConversationMessage[] };
+      });
 
       expect(response.messages).toHaveLength(1);
       const projected = response.messages[0]!;

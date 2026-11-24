@@ -12,6 +12,7 @@ import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 import { z } from "zod";
 
 import { fetchMock } from "../../../__tests__/helpers/fetch-mock.js";
+import { jsonObjectSchema } from "../../../__tests__/helpers/json-object-schema.js";
 
 const capturedStringSchema = z.string();
 
@@ -407,7 +408,7 @@ describe("sendDiscordAttachments", () => {
 
 describe("editDiscordMessage", () => {
   const bodyOf = (index = 0): Record<string, unknown> =>
-    JSON.parse(String(calls[index]?.body)) as Record<string, unknown>;
+    jsonObjectSchema.parse(JSON.parse(String(calls[index]?.body)));
 
   test("an edit always strips components, so a settled card keeps no live buttons", async () => {
     await editDiscordMessage({ channelId: "C1" }, "m1", "Approved");
