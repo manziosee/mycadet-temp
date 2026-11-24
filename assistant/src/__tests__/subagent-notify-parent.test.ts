@@ -1,5 +1,7 @@
 import { describe, expect, mock, test } from "bun:test";
 
+import { z } from "zod";
+
 // ── Module mocks (must come before any imports that transitively load these) ──
 
 // Mock conversation-crud before importing tool executors that depend on it.
@@ -513,7 +515,9 @@ describe("notify_parent — model-input schema validation (LUM-2857)", () => {
       makeContext(conversationId),
     );
     expect(result.isError).toBe(false);
-    const parsed = JSON.parse(result.content) as { urgency: string };
+    const parsed = z
+      .looseObject({ urgency: z.string() })
+      .parse(JSON.parse(result.content));
     expect(parsed.urgency).toBe("info");
   });
 });

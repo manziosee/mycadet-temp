@@ -22,6 +22,7 @@ import {
   getMessages,
 } from "../persistence/conversation-crud.js";
 import { initializeDb } from "../persistence/db-init.js";
+import { jsonObjectSchema } from "./helpers/json-object-schema.js";
 
 beforeAll(async () => {
   await initializeDb();
@@ -96,16 +97,16 @@ function createSlackTurnContext(): MessagingConversationContext {
 function lastPersistedSlackMeta(): SlackMessageMetadata | null {
   const rows = getMessages(conversationId);
   expect(rows.length).toBeGreaterThan(0);
-  const metadata = JSON.parse(rows.at(-1)!.metadata!) as Record<
-    string,
-    unknown
-  >;
+  const metadata = jsonObjectSchema.parse(JSON.parse(rows.at(-1)!.metadata!));
   const raw = metadata.slackMeta;
   if (raw === undefined) {
     return null;
   }
   expect(typeof raw).toBe("string");
-  return readSlackMetadata(raw as string);
+  if (typeof raw !== "string") {
+    throw new Error("Expected serialized Slack message metadata");
+  }
+  return readSlackMetadata(raw);
 }
 
 describe("PR 16 — Slack DM persistence parity", () => {
@@ -144,9 +145,9 @@ describe("PR 16 — Slack DM persistence parity", () => {
 
     // The transient `slackInbound` carrier key must not leak into the stored
     // metadata column — it's an in-memory plumbing field only.
-    const persistedMeta = JSON.parse(
-      getMessages(conversationId).at(-1)!.metadata!,
-    ) as Record<string, unknown>;
+    const persistedMeta = jsonObjectSchema.parse(
+      JSON.parse(getMessages(conversationId).at(-1)!.metadata!),
+    );
     expect(persistedMeta.slackInbound).toBeUndefined();
   });
 

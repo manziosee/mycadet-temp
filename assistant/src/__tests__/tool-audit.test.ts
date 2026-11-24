@@ -1,5 +1,7 @@
 import { beforeEach, describe, expect, mock, test } from "bun:test";
 
+import { z } from "zod";
+
 // Capture the audit rows the terminals would insert, without touching the
 // database.
 const records: Array<Record<string, unknown>> = [];
@@ -148,7 +150,9 @@ describe("tool audit terminals", () => {
       // redacted before stringification, so the marker lands inside a JSON
       // string value (its quotes escaped) instead of corrupting the
       // serialized form.
-      const parsed = JSON.parse(record.input as string) as { command: string };
+      const parsed = z
+        .looseObject({ command: z.string() })
+        .parse(JSON.parse(z.string().parse(record.input)));
       expect(parsed.command).toContain(OPENAI_PROJECT_KEY_REDACTION_MARKER);
     }
   });
@@ -195,11 +199,13 @@ describe("tool audit terminals", () => {
     });
 
     expect(records).toHaveLength(1);
-    const stored = JSON.parse(records[0].input as string) as {
-      username: string;
-      password: string;
-      token: string;
-    };
+    const stored = z
+      .looseObject({
+        username: z.string(),
+        password: z.string(),
+        token: z.string(),
+      })
+      .parse(JSON.parse(z.string().parse(records[0].input)));
     // Non-sensitive keys pass through; sensitive-key values are redacted.
     expect(stored.username).toBe("alice");
     expect(stored.password).not.toBe("hunter2");

@@ -25,12 +25,12 @@
  * in-memory SQLite DB backs the write assertions via the
  * `memory_v3_selections` migration.
  */
-
 import { Database } from "bun:sqlite";
 import { afterAll, beforeEach, describe, expect, mock, test } from "bun:test";
 
 import { VOICE_ESCALATION_CONTINUATION_MESSAGE_KIND } from "@mycadet/plugin-api";
 import { drizzle } from "drizzle-orm/bun-sqlite";
+import { z } from "zod";
 
 import { setConfig } from "../../../../../__tests__/helpers/set-config.js";
 import { ESCALATION_CONTINUATION_CONTENT } from "../../../../../calls/voice-triage-escalate.js";
@@ -658,10 +658,9 @@ function readPoolInputs() {
 function chosenBySlug(): Record<string, boolean> {
   const pools = readPools();
   expect(pools).toHaveLength(1);
-  const candidates = JSON.parse(pools[0]!.candidates_json) as Array<{
-    slug: string;
-    chosen: boolean;
-  }>;
+  const candidates = z
+    .array(z.looseObject({ slug: z.string(), chosen: z.boolean() }))
+    .parse(JSON.parse(pools[0]!.candidates_json));
   return Object.fromEntries(candidates.map((c) => [c.slug, c.chosen]));
 }
 
@@ -1053,9 +1052,9 @@ describe("memory-v3 engine", () => {
 
     // One hash per pooled candidate in pool order: the card as pre-rendered,
     // then each finder line exactly as the selector renders it.
-    const hashes = JSON.parse(
-      inputs[0]!.candidate_text_hashes_json,
-    ) as string[];
+    const hashes = z
+      .array(z.string())
+      .parse(JSON.parse(inputs[0]!.candidate_text_hashes_json));
     expect(hashes.map((hash) => readPoolText(hash))).toEqual([
       "core card",
       renderFinderLine(finder[0]!),

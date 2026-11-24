@@ -934,10 +934,9 @@ describe("HostBrowserProxy", () => {
       isError: boolean;
     }): void {
       expect(result.isError).toBe(true);
-      const parsed = JSON.parse(result.content) as {
-        code: string;
-        message: string;
-      };
+      const parsed = z
+        .looseObject({ code: z.string(), message: z.string() })
+        .parse(JSON.parse(result.content));
       expect(parsed.code).toBe("extension_required");
       expect(parsed.message).toContain("Chrome extension");
     }
@@ -1002,7 +1001,9 @@ describe("HostBrowserProxy", () => {
       );
 
       expectExtensionRequired(result);
-      const parsed = JSON.parse(result.content) as { message: string };
+      const parsed = z
+        .looseObject({ message: z.string() })
+        .parse(JSON.parse(result.content));
       expect(parsed.message).toContain('"macos"');
       expect(getPublishedMessages()).toHaveLength(0);
     });

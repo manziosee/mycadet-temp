@@ -12,6 +12,8 @@ import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 
+import { z } from "zod";
+
 import { asConversation } from "./helpers/mock-conversation.js";
 
 // ---------------------------------------------------------------------------
@@ -253,9 +255,17 @@ describe("CLI signal send after an interrupt", () => {
 
     // Back with the handover still stalled: the result file is already written
     // and the dispatch has not run.
-    const written = JSON.parse(
-      readFileSync(join(signalsDir, `${filename}.result`), "utf-8"),
-    ) as { ok: boolean; accepted: boolean; requestId: string };
+    const written = z
+      .looseObject({
+        ok: z.boolean(),
+        accepted: z.boolean(),
+        requestId: z.string(),
+      })
+      .parse(
+        JSON.parse(
+          readFileSync(join(signalsDir, `${filename}.result`), "utf-8"),
+        ),
+      );
     expect(written).toMatchObject({
       ok: true,
       accepted: true,

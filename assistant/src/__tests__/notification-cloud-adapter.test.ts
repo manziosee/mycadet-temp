@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, mock, test } from "bun:test";
 
 import { saveRawConfig } from "../config/loader.js";
+import { jsonObjectSchema } from "./helpers/json-object-schema.js";
 
 // ── Mock logger ──────────────────────────────────────────────────────────────
 
@@ -57,7 +58,7 @@ mock.module("../cloud/client.js", () => ({
         cloudAssistantId: "test-assistant-id",
         fetch: async (path: string, init?: RequestInit) => {
           const body = init?.body
-            ? (JSON.parse(init.body as string) as Record<string, unknown>)
+            ? jsonObjectSchema.parse(JSON.parse(init.body as string))
             : {};
           fetchCalls.push({
             path,
@@ -78,7 +79,7 @@ mock.module("../cloud/client.js", () => ({
             ok: response.ok,
             status: response.status,
             text: async () => response.body ?? "",
-            json: async () => JSON.parse(response.body ?? "") as unknown,
+            json: async (): Promise<unknown> => JSON.parse(response.body ?? ""),
           };
         },
       };

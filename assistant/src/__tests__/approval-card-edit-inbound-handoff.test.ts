@@ -11,6 +11,8 @@
  */
 import { beforeEach, describe, expect, mock, spyOn, test } from "bun:test";
 
+import { z } from "zod";
+
 process.env.DISABLE_HTTP_AUTH = "true";
 
 const _conversationMocks = new Map<string, unknown>();
@@ -146,9 +148,11 @@ describe("approval-card edit: inbound message-id handoff", () => {
     // will hang off, the way a real approval prompt's conversation exists
     // before its buttons are pressed.
     const first = await handleChannelInbound(makeInboundRequest());
-    expect(((await first.json()) as { accepted?: boolean }).accepted).toBe(
-      true,
-    );
+    expect(
+      z
+        .looseObject({ accepted: z.boolean().optional() })
+        .parse(await first.json()).accepted,
+    ).toBe(true);
     const conversationId = conversationIdFromInboundEvents();
     registerPendingInteraction("req-handoff-1", conversationId);
 
@@ -180,9 +184,11 @@ describe("approval-card edit: inbound message-id handoff", () => {
   test("a button press whose wire carries no message id edits nothing", async () => {
     // The inverse pin: the edit is driven by the wire's id and only by it.
     const first = await handleChannelInbound(makeInboundRequest());
-    expect(((await first.json()) as { accepted?: boolean }).accepted).toBe(
-      true,
-    );
+    expect(
+      z
+        .looseObject({ accepted: z.boolean().optional() })
+        .parse(await first.json()).accepted,
+    ).toBe(true);
     const conversationId = conversationIdFromInboundEvents();
     registerPendingInteraction("req-handoff-2", conversationId);
 

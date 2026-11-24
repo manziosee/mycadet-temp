@@ -27,6 +27,7 @@ import { resetCleanupScheduleThrottle } from "../persistence/cleanup-schedule-st
 import { getMemoryDb } from "../persistence/db-connection.js";
 import { initializeDb } from "../persistence/db-init.js";
 import { memoryJobs } from "../persistence/schema/index.js";
+import { jsonObjectSchema } from "./helpers/json-object-schema.js";
 
 beforeAll(async () => {
   await initializeDb();
@@ -68,7 +69,7 @@ const jobPayload = (
     return {};
   }
   try {
-    return JSON.parse(row.payload) as Record<string, unknown>;
+    return jsonObjectSchema.parse(JSON.parse(row.payload));
   } catch {
     return {};
   }

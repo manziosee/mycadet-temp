@@ -354,16 +354,7 @@ function readPersistedSlackRows(conversationId: string): PersistedRow[] {
     }
     let envelope: Record<string, unknown>;
     try {
-      const parsed = JSON.parse(row.metadata) as unknown;
-      if (
-        parsed === null ||
-        typeof parsed !== "object" ||
-        Array.isArray(parsed)
-      ) {
-        out.push(blank);
-        continue;
-      }
-      envelope = parsed as Record<string, unknown>;
+      envelope = jsonObjectSchema.parse(JSON.parse(row.metadata));
     } catch {
       out.push(blank);
       continue;

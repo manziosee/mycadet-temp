@@ -334,7 +334,7 @@ describe("duplicate event deduplication", () => {
       noopProcessMessage,
       TEST_BEARER_TOKEN,
     );
-    const body1 = (await res1.json()) as Record<string, unknown>;
+    const body1 = jsonObjectSchema.parse(await res1.json());
     expect(body1.duplicate).toBe(false);
 
     // Same externalMessageId => duplicate
@@ -347,7 +347,7 @@ describe("duplicate event deduplication", () => {
       noopProcessMessage,
       TEST_BEARER_TOKEN,
     );
-    const body2 = (await res2.json()) as Record<string, unknown>;
+    const body2 = jsonObjectSchema.parse(await res2.json());
     expect(body2.duplicate).toBe(true);
 
     // Only one attention event should exist

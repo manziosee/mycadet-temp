@@ -73,13 +73,14 @@ describe("handleListMessages metadata.hidden filtering", () => {
     const response = await handleListMessages({
       queryParams: { conversationId: conv.id },
     });
-    const body = response as { messages: MessagePayload[] };
 
-    expect(body.messages).toHaveLength(2);
-    expect(plainText(body.messages[0])).toBe("first visible");
-    expect(plainText(body.messages[1])).toBe("second visible");
+    expect(response.messages).toHaveLength(2);
+    expect(plainText(response.messages[0])).toBe("first visible");
+    expect(plainText(response.messages[1])).toBe("second visible");
     expect(
-      body.messages.some((m) => plainText(m).includes("internal scaffolding")),
+      response.messages.some((m) =>
+        plainText(m).includes("internal scaffolding"),
+      ),
     ).toBe(false);
 
     // LLM-side loader must include the hidden row so agent context is intact.
@@ -112,12 +113,13 @@ describe("handleListMessages metadata.hidden filtering", () => {
     const response = await handleListMessages({
       queryParams: { conversationId: conv.id },
     });
-    const body = response as { messages: MessagePayload[] };
 
     // THEN only the user/assistant turns are returned, never the system row
-    expect(body.messages.map((m) => m.role)).toEqual(["user", "assistant"]);
+    expect(response.messages.map((m) => m.role)).toEqual(["user", "assistant"]);
     expect(
-      body.messages.some((m) => plainText(m).includes("system scaffolding")),
+      response.messages.some((m) =>
+        plainText(m).includes("system scaffolding"),
+      ),
     ).toBe(false);
 
     // AND the LLM-side loader still includes the system row for agent context
@@ -143,9 +145,8 @@ describe("handleListMessages metadata.hidden filtering", () => {
     const response = await handleListMessages({
       queryParams: { conversationId: conv.id },
     });
-    const body = response as { messages: MessagePayload[] };
 
-    expect(body.messages).toHaveLength(2);
+    expect(response.messages).toHaveLength(2);
   });
 
   test("pagination skips hidden rows so hasMore and oldest cursor reflect visible rows", async () => {
@@ -177,14 +178,9 @@ describe("handleListMessages metadata.hidden filtering", () => {
       );
     }
 
-    const latest = (await handleListMessages({
+    const latest = await handleListMessages({
       queryParams: { conversationId: conv.id, page: "latest", limit: "2" },
-    })) as {
-      messages: MessagePayload[];
-      hasMore: boolean;
-      oldestTimestamp: number | null;
-      oldestMessageId: string | null;
-    };
+    });
 
     expect(latest.messages.map(plainText)).toEqual([
       "new visible 0",
@@ -196,16 +192,13 @@ describe("handleListMessages metadata.hidden filtering", () => {
 
     // Older page request — anchored before the latest page's oldest row —
     // should skip the hidden block entirely and return the next 2 visible rows.
-    const older = (await handleListMessages({
+    const older = await handleListMessages({
       queryParams: {
         conversationId: conv.id,
         beforeTimestamp: String(latest.oldestTimestamp),
         limit: "2",
       },
-    })) as {
-      messages: MessagePayload[];
-      hasMore: boolean;
-    };
+    });
 
     expect(older.messages.map(plainText)).toEqual([
       "old visible 2",
@@ -258,13 +251,9 @@ describe("handleListMessages metadata.hidden filtering", () => {
         }
       });
 
-      const latest = (await handleListMessages({
+      const latest = await handleListMessages({
         queryParams: { conversationId: conv.id, page: "latest", limit: "2" },
-      })) as {
-        messages: MessagePayload[];
-        hasMore: boolean;
-        oldestTimestamp: number | null;
-      };
+      });
 
       // Page is empty (the cap was consumed entirely by hidden rows) but the
       // client must still be told to keep paginating and given a cursor.
@@ -274,13 +263,13 @@ describe("handleListMessages metadata.hidden filtering", () => {
 
       // Resuming from the surfaced cursor drains the remaining hidden rows and
       // surfaces the visible ones below the cap.
-      const older = (await handleListMessages({
+      const older = await handleListMessages({
         queryParams: {
           conversationId: conv.id,
           beforeTimestamp: String(latest.oldestTimestamp),
           limit: "2",
         },
-      })) as { messages: MessagePayload[]; hasMore: boolean };
+      });
 
       expect(older.messages.map(plainText)).toEqual(["visible 0", "visible 1"]);
       expect(older.hasMore).toBe(false);
@@ -311,13 +300,9 @@ describe("handleListMessages metadata.hidden filtering", () => {
       );
     }
 
-    const latest = (await handleListMessages({
+    const latest = await handleListMessages({
       queryParams: { conversationId: conv.id, page: "latest", limit: "2" },
-    })) as {
-      messages: MessagePayload[];
-      hasMore: boolean;
-      oldestTimestamp: number | null;
-    };
+    });
 
     expect(latest.messages.map(plainText)).toEqual([
       "old visible 0",
@@ -360,21 +345,20 @@ describe("handleListMessages metadata.hidden filtering", () => {
     const response = await handleListMessages({
       queryParams: { conversationId: conv.id },
     });
-    const body = response as { messages: MessagePayload[] };
 
     // The hidden instruction is shown, and because it sits between the two
     // assistant rows they do NOT merge — the review stands as its own turn.
-    expect(body.messages.map((m) => m.role)).toEqual([
+    expect(response.messages.map((m) => m.role)).toEqual([
       "user",
       "assistant",
       "user",
       "assistant",
     ]);
-    expect(plainText(body.messages[1])).toBe("source answer");
-    expect(plainText(body.messages[2])).toContain(
+    expect(plainText(response.messages[1])).toBe("source answer");
+    expect(plainText(response.messages[2])).toContain(
       "background memory pass instruction",
     );
-    expect(plainText(body.messages[3])).toBe("retrospective review");
+    expect(plainText(response.messages[3])).toBe("retrospective review");
   });
 
   test("non-fork conversations still hide the retrospective instruction (relaxation is fork-scoped)", async () => {
@@ -408,17 +392,18 @@ describe("handleListMessages metadata.hidden filtering", () => {
     const response = await handleListMessages({
       queryParams: { conversationId: conv.id },
     });
-    const body = response as { messages: MessagePayload[] };
 
     // Instruction stays hidden for non-retrospective conversations; the review
     // (a normal assistant message) is still returned.
     expect(
-      body.messages.some((m) =>
+      response.messages.some((m) =>
         plainText(m).includes("background memory pass instruction"),
       ),
     ).toBe(false);
     expect(
-      body.messages.some((m) => plainText(m).includes("retrospective review")),
+      response.messages.some((m) =>
+        plainText(m).includes("retrospective review"),
+      ),
     ).toBe(true);
   });
 });

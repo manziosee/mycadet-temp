@@ -177,10 +177,7 @@ function seedPendingConfirmation(
   // Access private ownedIds so denyAllPending/dispose can find this request.
   // promptResolve/promptReject callbacks are stored in pendingInteractions via
   // registerPendingInteraction, which is called separately in each test.
-  const prompter = conversation["prompter"] as unknown as {
-    ownedIds: Set<string>;
-  };
-  prompter.ownedIds.add(requestId);
+  conversation["prompter"]["ownedIds"].add(requestId);
 }
 
 // ---------------------------------------------------------------------------
@@ -200,11 +197,7 @@ describe("centralized confirmation emissions", () => {
     );
     // Filter to our explicitly requested emission (not the pending/timed_out ones from prompter)
     const confirmMsg = confirmMsgs.find(
-      (m) =>
-        "requestId" in m &&
-        (m as { requestId: string }).requestId === "req-allow-1" &&
-        "state" in m &&
-        (m as { state: string }).state === "approved",
+      (m) => m.requestId === "req-allow-1" && m.state === "approved",
     );
     expect(confirmMsg).toBeDefined();
     expect(confirmMsg).toMatchObject({
@@ -226,10 +219,8 @@ describe("centralized confirmation emissions", () => {
     const confirmMsg = emitted.find(
       (m) =>
         m.type === "confirmation_state_changed" &&
-        "requestId" in m &&
-        (m as { requestId: string }).requestId === "req-deny-1" &&
-        "state" in m &&
-        (m as { state: string }).state === "denied",
+        m.requestId === "req-deny-1" &&
+        m.state === "denied",
     );
     expect(confirmMsg).toBeDefined();
     expect(confirmMsg).toMatchObject({
@@ -250,8 +241,7 @@ describe("centralized confirmation emissions", () => {
     const activityMsg = emitted.find(
       (m) =>
         m.type === "assistant_activity_state" &&
-        "reason" in m &&
-        (m as { reason: string }).reason === "confirmation_resolved",
+        m.reason === "confirmation_resolved",
     );
     expect(activityMsg).toBeDefined();
     expect(activityMsg).toMatchObject({
@@ -277,9 +267,7 @@ describe("centralized confirmation emissions", () => {
 
     const confirmMsg = emitted.find(
       (m) =>
-        m.type === "confirmation_state_changed" &&
-        "requestId" in m &&
-        (m as { requestId: string }).requestId === "req-ctx-1",
+        m.type === "confirmation_state_changed" && m.requestId === "req-ctx-1",
     );
     expect(confirmMsg).toBeDefined();
     expect(confirmMsg).toMatchObject({
@@ -326,7 +314,10 @@ describe("activity version ordering", () => {
 
     const baselineMsg = emitted.find(
       (m) => m.type === "assistant_activity_state",
-    ) as AssistantEvent & { activityVersion: number };
+    );
+    if (!baselineMsg) {
+      throw new Error("Expected a baseline activity state");
+    }
     const baselineVersion = baselineMsg.activityVersion;
 
     // Now handle a confirmation
@@ -384,14 +375,12 @@ describe("sendToClient receives state signals", () => {
     const confirmSignal = clientMsgs.find(
       (m) =>
         m.type === "confirmation_state_changed" &&
-        "requestId" in m &&
-        (m as { requestId: string }).requestId === "req-signal-confirm",
+        m.requestId === "req-signal-confirm",
     );
     const activitySignal = clientMsgs.find(
       (m) =>
         m.type === "assistant_activity_state" &&
-        "reason" in m &&
-        (m as { reason: string }).reason === "confirmation_resolved",
+        m.reason === "confirmation_resolved",
     );
 
     expect(confirmSignal).toBeDefined();
@@ -425,9 +414,7 @@ describe("the sink is fixed for the conversation's life", () => {
       (m) => m.type === "assistant_activity_state",
     );
     expect(activity).toHaveLength(1);
-    expect((activity[0] as { statusText?: string }).statusText).toBe(
-      "Summarizing conversation",
-    );
+    expect(activity[0]?.statusText).toBe("Summarizing conversation");
   });
 
   test("presence is a property of the turn, not of delivery", () => {

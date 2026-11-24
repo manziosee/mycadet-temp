@@ -8,10 +8,11 @@
  * validate against the canonical event schema, because the client's stream
  * parser silently drops events that do not.
  */
-
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, test } from "bun:test";
+
+import { z } from "zod";
 
 import { UISurfaceShowEventSchema } from "../api/events/ui-surface-show.js";
 import type { AssistantEvent } from "../api/index.js";
@@ -626,10 +627,9 @@ describe("ui_show visual emission", () => {
     expect(parsed.title).toBe("How staging works");
     expect(parsed.data).toEqual({ html: HTML, height: 320 });
 
-    const payload = JSON.parse(result.content) as {
-      surfaceId: string;
-      note: string;
-    };
+    const payload = z
+      .looseObject({ surfaceId: z.string(), note: z.string() })
+      .parse(JSON.parse(result.content));
     expect(payload.surfaceId).toBe(parsed.surfaceId);
     expect(payload.note).toContain("Continue your response in prose");
     expect(payload.note).toContain("ui_dismiss");

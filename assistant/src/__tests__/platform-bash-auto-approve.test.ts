@@ -109,13 +109,12 @@ function makeContext(overrides?: Partial<TC>): TC {
   };
 }
 
-function makePrompter(): PermissionPrompter {
-  return {
-    prompt: async () => ({ decision: "allow" as const }),
-    resolveConfirmation: () => {},
-    updateSender: () => {},
-    dispose: () => {},
-  } as unknown as PermissionPrompter;
+function makePrompter(
+  prompt: PermissionPrompter["prompt"] = async () => ({ decision: "allow" }),
+): PermissionPrompter {
+  const prompter = new PermissionPrompter(() => {});
+  prompter.prompt = prompt;
+  return prompter;
 }
 
 afterAll(() => {
@@ -140,15 +139,10 @@ describe("cloud-hosted bash auto-approval", () => {
     checkResultOverride = { decision: "prompt", reason: "Needs approval" };
 
     let promptCalled = false;
-    const trackingPrompter = {
-      prompt: async () => {
-        promptCalled = true;
-        return { decision: "allow" as const };
-      },
-      resolveConfirmation: () => {},
-      updateSender: () => {},
-      dispose: () => {},
-    } as unknown as PermissionPrompter;
+    const trackingPrompter = makePrompter(async () => {
+      promptCalled = true;
+      return { decision: "allow" };
+    });
 
     const executor = new ToolExecutor(trackingPrompter);
     const result = await executor.execute(
@@ -165,15 +159,10 @@ describe("cloud-hosted bash auto-approval", () => {
     checkResultOverride = { decision: "prompt", reason: "Needs approval" };
 
     let promptCalled = false;
-    const trackingPrompter = {
-      prompt: async () => {
-        promptCalled = true;
-        return { decision: "allow" as const };
-      },
-      resolveConfirmation: () => {},
-      updateSender: () => {},
-      dispose: () => {},
-    } as unknown as PermissionPrompter;
+    const trackingPrompter = makePrompter(async () => {
+      promptCalled = true;
+      return { decision: "allow" };
+    });
 
     const executor = new ToolExecutor(trackingPrompter);
     await executor.execute(
@@ -189,15 +178,10 @@ describe("cloud-hosted bash auto-approval", () => {
     checkResultOverride = { decision: "prompt", reason: "Needs approval" };
 
     let promptCalled = false;
-    const trackingPrompter = {
-      prompt: async () => {
-        promptCalled = true;
-        return { decision: "allow" as const };
-      },
-      resolveConfirmation: () => {},
-      updateSender: () => {},
-      dispose: () => {},
-    } as unknown as PermissionPrompter;
+    const trackingPrompter = makePrompter(async () => {
+      promptCalled = true;
+      return { decision: "allow" };
+    });
 
     const executor = new ToolExecutor(trackingPrompter);
     await executor.execute(
@@ -216,14 +200,9 @@ describe("cloud-hosted bash auto-approval", () => {
   test("bash NOT auto-approved for non-guardian actors via cloud path (trusted_contact requires grant)", async () => {
     checkResultOverride = { decision: "prompt", reason: "Needs approval" };
 
-    const trackingPrompter = {
-      prompt: async () => {
-        return { decision: "allow" as const };
-      },
-      resolveConfirmation: () => {},
-      updateSender: () => {},
-      dispose: () => {},
-    } as unknown as PermissionPrompter;
+    const trackingPrompter = makePrompter(async () => {
+      return { decision: "allow" };
+    });
 
     const executor = new ToolExecutor(trackingPrompter);
     const result = await executor.execute(
@@ -246,15 +225,10 @@ describe("cloud-hosted bash auto-approval", () => {
     checkResultOverride = { decision: "prompt", reason: "Needs approval" };
 
     let promptCalled = false;
-    const trackingPrompter = {
-      prompt: async () => {
-        promptCalled = true;
-        return { decision: "allow" as const };
-      },
-      resolveConfirmation: () => {},
-      updateSender: () => {},
-      dispose: () => {},
-    } as unknown as PermissionPrompter;
+    const trackingPrompter = makePrompter(async () => {
+      promptCalled = true;
+      return { decision: "allow" };
+    });
 
     const executor = new ToolExecutor(trackingPrompter);
     await executor.execute(
@@ -293,15 +267,10 @@ describe("cloud-hosted bash auto-approval", () => {
     checkResultOverride = { decision: "prompt", reason: "High risk command" };
 
     let promptCalled = false;
-    const trackingPrompter = {
-      prompt: async () => {
-        promptCalled = true;
-        return { decision: "allow" as const };
-      },
-      resolveConfirmation: () => {},
-      updateSender: () => {},
-      dispose: () => {},
-    } as unknown as PermissionPrompter;
+    const trackingPrompter = makePrompter(async () => {
+      promptCalled = true;
+      return { decision: "allow" };
+    });
 
     const executor = new ToolExecutor(trackingPrompter);
     const result = await executor.execute(
@@ -318,15 +287,10 @@ describe("cloud-hosted bash auto-approval", () => {
     checkResultOverride = { decision: "prompt", reason: "Needs approval" };
 
     let promptCalled = false;
-    const trackingPrompter = {
-      prompt: async () => {
-        promptCalled = true;
-        return { decision: "allow" as const };
-      },
-      resolveConfirmation: () => {},
-      updateSender: () => {},
-      dispose: () => {},
-    } as unknown as PermissionPrompter;
+    const trackingPrompter = makePrompter(async () => {
+      promptCalled = true;
+      return { decision: "allow" };
+    });
 
     const executor = new ToolExecutor(trackingPrompter);
     await executor.execute(

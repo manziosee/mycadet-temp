@@ -10,6 +10,10 @@
  */
 import { beforeEach, describe, expect, mock, test } from "bun:test";
 
+import { z } from "zod";
+
+import { jsonObjectSchema } from "./helpers/json-object-schema.js";
+
 let mockedRowContent = "";
 const updates: Array<{ id: string; content: string }> = [];
 
@@ -93,7 +97,7 @@ function findBlockById(
   rawContent: string,
   id: string,
 ): Record<string, unknown> {
-  const parsed = JSON.parse(rawContent) as Array<Record<string, unknown>>;
+  const parsed = z.array(jsonObjectSchema).parse(JSON.parse(rawContent));
   const block = parsed.find((b) => b.id === id);
   if (!block) {
     throw new Error(`block ${id} not found`);

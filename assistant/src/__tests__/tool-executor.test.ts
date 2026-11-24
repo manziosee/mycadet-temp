@@ -151,13 +151,12 @@ function makeContext(overrides?: Partial<ToolContext>): ToolContext {
   };
 }
 
-function makePrompter(): PermissionPrompter {
-  return {
-    prompt: async () => ({ decision: "allow" as const }),
-    resolveConfirmation: () => {},
-    updateSender: () => {},
-    dispose: () => {},
-  } as unknown as PermissionPrompter;
+function makePrompter(
+  prompt: PermissionPrompter["prompt"] = async () => ({ decision: "allow" }),
+): PermissionPrompter {
+  const prompter = new PermissionPrompter(() => {});
+  prompter.prompt = prompt;
+  return prompter;
 }
 
 describe("ToolExecutor allowedToolNames gating", () => {
@@ -613,15 +612,10 @@ describe("ToolExecutor forcePromptSideEffects enforcement", () => {
    * Prompter that tracks whether it was called and always allows.
    */
   function makeTrackingPrompter(): PermissionPrompter {
-    return {
-      prompt: async () => {
-        promptCalled = true;
-        return { decision: "allow" as const };
-      },
-      resolveConfirmation: () => {},
-      updateSender: () => {},
-      dispose: () => {},
-    } as unknown as PermissionPrompter;
+    return makePrompter(async () => {
+      promptCalled = true;
+      return { decision: "allow" };
+    });
   }
 
   test("side-effect tool with allow rule is forced to prompt when forcePromptSideEffects is true", async () => {
@@ -747,15 +741,10 @@ describe("ToolExecutor forcePromptSideEffects enforcement", () => {
     };
 
     let promptCount = 0;
-    const countingPrompter = {
-      prompt: async () => {
-        promptCount++;
-        return { decision: "allow" as const };
-      },
-      resolveConfirmation: () => {},
-      updateSender: () => {},
-      dispose: () => {},
-    } as unknown as PermissionPrompter;
+    const countingPrompter = makePrompter(async () => {
+      promptCount++;
+      return { decision: "allow" };
+    });
 
     const executor = new ToolExecutor(countingPrompter);
     const result = await executor.execute(
@@ -959,8 +948,8 @@ describe("integration regressions — prompt payload (PR 11)", () => {
 
     let capturedAllowlist: AllowlistOption[] | undefined;
     let capturedScopes: ScopeOption[] | undefined;
-    const prompter = {
-      prompt: async (
+    const prompter = makePrompter(
+      async (
         _toolName: string,
         _input: Record<string, unknown>,
         _riskLevel: string,
@@ -969,12 +958,9 @@ describe("integration regressions — prompt payload (PR 11)", () => {
       ) => {
         capturedAllowlist = allowlistOptions;
         capturedScopes = scopeOptions;
-        return { decision: "allow" as const };
+        return { decision: "allow" };
       },
-      resolveConfirmation: () => {},
-      updateSender: () => {},
-      dispose: () => {},
-    } as unknown as PermissionPrompter;
+    );
 
     const executor = new ToolExecutor(prompter);
     await executor.execute(

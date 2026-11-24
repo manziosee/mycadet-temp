@@ -34,12 +34,6 @@ function resetTables() {
   db.run("DELETE FROM conversations");
 }
 
-interface ProjectedMessage {
-  role: string;
-  backgroundEventNotification?: boolean;
-  backgroundToolCompletion?: Record<string, unknown>;
-}
-
 describe("handleListMessages background-tool completion projection", () => {
   beforeEach(resetTables);
 
@@ -85,9 +79,9 @@ describe("handleListMessages background-tool completion projection", () => {
       },
     );
 
-    const response = (await handleListMessages({
+    const response = await handleListMessages({
       queryParams: { conversationId: conv.id },
-    })) as { messages: ProjectedMessage[] };
+    });
 
     // Every projected message validates against the wire schema.
     for (const message of response.messages) {
@@ -115,9 +109,9 @@ describe("handleListMessages background-tool completion projection", () => {
       JSON.stringify([{ type: "text", text: "hi there" }]),
     );
 
-    const response = (await handleListMessages({
+    const response = await handleListMessages({
       queryParams: { conversationId: conv.id },
-    })) as { messages: ProjectedMessage[] };
+    });
 
     expect(response.messages).toHaveLength(2);
     for (const message of response.messages) {

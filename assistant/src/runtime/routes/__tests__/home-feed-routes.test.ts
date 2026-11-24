@@ -12,6 +12,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 
+import { z } from "zod";
+
 import {
   type FeedItem,
   FeedItemSchema,
@@ -496,7 +498,9 @@ describe("handlePostFeedAction", () => {
       "reply",
     );
     expect(res.status).toBe(200);
-    const body = (await res.json()) as { conversationId: string };
+    const body = z
+      .looseObject({ conversationId: z.string() })
+      .parse(await res.json());
     expect(body.conversationId).toBe("conv-1");
 
     expect(createdConversations).toHaveLength(1);
@@ -505,10 +509,9 @@ describe("handlePostFeedAction", () => {
     expect(addedMessages).toHaveLength(1);
     expect(addedMessages[0]!.role).toBe("user");
     expect(addedMessages[0]!.conversationId).toBe("conv-1");
-    const content = JSON.parse(addedMessages[0]!.content) as Array<{
-      type: string;
-      text: string;
-    }>;
+    const content = z
+      .array(z.looseObject({ type: z.string(), text: z.string() }))
+      .parse(JSON.parse(addedMessages[0]!.content));
     expect(content[0]!.text).toBe("Draft a reply to this email");
   });
 

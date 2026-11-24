@@ -36,13 +36,6 @@ function resetTables() {
   db.run("DELETE FROM conversations");
 }
 
-interface ProjectedMessage {
-  id: string;
-  role: string;
-  systemCard?: boolean;
-  noResponse?: boolean;
-}
-
 describe("handleListMessages system-card projection", () => {
   beforeEach(resetTables);
 
@@ -62,9 +55,9 @@ describe("handleListMessages system-card projection", () => {
       { metadata: { messageKind: SYSTEM_CARD_MESSAGE_KIND } },
     );
 
-    const response = (await handleListMessages({
+    const response = await handleListMessages({
       queryParams: { conversationId: conv.id },
-    })) as { messages: ProjectedMessage[] };
+    });
 
     // Every projected message validates against the wire schema.
     for (const message of response.messages) {
@@ -92,9 +85,9 @@ describe("handleListMessages system-card projection", () => {
       { metadata: { messageKind: NO_RESPONSE_MESSAGE_KIND } },
     );
 
-    const response = (await handleListMessages({
+    const response = await handleListMessages({
       queryParams: { conversationId: conv.id },
-    })) as { messages: ProjectedMessage[] };
+    });
 
     for (const message of response.messages) {
       expect(() => ConversationMessageSchema.parse(message)).not.toThrow();
@@ -131,21 +124,9 @@ describe("handleListMessages system-card projection", () => {
       },
     );
 
-    const response = (await handleListMessages({
+    const response = await handleListMessages({
       queryParams: { conversationId: conv.id },
-    })) as {
-      messages: Array<
-        ProjectedMessage & {
-          reaction?: {
-            emoji: string;
-            emojiKind?: string;
-            emojiName?: string;
-            emojiId?: string;
-            emojiAnimated?: boolean;
-          };
-        }
-      >;
-    };
+    });
     const projected = response.messages.find((m) => m.id === row.id);
     expect(projected?.reaction).toMatchObject({
       emoji: "<:party_blob:111>",
@@ -179,15 +160,9 @@ describe("handleListMessages system-card projection", () => {
       },
     );
 
-    const response = (await handleListMessages({
+    const response = await handleListMessages({
       queryParams: { conversationId: conv.id },
-    })) as {
-      messages: Array<
-        ProjectedMessage & {
-          reaction?: { emoji: string; selfAuthored?: boolean };
-        }
-      >;
-    };
+    });
     for (const message of response.messages) {
       expect(() => ConversationMessageSchema.parse(message)).not.toThrow();
     }
@@ -233,9 +208,9 @@ describe("handleListMessages system-card projection", () => {
       },
     );
 
-    const response = (await handleListMessages({
+    const response = await handleListMessages({
       queryParams: { conversationId: conv.id },
-    })) as { messages: Array<ProjectedMessage & { deletedAt?: number }> };
+    });
     for (const message of response.messages) {
       expect(() => ConversationMessageSchema.parse(message)).not.toThrow();
     }
@@ -260,9 +235,9 @@ describe("handleListMessages system-card projection", () => {
       JSON.stringify([{ type: "text", text: "hi there" }]),
     );
 
-    const response = (await handleListMessages({
+    const response = await handleListMessages({
       queryParams: { conversationId: conv.id },
-    })) as { messages: ProjectedMessage[] };
+    });
 
     expect(response.messages).toHaveLength(2);
     for (const message of response.messages) {

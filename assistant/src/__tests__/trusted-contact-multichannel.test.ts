@@ -8,6 +8,8 @@
  */
 import { beforeEach, describe, expect, mock, test } from "bun:test";
 
+import { jsonObjectSchema } from "./helpers/json-object-schema.js";
+
 // ---------------------------------------------------------------------------
 // Test isolation: in-memory SQLite via temp directory
 // ---------------------------------------------------------------------------
@@ -194,7 +196,7 @@ for (const config of CHANNEL_CONFIGS) {
         undefined,
         TEST_BEARER_TOKEN,
       );
-      const json = (await resp.json()) as Record<string, unknown>;
+      const json = jsonObjectSchema.parse(await resp.json());
 
       expect(json.denied).toBe(true);
       // Slack sends a verification challenge instead of a flat rejection
@@ -232,7 +234,7 @@ for (const config of CHANNEL_CONFIGS) {
         undefined,
         TEST_BEARER_TOKEN,
       );
-      const json = (await resp.json()) as Record<string, unknown>;
+      const json = jsonObjectSchema.parse(await resp.json());
 
       expect(json.denied).toBe(true);
 

@@ -1,5 +1,7 @@
 import { describe, expect, mock, test } from "bun:test";
 
+import { z } from "zod";
+
 import { CompactionCircuit } from "../agent/compaction-circuit.js";
 import type { AgentEvent, AgentLoopRunResult } from "../agent/loop.js";
 import type {
@@ -7,6 +9,7 @@ import type {
   Message,
   ProviderResponse,
 } from "../providers/types.js";
+import { jsonObjectSchema } from "./helpers/json-object-schema.js";
 
 mock.module("../providers/registry.js", () => ({
   getProvider: () => ({ name: "mock-provider" }),
@@ -258,7 +261,7 @@ describe("abort tool result persistence", () => {
     // Collect all persisted tool_result tool_use_ids
     const persistedToolUseIds = new Set<string>();
     for (const msg of toolResultUserMessages) {
-      const content = JSON.parse(msg.content) as Array<Record<string, unknown>>;
+      const content = z.array(jsonObjectSchema).parse(JSON.parse(msg.content));
       for (const block of content) {
         if (
           block.type === "tool_result" &&
@@ -276,7 +279,7 @@ describe("abort tool result persistence", () => {
     // No tool_use_id should appear more than once (no duplicates)
     const allToolUseIds: string[] = [];
     for (const msg of toolResultUserMessages) {
-      const content = JSON.parse(msg.content) as Array<Record<string, unknown>>;
+      const content = z.array(jsonObjectSchema).parse(JSON.parse(msg.content));
       for (const block of content) {
         if (
           block.type === "tool_result" &&

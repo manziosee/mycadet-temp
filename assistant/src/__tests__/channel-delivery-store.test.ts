@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, test } from "bun:test";
 
 import { eq } from "drizzle-orm";
+import { z } from "zod";
 
 import {
   getConversationByKey,
@@ -1323,7 +1324,7 @@ describe("channel-delivery-store", () => {
     const res = await handleDeleteConversation(req, "my-assistant");
     expect(res.status).toBe(200);
 
-    const json = (await res.json()) as { ok: boolean };
+    const json = z.looseObject({ ok: z.boolean() }).parse(await res.json());
     expect(json.ok).toBe(true);
 
     // Self delete removes both scoped key and legacy key.

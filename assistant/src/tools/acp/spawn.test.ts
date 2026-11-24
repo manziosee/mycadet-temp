@@ -3,6 +3,7 @@ import { afterAll, beforeEach, describe, expect, mock, test } from "bun:test";
 import { installAcpConfigStub } from "../../acp/__tests__/helpers/acp-config-stub.js";
 import { installExecFileStub } from "../../acp/__tests__/helpers/exec-file-stub.js";
 import { installWhichStub } from "../../acp/__tests__/helpers/which-stub.js";
+import type { AcpSessionManager } from "../../acp/session-manager.js";
 import type { ToolContext } from "../types.js";
 
 // ---------------------------------------------------------------------------
@@ -116,23 +117,17 @@ mock.module("../credentials/broker.js", () => ({
 }));
 
 // Stub session manager so we don't actually spawn child processes.
-const spawnMock = mock(
+const spawnMock = mock<AcpSessionManager["spawn"]>(
   async (
-    _agentId: string,
-    _agentConfig: unknown,
-    _task: string,
-    _cwd: string,
-    _parentConversationId: string,
-    _sendToCadet: (msg: unknown) => void,
-    _options?: { parentToolUseId?: string; model?: string },
-  ): Promise<{
-    acpSessionId: string;
-    protocolSessionId: string;
-    requestedModel?: string;
-    effectiveModel?: string;
-    modelWarning?: string;
-  }> => {
-    const requestedModel = _options?.model?.trim() || undefined;
+    _agentId,
+    _agentConfig,
+    _task,
+    _cwd,
+    _parentConversationId,
+    _sendToCadet,
+    options,
+  ) => {
+    const requestedModel = options?.model?.trim() || undefined;
     return {
       acpSessionId: "acp-session-test",
       protocolSessionId: "proto-session-test",
@@ -175,7 +170,7 @@ function makeContext(): ToolContext {
     conversationId: "test-conversation",
     trustClass: "guardian",
     sendToClient: () => {},
-  } as ToolContext;
+  };
 }
 
 beforeEach(() => {
@@ -216,7 +211,7 @@ describe("executeAcpSpawn - happy path", () => {
     expect(payload.requestedModel).toBeNull();
     expect(payload.effectiveModel).toBe("opus");
     // The real adapter binary is spawned (no `bun x` wrapper).
-    const agentConfigArg = spawnMock.mock.calls[0][1] as { command: string };
+    const agentConfigArg = spawnMock.mock.calls[0][1];
     expect(agentConfigArg.command).toBe("claude-agent-acp");
   });
 
@@ -247,7 +242,7 @@ describe("executeAcpSpawn - happy path", () => {
 
     expect(result.isError).toBe(false);
     expect(spawnMock).toHaveBeenCalledTimes(1);
-    const agentConfigArg = spawnMock.mock.calls[0][1] as { command: string };
+    const agentConfigArg = spawnMock.mock.calls[0][1];
     expect(agentConfigArg.command).toBe("codex-acp");
   });
 });
@@ -329,10 +324,7 @@ describe("executeAcpSpawn: sandboxed bun auto-install on missing binary", () => 
     );
     // The real binary was spawned with cwd = the project dir and token
     // injected (trusted-binary config, no resolution at spawn).
-    const agentConfigArg = spawnMock.mock.calls[0][1] as {
-      command: string;
-      env?: Record<string, string>;
-    };
+    const agentConfigArg = spawnMock.mock.calls[0][1];
     expect(agentConfigArg.command).toBe("claude-agent-acp");
     expect(agentConfigArg.env?.CLAUDE_CODE_OAUTH_TOKEN).toBe(
       "default-test-token",
@@ -514,8 +506,8 @@ describe("executeAcpSpawn - model selection", () => {
     );
 
     expect(result.isError).toBe(false);
-    const options = spawnMock.mock.calls[0][6] as { model?: string };
-    expect(options.model).toBeUndefined();
+    const options = spawnMock.mock.calls[0][6];
+    expect(options?.model).toBeUndefined();
   });
 
   test("a modelWarning from the spawn is relayed in the result message", async () => {
@@ -622,9 +614,7 @@ describe("executeAcpSpawn — CLAUDE_CODE_OAUTH_TOKEN injection", () => {
 
     expect(result.isError).toBe(false);
     expect(spawnMock).toHaveBeenCalledTimes(1);
-    const agentConfigArg = spawnMock.mock.calls[0][1] as {
-      env?: Record<string, string>;
-    };
+    const agentConfigArg = spawnMock.mock.calls[0][1];
     expect(agentConfigArg.env?.CLAUDE_CODE_OAUTH_TOKEN).toBe(
       "tool-vault-token-abc",
     );
@@ -651,9 +641,7 @@ describe("executeAcpSpawn — CLAUDE_CODE_OAUTH_TOKEN injection", () => {
     );
 
     expect(result.isError).toBe(false);
-    const agentConfigArg = spawnMock.mock.calls[0][1] as {
-      env?: Record<string, string>;
-    };
+    const agentConfigArg = spawnMock.mock.calls[0][1];
     expect(agentConfigArg.env?.CLAUDE_CODE_OAUTH_TOKEN).toBe(
       "tool-config-token-xyz",
     );

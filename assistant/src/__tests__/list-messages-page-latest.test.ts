@@ -82,37 +82,6 @@ function seedMessages(
   return seeded;
 }
 
-interface MessagePayload {
-  id: string;
-  role: string;
-  timestamp: string;
-  slackMessage?: {
-    channelId: string;
-    channelName?: string;
-    channelTs: string;
-    threadTs?: string;
-    sender?: { displayName?: string; externalUserId?: string };
-    messageLink?: { appUrl?: string; webUrl?: string };
-    threadLink?: { appUrl?: string; webUrl?: string };
-    eventKind?: "message" | "reaction";
-    reaction?: {
-      emoji: string;
-      op: "added" | "removed";
-      actorDisplayName?: string;
-      targetChannelTs: string;
-    };
-  };
-}
-
-interface ListResponse {
-  messages: MessagePayload[];
-  hasMore?: boolean;
-  oldestTimestamp?: number | null;
-  oldestMessageId?: string | null;
-  seq?: number | null;
-  processing?: boolean;
-}
-
 /**
  * Stamp `count` conversation-scoped events to advance the global `seq`
  * counter, mirroring `mkEvent` in assistant-stream-state.test.ts. The
@@ -134,10 +103,10 @@ function advanceGlobalSeq(count: number): void {
   }
 }
 
-async function callList(query: Record<string, string>): Promise<ListResponse> {
-  return (await handleListMessages({
+function callList(query: Record<string, string>) {
+  return handleListMessages({
     queryParams: query,
-  })) as unknown as ListResponse;
+  });
 }
 
 describe("handleListMessages page=latest", () => {

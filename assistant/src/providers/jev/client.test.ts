@@ -138,7 +138,7 @@ describe("JevProvider.sendMessage", () => {
     globalThis.fetch = stubFetch(async (input, init) => {
       captured = {
         url: String(input),
-        body: JSON.parse(String(init?.body ?? "{}")) as unknown,
+        body: JSON.parse(String(init?.body ?? "{}")),
       };
       return jsonResponse({
         model: "jev-latest",
@@ -199,7 +199,7 @@ describe("JevProvider.sendMessage", () => {
   test("forwards an explicit System One payload from the last user message", async () => {
     let captured: unknown;
     globalThis.fetch = stubFetch(async (_input, init) => {
-      captured = JSON.parse(String(init?.body ?? "{}")) as unknown;
+      captured = JSON.parse(String(init?.body ?? "{}"));
       return jsonResponse({
         model: "jev-latest",
         answers: {

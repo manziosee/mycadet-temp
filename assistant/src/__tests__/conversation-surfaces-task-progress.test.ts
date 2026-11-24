@@ -1,5 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
+import { z } from "zod";
+
 import { UISurfaceUpdateEvent } from "../api/events/ui-surface-update.js";
 import type { AssistantEvent } from "../api/index.js";
 import { CardSurfaceData } from "../api/surfaces.js";
@@ -89,7 +91,9 @@ describe("task_progress surface compatibility", () => {
 
     expect(result.isError).toBe(false);
     expect(result.yieldToUser).toBeUndefined();
-    const { surfaceId } = JSON.parse(result.content) as { surfaceId: string };
+    const { surfaceId } = z
+      .looseObject({ surfaceId: z.string() })
+      .parse(JSON.parse(result.content));
     expect(ctx.currentTurnSurfaces.some((s) => s.surfaceId === surfaceId)).toBe(
       true,
     );
@@ -115,7 +119,9 @@ describe("task_progress surface compatibility", () => {
         templateData: { status: "in_progress", steps: [] },
       },
     });
-    const { surfaceId } = JSON.parse(shown.content) as { surfaceId: string };
+    const { surfaceId } = z
+      .looseObject({ surfaceId: z.string() })
+      .parse(JSON.parse(shown.content));
 
     const result = await surfaceProxyResolver(ctx, "ui_update", {
       surface_id: surfaceId,

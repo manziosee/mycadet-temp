@@ -8,6 +8,8 @@ import {
 import { dirname, join } from "node:path";
 import { beforeEach, describe, expect, test } from "bun:test";
 
+import { z } from "zod";
+
 import type { AssistantEventEnvelope } from "../api/index.js";
 import type { AssistantEventPublishOptions } from "../runtime/assistant-event-publish-options.js";
 import type { SubscriberIdentity } from "../runtime/assistant-event-targeting.js";
@@ -630,9 +632,9 @@ describe("assistant-stream-state", () => {
       // THEN issuance jumps above the on-disk ceiling instead of
       // regressing the file below seqs the other writer may have issued
       expect(crossing.seq).toBe(5001);
-      const persisted = JSON.parse(readFileSync(reservationPath(), "utf8")) as {
-        reservedSeqCeiling: number;
-      };
+      const persisted = z
+        .looseObject({ reservedSeqCeiling: z.number() })
+        .parse(JSON.parse(readFileSync(reservationPath(), "utf8")));
       expect(persisted.reservedSeqCeiling).toBeGreaterThan(5000);
     });
 

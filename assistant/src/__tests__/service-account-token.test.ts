@@ -1,5 +1,7 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
+import { z } from "zod";
+
 import { fetchMock } from "./helpers/fetch-mock.js";
 
 // ── Mutable state for injected vault ────────────────────────────────────────
@@ -235,10 +237,9 @@ describe("service-account-token", () => {
 
       const blob = vaultStore.get("credential/vertex-ai/token_cache");
       expect(blob).toBeDefined();
-      const parsed = JSON.parse(blob!) as {
-        access_token: string;
-        expires_at: number;
-      };
+      const parsed = z
+        .looseObject({ access_token: z.string(), expires_at: z.number() })
+        .parse(JSON.parse(blob!));
       expect(parsed.access_token).toBe("fresh-token");
       expect(typeof parsed.expires_at).toBe("number");
     } finally {
