@@ -25,8 +25,6 @@ import {
 
 import { jsonObjectSchema } from "./helpers/json-object-schema.js";
 
-import { jsonObjectSchema } from "./helpers/json-object-schema.js";
-
 // ---------------------------------------------------------------------------
 // Mocks (must precede module imports under test). Note: backfillThreadWindow is
 // stubbed via spyOn (below) rather than mock.module so the stub does not leak
