@@ -15,31 +15,31 @@ export function RoadmapContent() {
       label: step.title,
       level: 2 as const,
     })),
-    { id: "the-fine-print", label: "The fine print", level: 2 as const },
   ];
 
   return (
     <>
       <DocsContent title="Roadmap" breadcrumb="Docs / Roadmap">
+        {/* TODO: This is all content I would've expected in roadmap.md */}
         <p className="mb-2 text-xs text-stone-400 dark:text-stone-500">
-          Last updated November 19, 2026
+          Last updated November 25, 2026{" "}
+          {/** TODO: Feels like this should be automatic based on last committed date */}
         </p>
         <p className="mb-8 text-stone-600 dark:text-stone-400">
-          This roadmap is the bridge between{" "}
+          This roadmap is the bridge between today&apos;s{" "}
           <a
             href="/docs/architecture"
             className="text-stone-900 underline dark:text-stone-100"
           >
-            today&apos;s architecture
+            architecture
           </a>{" "}
-          and the{" "}
+          and achieving the Cadet{" "}
           <a
             href="/docs/vision"
             className="text-stone-900 underline dark:text-stone-100"
           >
-            north star
+            Vision.
           </a>{" "}
-          — the plan for getting from one to the other, in order.
         </p>
 
         <section id="the-plan">
@@ -47,34 +47,6 @@ export function RoadmapContent() {
             The plan
           </SectionHeading>
           <RoadmapFlowView />
-        </section>
-
-        <section id="the-fine-print" className="mt-12">
-          <SectionHeading id="the-fine-print" level={2}>
-            The fine print
-          </SectionHeading>
-          <p className="mb-4 text-stone-600 dark:text-stone-400">
-            Polish, bug fixes, and security improvements are a standing
-            commitment — a meaningful slice of every team&apos;s capacity goes
-            here, always. That work doesn&apos;t show up on this page, but it
-            ships continuously.
-          </p>
-          <p className="mb-4 text-stone-600 dark:text-stone-400">
-            Priorities shift. Steps will merge, split, or get dropped — this
-            page changes with us. If there&apos;s something you want to see
-            sooner, tell us — we read every note.
-          </p>
-          <p className="mb-0 text-stone-600 dark:text-stone-400">
-            Want to share feedback on our Roadmap? Drop us a note in{" "}
-            <a
-              href="https://discord.com/invite/ZABd9V2zM8"
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              Discord
-            </a>
-            .
-          </p>
         </section>
       </DocsContent>
       <TableOfContents items={tocItems} />
