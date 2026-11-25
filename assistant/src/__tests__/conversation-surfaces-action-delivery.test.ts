@@ -558,9 +558,7 @@ describe("surface action delivery to assistant", () => {
     const completeMsg = findSurfaceComplete(surfaceId);
     expect(completeMsg).toBeDefined();
 
-    const submittedData = completeMsg?.submittedData as
-      | Record<string, unknown>
-      | undefined;
+    const submittedData = completeMsg?.submittedData;
     // The files array with base64 blobs should be stripped from the
     // completion event — only the sanitized payload (without files) is sent.
     expect(submittedData?.files).toBeUndefined();

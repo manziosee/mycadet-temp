@@ -1,3 +1,4 @@
+import assert from "node:assert/strict";
 /**
  * Tests for surface-action route handlers.
  *
@@ -10,7 +11,6 @@
  * Strategy: mock `conversation-store` and `raw-query` at module boundaries,
  * import ROUTES afterwards, find each handler by operationId, and exercise.
  */
-
 import { beforeEach, describe, expect, mock, test } from "bun:test";
 
 // ---------------------------------------------------------------------------
@@ -452,7 +452,8 @@ describe("triggerSurfaceAction handler", () => {
 
     // BadRequestError is a RouteError — verify the error message bubbled.
     expect(caught).toBeDefined();
-    expect((caught as Error).message).toContain("surface already completed");
+    assert(caught instanceof Error);
+    expect(caught.message).toContain("surface already completed");
   });
 });
 

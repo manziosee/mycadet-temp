@@ -91,7 +91,7 @@ describe("ui_show channel_setup acknowledgment", () => {
 
     const result = await resultPromise;
     expect(result.isError).toBe(false);
-    expect(JSON.parse(result.content as string)).toEqual({
+    expect(JSON.parse(result.content)).toEqual({
       surfaceId,
       status: "displayed",
     });

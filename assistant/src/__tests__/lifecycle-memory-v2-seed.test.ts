@@ -15,7 +15,10 @@
  */
 import { beforeEach, describe, expect, mock, test } from "bun:test";
 
-import type { AssistantConfig } from "../config/schema.js";
+import {
+  type AssistantConfig,
+  AssistantConfigSchema,
+} from "../config/schema.js";
 
 // ---------------------------------------------------------------------------
 // Programmable test state — drives every mocked dependency below.
@@ -150,11 +153,11 @@ const {
 
 /** Minimal config shape the gate touches; cast to AssistantConfig at the boundary. */
 function makeConfig(v2Enabled: boolean): AssistantConfig {
-  return {
+  return AssistantConfigSchema.parse({
     memory: {
       v2: { enabled: v2Enabled },
     },
-  } as unknown as AssistantConfig;
+  });
 }
 
 /**

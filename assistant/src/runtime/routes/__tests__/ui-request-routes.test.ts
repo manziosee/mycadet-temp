@@ -30,7 +30,7 @@ describe("ui_request body validation", () => {
           conversationId: "c1",
           surfaceType: "bogus",
           data: {},
-        } as unknown as Record<string, unknown>,
+        },
       }),
     ).rejects.toThrow(BadRequestError);
   });

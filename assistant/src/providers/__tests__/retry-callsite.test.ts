@@ -74,9 +74,7 @@ function makeProvider(
     async sendMessage(_messages: Message[], options?: SendMessageOptions) {
       onCall(options);
       const config = options?.config;
-      return makeResponse(
-        (config?.model as string | undefined) ?? "default-model",
-      );
+      return makeResponse(config?.model ?? "default-model");
     },
   };
 }

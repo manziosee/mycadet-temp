@@ -285,7 +285,7 @@ describe("voice parent notification routing", () => {
 describe("notify_parent tool definition", () => {
   test("has correct core tool definition", () => {
     const def = notifyParentTool;
-    const schema = def.input_schema as Record<string, unknown>;
+    const schema = def.input_schema;
     expect(def.name).toBe("notify_parent");
     expect(schema.required).toContain("message");
     expect(

@@ -44,7 +44,10 @@ import {
 import { drizzle } from "drizzle-orm/bun-sqlite";
 import { z } from "zod";
 
-import { AssistantConfig } from "../../../../../config/schema.js";
+import {
+  type AssistantConfig,
+  AssistantConfigSchema,
+} from "../../../../../config/schema.js";
 
 // ---------------------------------------------------------------------------
 // Module-level mocks
@@ -452,7 +455,7 @@ function makeConfig(
   }> = {},
 ): AssistantConfig {
   const { router, ...rest } = overrides;
-  return {
+  return AssistantConfigSchema.parse({
     memory: {
       v2: {
         d: 0.3,
@@ -469,7 +472,7 @@ function makeConfig(
         ...rest,
       },
     },
-  } as unknown as AssistantConfig;
+  });
 }
 
 /**

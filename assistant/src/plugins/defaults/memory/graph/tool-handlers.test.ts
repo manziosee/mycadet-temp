@@ -40,7 +40,7 @@ mock.module("../v1/jobs/embed-pkb-file.js", () => ({
 }));
 
 // ── Import handlers after mocks are set up ─────────────────────────────────────
-import { AssistantConfig } from "../../../../config/schema.js";
+import { AssistantConfigSchema } from "../../../../config/schema.js";
 import {
   handleDeleteMemory,
   handleListMemory,
@@ -48,19 +48,19 @@ import {
 } from "./tool-handlers.js";
 
 // ── Config helpers ─────────────────────────────────────────────────────────────
-const configV2On = {
+const configV2On = AssistantConfigSchema.parse({
   memory: { v2: { enabled: true } },
-} as unknown as AssistantConfig;
+});
 
-const configV2Off = {
+const configV2Off = AssistantConfigSchema.parse({
   memory: { v2: { enabled: false } },
-} as unknown as AssistantConfig;
+});
 
 // v3-live with the v2 flag off — the concept-page substrate is active, so the
 // handlers must work exactly as they do under v2.
-const configV3Only = {
+const configV3Only = AssistantConfigSchema.parse({
   memory: { v2: { enabled: false }, v3: { live: true } },
-} as unknown as AssistantConfig;
+});
 
 function node(
   id: string,

@@ -145,10 +145,7 @@ describe("activateMemberChannel gateway-first relay", () => {
 
     // The local mirror persists identity/INFO only — no ACL columns. The
     // gateway owns status/policy/verification.
-    const mirrorArgs = upsertContactChannelMock.mock.calls[0]![0] as Record<
-      string,
-      unknown
-    >;
+    const mirrorArgs = upsertContactChannelMock.mock.calls[0]![0];
     expect(mirrorArgs).toEqual({
       sourceChannel: "telegram",
       externalUserId: "user-1",

@@ -32,7 +32,7 @@ describe("defer route body validation", () => {
   test("defer_list rejects a non-string conversationId", async () => {
     await expect(
       routeFor("defer_list").handler({
-        body: { conversationId: 123 } as unknown as Record<string, unknown>,
+        body: { conversationId: 123 },
       }),
     ).rejects.toThrow(BadRequestError);
   });

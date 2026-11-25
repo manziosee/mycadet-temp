@@ -1,3 +1,4 @@
+import assert from "node:assert/strict";
 import { beforeEach, describe, expect, test } from "bun:test";
 
 import { runCloud, runCloudCaught, setupCloudIpcMock } from "./helpers.js";
@@ -63,7 +64,8 @@ describe("assistant cloud callback-routes list", () => {
       "--json",
     ]);
 
-    expect((thrown as Error).message).toBe("exitFromIpcResult called");
+    assert(thrown instanceof Error);
+    expect(thrown.message).toBe("exitFromIpcResult called");
   });
 
   test("callback-routes register calls cloud_callback_routes_register", async () => {

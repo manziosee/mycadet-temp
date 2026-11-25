@@ -13,7 +13,10 @@ import { beforeEach, describe, expect, test } from "bun:test";
 import { eq } from "drizzle-orm";
 
 import { applyNestedDefaults } from "../../../../config/loader.js";
-import { AssistantConfig } from "../../../../config/schema.js";
+import {
+  type AssistantConfig,
+  AssistantConfigSchema,
+} from "../../../../config/schema.js";
 import {
   getMemoryCheckpoint,
   setMemoryCheckpoint,
@@ -37,7 +40,7 @@ const SWEEP_INTERVAL_MS = 8 * 60 * 60 * 1000; // 8h default
 function buildConfig(
   overrides: { memoryEnabled?: boolean; retrospectiveEnabled?: boolean } = {},
 ): AssistantConfig {
-  const config = applyNestedDefaults({}) as unknown as AssistantConfig;
+  const config = AssistantConfigSchema.parse(applyNestedDefaults({}));
   if (overrides.memoryEnabled !== undefined) {
     config.memory.enabled = overrides.memoryEnabled;
   }

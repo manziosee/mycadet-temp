@@ -29,7 +29,10 @@
  */
 import { afterEach, describe, expect, mock, test } from "bun:test";
 
-import type { AssistantConfig } from "../../../../../config/schema.js";
+import {
+  type AssistantConfig,
+  AssistantConfigSchema,
+} from "../../../../../config/schema.js";
 
 const proxyState = { prereqs: true };
 const seedSkill = mock(async () => {});
@@ -123,7 +126,7 @@ const {
  * `usesConceptPageMemory` follows `enabled`, `isMemoryV3Live` is false.
  */
 function configWithV2(enabled: boolean): AssistantConfig {
-  return { memory: { v2: { enabled } } } as unknown as AssistantConfig;
+  return AssistantConfigSchema.parse({ memory: { v2: { enabled } } });
 }
 
 /**
@@ -132,9 +135,9 @@ function configWithV2(enabled: boolean): AssistantConfig {
  * `v3.live`).
  */
 function configWithV3(): AssistantConfig {
-  return {
+  return AssistantConfigSchema.parse({
     memory: { v2: { enabled: true }, v3: { live: true } },
-  } as unknown as AssistantConfig;
+  });
 }
 
 /** Poll until `m` has been called at least `n` times, or `timeoutMs` elapses. */

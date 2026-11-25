@@ -1,6 +1,9 @@
 import { describe, expect, mock, test } from "bun:test";
 
-import { AssistantConfig } from "../../config/schema.js";
+import {
+  type AssistantConfig,
+  AssistantConfigSchema,
+} from "../../config/schema.js";
 import {
   type ReconcileDeps,
   reconcileEmbeddingIdentity,
@@ -24,12 +27,12 @@ import {
  */
 
 function fakeConfig(): AssistantConfig {
-  return {
+  return AssistantConfigSchema.parse({
     memory: {
       embeddings: { provider: "auto" },
       qdrant: { vectorSize: 384 },
     },
-  } as unknown as AssistantConfig;
+  });
 }
 
 /**

@@ -82,7 +82,8 @@ describe("AnthropicProvider — error message formatting (JARVIS-390)", () => {
       throw new Error("expected sendMessage to throw");
     } catch (err) {
       expect(err).toBeInstanceOf(ProviderError);
-      const message = (err as Error).message;
+      assert(err instanceof Error);
+      const message = err.message;
       expect(message).toBe("Anthropic API error: Request was aborted.");
       // Belt-and-suspenders: the literal "(undefined)" must never appear.
       expect(message).not.toContain("(undefined)");
@@ -102,7 +103,8 @@ describe("AnthropicProvider — error message formatting (JARVIS-390)", () => {
       throw new Error("expected sendMessage to throw");
     } catch (err) {
       assert(err instanceof ProviderError, "Expected ProviderError");
-      const message = (err as Error).message;
+      assert(err instanceof Error);
+      const message = err.message;
       expect(message).toContain("Anthropic API error (402):");
       expect(err.statusCode).toBe(402);
     }

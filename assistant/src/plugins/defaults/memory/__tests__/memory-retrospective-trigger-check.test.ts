@@ -14,7 +14,10 @@ mock.module("../memory-retrospective-enqueue.js", () => ({
 
 import { eq } from "drizzle-orm";
 
-import { AssistantConfig } from "../../../../config/schema.js";
+import {
+  type AssistantConfig,
+  AssistantConfigSchema,
+} from "../../../../config/schema.js";
 import { createConversation } from "../../../../persistence/conversation-crud.js";
 import {
   getDb,
@@ -204,11 +207,11 @@ function insertSkillCardMessage(
 function makeConfig(
   overrides: Partial<typeof THRESHOLDS> = {},
 ): AssistantConfig {
-  return {
+  return AssistantConfigSchema.parse({
     memory: {
       retrospective: { ...THRESHOLDS, ...overrides },
     },
-  } as unknown as AssistantConfig;
+  });
 }
 
 describe("maybeEnqueueRetrospective — kind-aware accounting", () => {

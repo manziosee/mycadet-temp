@@ -1,3 +1,4 @@
+import assert from "node:assert/strict";
 import { afterEach, describe, expect, test } from "bun:test";
 
 import {
@@ -50,7 +51,8 @@ describe("TTS provider resolution", () => {
       getTtsProvider("nope");
       throw new Error("Expected getTtsProvider to throw");
     } catch (err) {
-      const msg = (err as Error).message;
+      assert(err instanceof Error);
+      const msg = err.message;
       expect(msg).toMatch(/Unknown TTS provider "nope"/);
       expect(msg).toMatch(/elevenlabs/);
     }

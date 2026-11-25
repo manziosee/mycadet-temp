@@ -972,7 +972,7 @@ describe("background result ownership", () => {
   test.each(["scheduled", "background"])(
     "%s conversations keep their existing owner",
     async (kind) => {
-      conversation.conversationType = kind as "scheduled" | "background";
+      conversation.conversationType = kind;
       await emit();
       expect(signals).toHaveLength(0);
     },

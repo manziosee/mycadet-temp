@@ -17,7 +17,10 @@ import { beforeAll, beforeEach, describe, expect, test } from "bun:test";
 
 import { eq } from "drizzle-orm";
 
-import { AssistantConfig } from "../config/schema.js";
+import {
+  type AssistantConfig,
+  AssistantConfigSchema,
+} from "../config/schema.js";
 import {
   deleteMemoryCheckpoint,
   getMemoryCheckpoint,
@@ -90,7 +93,7 @@ function makeConfig(opts: {
   llmRequestLogRetentionMs?: number | null;
   auditLogRetentionDays?: number;
 }): AssistantConfig {
-  return {
+  return AssistantConfigSchema.parse({
     memory: {
       cleanup: {
         enabled: opts.enabled ?? true,
@@ -102,7 +105,7 @@ function makeConfig(opts: {
       },
     },
     auditLog: { retentionDays: opts.auditLogRetentionDays ?? 0 },
-  } as unknown as AssistantConfig;
+  });
 }
 
 describe("maybeEnqueueScheduledCleanupJobs retention-derived cadence", () => {

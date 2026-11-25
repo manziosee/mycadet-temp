@@ -460,7 +460,7 @@ describe("approveHostAttachmentRead", () => {
     expect(allowed).toBe(true);
     expect(checkSpy).not.toHaveBeenCalled();
     expect(addRuleSpy).not.toHaveBeenCalled();
-    const call = promptSpy.mock.calls[0] as unknown as unknown[];
+    const call = promptSpy.mock.calls[0];
     expect(call[3]).toEqual([]);
     expect(call[4]).toEqual([]);
     expect(call[8]).toBe(false); // persistentDecisionsAllowed

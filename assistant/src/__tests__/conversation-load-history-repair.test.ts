@@ -1413,11 +1413,7 @@ describe("guardian card rows are not replayed as conversation history", () => {
     expect(serialized(conversation.getMessages())).not.toContain(
       "tool-approval-req-1",
     );
-    expect(
-      (
-        conversation as unknown as { surfaceState: Map<string, unknown> }
-      ).surfaceState.has("tool-approval-req-1"),
-    ).toBe(true);
+    expect(conversation.surfaceState.has("tool-approval-req-1")).toBe(true);
   });
 
   test("an assistant turn carrying a non-approval surface stays in history", async () => {

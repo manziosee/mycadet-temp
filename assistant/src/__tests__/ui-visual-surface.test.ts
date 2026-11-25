@@ -1,3 +1,4 @@
+import assert from "node:assert/strict";
 /**
  * Tests for the model-invokable `visual` ui_show surface.
  *
@@ -578,7 +579,8 @@ describe("ui_show data double-encoded as a JSON string", () => {
     try {
       JSON.parse('{"html": "<p>x</p>", }');
     } catch (error) {
-      parseMessage = (error as Error).message;
+      assert(error instanceof Error);
+      parseMessage = error.message;
     }
     expect(parseMessage.length).toBeGreaterThan(0);
     expect(result.content).toContain(parseMessage);

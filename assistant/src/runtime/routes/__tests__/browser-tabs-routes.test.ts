@@ -25,10 +25,7 @@ describe("browser_tabs request body validation", () => {
   test("rejects a non-numeric tabId with BadRequestError", async () => {
     await expect(
       route.handler({
-        body: { command: "select", tabId: "not-a-number" } as unknown as Record<
-          string,
-          unknown
-        >,
+        body: { command: "select", tabId: "not-a-number" },
       }),
     ).rejects.toThrow(BadRequestError);
   });

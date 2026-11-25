@@ -14,7 +14,10 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 
-import type { AssistantConfig } from "../../../../../config/schema.js";
+import {
+  type AssistantConfig,
+  AssistantConfigSchema,
+} from "../../../../../config/schema.js";
 
 const warnCalls: Array<{ data: Record<string, unknown>; msg: string }> = [];
 const recordingLogger = {
@@ -37,11 +40,11 @@ const { sweepConceptPageFrontmatter } = await import("../frontmatter-sweep.js");
 
 /** Minimal config shape the sweep touches; cast to AssistantConfig at the boundary. */
 function makeConfig(v2Enabled: boolean): AssistantConfig {
-  return {
+  return AssistantConfigSchema.parse({
     memory: {
       v2: { enabled: v2Enabled },
     },
-  } as unknown as AssistantConfig;
+  });
 }
 
 const v2On = makeConfig(true);

@@ -1,3 +1,4 @@
+import assert from "node:assert/strict";
 import { beforeEach, describe, expect, mock, test } from "bun:test";
 
 // ---------------------------------------------------------------------------
@@ -339,7 +340,8 @@ describe("no-match error lists available accounts", () => {
         account: "missing@example.com",
       });
     } catch (error) {
-      message = (error as Error).message;
+      assert(error instanceof Error);
+      message = error.message;
     }
 
     expect(message).toContain('account "missing@example.com"');
@@ -358,7 +360,8 @@ describe("no-match error lists available accounts", () => {
         account: "missing@example.com",
       });
     } catch (error) {
-      message = (error as Error).message;
+      assert(error instanceof Error);
+      message = error.message;
     }
 
     expect(message).not.toContain("Active google connections:");

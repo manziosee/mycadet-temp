@@ -33,7 +33,7 @@ const buildCandidateListMock = mock(
 
 const getCdpClientMock = mock(
   (_context: ToolContext, options?: { mode?: string }) => {
-    const mode = (options?.mode ?? "auto") as string;
+    const mode = options?.mode ?? "auto";
     const outcome = probeOutcomes[mode];
     return {
       kind: mode,

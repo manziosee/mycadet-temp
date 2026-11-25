@@ -163,7 +163,7 @@ describe("transcribeSegmentAudio cancellation", () => {
         seen = req.signal;
         return { text: "hello" };
       },
-    } as unknown as BatchTranscriber;
+    };
     spawnResult = { exitCode: 0, stdout: "", stderr: "" };
 
     await transcribeSegmentAudio(

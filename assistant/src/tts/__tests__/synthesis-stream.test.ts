@@ -1,3 +1,4 @@
+import assert from "node:assert/strict";
 import { describe, expect, test } from "bun:test";
 
 import { setConfig } from "../../__tests__/helpers/set-config.js";
@@ -492,7 +493,8 @@ describe("synthesizeAndEmit (streaming)", () => {
     setTimeout(releaseSink, 5);
     const err = await settled;
     expect(err).toBeInstanceOf(Error);
-    expect((err as Error).message).toBe("provider exploded");
+    assert(err instanceof Error);
+    expect(err.message).toBe("provider exploded");
     // "b" never reaches the sink, and the rejection settles only after the
     // in-flight sink call completes — nothing fires after error handling.
     expect(events).toEqual([

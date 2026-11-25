@@ -73,10 +73,7 @@ function getLatestAssistantText(conversationId: string): string {
   );
   expect(rows.length).toBeGreaterThan(0);
   const latest = rows[rows.length - 1];
-  const parsed = latest.content as unknown as Array<{
-    type: string;
-    text?: string;
-  }>;
+  const parsed = latest.content;
   return parsed
     .filter((b) => b.type === "text")
     .map((b) => b.text ?? "")
