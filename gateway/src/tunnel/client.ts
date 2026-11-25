@@ -234,6 +234,7 @@ export class TunnelClient {
 
   start(): void {
     if (this.running || !this.options.tunnelBaseUrl) return;
+    log.info("Starting Tunnel client");
     this.running = true;
     this.lastPublicIngressDisabled = this.isPublicIngressDisabled();
     this.unsubscribeConfigInvalidation ??= this.options.configFile.onInvalidate(
@@ -946,11 +947,11 @@ function buildRegisterWebSocketUrl(baseUrl: string): string {
   return url.toString();
 }
 
-let cachedTunnelClient: TunnelClient | undefined | null = null;
+let cachedTunnelClient: TunnelClient | null = null;
 /**
  * The process-wide tunnel client, built on first call from the singleton
- * config/credential/config-file caches. Undefined when no tunnel is
- * configured. The gateway server and the tunnel-status routes share it.
+ * config/credential/config-file caches. The gateway server, the tunnel-status
+ * routes, and the IPC handlers share it.
  */
 export function getTunnelClient(): TunnelClient {
   if (!cachedTunnelClient) {
