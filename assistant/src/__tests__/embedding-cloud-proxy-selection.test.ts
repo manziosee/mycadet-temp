@@ -7,7 +7,10 @@
 
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
-import { AssistantConfig } from "../config/schema.js";
+import {
+  type AssistantConfig,
+  AssistantConfigSchema,
+} from "../config/schema.js";
 import {
   clearEmbeddingBackendCache,
   selectEmbeddingBackend,
@@ -48,7 +51,7 @@ function makeConfig(
     geminiDimensions?: number;
   } = {},
 ): AssistantConfig {
-  return {
+  return AssistantConfigSchema.parse({
     memory: {
       embeddings: {
         provider: overrides.provider ?? "auto",
@@ -65,7 +68,7 @@ function makeConfig(
     services: {
       inference: { provider: "anthropic" },
     },
-  } as unknown as AssistantConfig;
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -91,8 +94,10 @@ describe("cloud proxy Gemini embedding selection", () => {
     const { backend, reason } = await selectEmbeddingBackend(config);
 
     expect(backend).not.toBeNull();
-    expect(backend).toBeInstanceOf(GeminiEmbeddingBackend);
-    expect(backend!.provider).toBe("gemini");
+    if (!(backend instanceof GeminiEmbeddingBackend)) {
+      throw new Error("Expected a Gemini embedding backend");
+    }
+    expect(backend.provider).toBe("gemini");
     expect(reason).toBeNull();
   });
 
@@ -102,10 +107,11 @@ describe("cloud proxy Gemini embedding selection", () => {
 
     const { backend } = await selectEmbeddingBackend(config);
 
-    expect(backend).toBeInstanceOf(GeminiEmbeddingBackend);
+    if (!(backend instanceof GeminiEmbeddingBackend)) {
+      throw new Error("Expected a Gemini embedding backend");
+    }
     // Access the private dimensions field to verify default
-    const dimensions = (backend as unknown as { dimensions: number })
-      .dimensions;
+    const dimensions = backend["dimensions"];
     expect(dimensions).toBe(3072);
   });
 
@@ -115,9 +121,10 @@ describe("cloud proxy Gemini embedding selection", () => {
 
     const { backend } = await selectEmbeddingBackend(config);
 
-    expect(backend).toBeInstanceOf(GeminiEmbeddingBackend);
-    const dimensions = (backend as unknown as { dimensions: number })
-      .dimensions;
+    if (!(backend instanceof GeminiEmbeddingBackend)) {
+      throw new Error("Expected a Gemini embedding backend");
+    }
+    const dimensions = backend["dimensions"];
     expect(dimensions).toBe(768);
   });
 
@@ -127,9 +134,10 @@ describe("cloud proxy Gemini embedding selection", () => {
 
     const { backend } = await selectEmbeddingBackend(config);
 
-    expect(backend).toBeInstanceOf(GeminiEmbeddingBackend);
-    const cloudBaseUrl = (backend as unknown as { cloudBaseUrl: string })
-      .cloudBaseUrl;
+    if (!(backend instanceof GeminiEmbeddingBackend)) {
+      throw new Error("Expected a Gemini embedding backend");
+    }
+    const cloudBaseUrl = backend["cloudBaseUrl"];
     expect(cloudBaseUrl).toBe(`${PLATFORM_BASE}/v1/runtime-proxy/gemini`);
   });
 
@@ -150,9 +158,10 @@ describe("cloud proxy Gemini embedding selection", () => {
 
     const { backend } = await selectEmbeddingBackend(config);
 
-    expect(backend).toBeInstanceOf(GeminiEmbeddingBackend);
-    const cloudBaseUrl = (backend as unknown as { cloudBaseUrl: string })
-      .cloudBaseUrl;
+    if (!(backend instanceof GeminiEmbeddingBackend)) {
+      throw new Error("Expected a Gemini embedding backend");
+    }
+    const cloudBaseUrl = backend["cloudBaseUrl"];
     expect(cloudBaseUrl).toContain("/v1/runtime-proxy/gemini");
   });
 
@@ -184,11 +193,12 @@ describe("cloud proxy Gemini embedding selection", () => {
 
     const { backend } = await selectEmbeddingBackend(config);
 
-    expect(backend).toBeInstanceOf(GeminiEmbeddingBackend);
-    expect(backend!.provider).toBe("gemini");
+    if (!(backend instanceof GeminiEmbeddingBackend)) {
+      throw new Error("Expected a Gemini embedding backend");
+    }
+    expect(backend.provider).toBe("gemini");
     // Should NOT use cloud proxy
-    const cloudBaseUrl = (backend as unknown as { cloudBaseUrl?: string })
-      .cloudBaseUrl;
+    const cloudBaseUrl = backend["cloudBaseUrl"];
     expect(cloudBaseUrl).toBeUndefined();
   });
 });

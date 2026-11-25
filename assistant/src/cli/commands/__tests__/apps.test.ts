@@ -1,12 +1,12 @@
 /**
  * Tests for `assistant apps inspect` and `assistant apps refresh`.
  */
-
 import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
+import { jsonObjectSchema } from "../../../__tests__/helpers/json-object-schema.js";
 import { mockIpc } from "../../../__tests__/requests-mock.js";
 import { createApp, getAppDirPath } from "../../../apps/app-store.js";
 import { writeAppSourceFingerprint } from "../../../apps/source-fingerprint.js";
@@ -54,7 +54,7 @@ afterEach(() => {
 });
 
 function parseJson(stdout: string): Record<string, unknown> {
-  return JSON.parse(stdout.trim()) as Record<string, unknown>;
+  return jsonObjectSchema.parse(JSON.parse(stdout.trim()));
 }
 
 describe("assistant apps inspect", () => {

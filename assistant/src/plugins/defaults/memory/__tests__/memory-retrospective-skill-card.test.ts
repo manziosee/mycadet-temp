@@ -1,5 +1,7 @@
 import { beforeEach, describe, expect, mock, test } from "bun:test";
 
+import { z } from "zod";
+
 // ---------------------------------------------------------------------------
 // Mock state. Reset between tests.
 // ---------------------------------------------------------------------------
@@ -434,12 +436,20 @@ describe("memory-retrospective skill card", () => {
 
     expect(skillCardJobUpserts).toHaveLength(1); // no further deferral
     expect(addMessageCalls).toHaveLength(1);
-    const blocks = JSON.parse(addMessageCalls[0]!.content) as Array<{
-      type: string;
-      data?: { skills: Array<{ skillId: string }> };
-      text?: string;
-      _surfaceFallback?: boolean;
-    }>;
+    const blocks = z
+      .array(
+        z.looseObject({
+          type: z.string(),
+          data: z
+            .looseObject({
+              skills: z.array(z.looseObject({ skillId: z.string() })),
+            })
+            .optional(),
+          text: z.string().optional(),
+          _surfaceFallback: z.boolean().optional(),
+        }),
+      )
+      .parse(JSON.parse(addMessageCalls[0]!.content));
     expect(blocks).toHaveLength(2);
     expect(blocks[0]!.type).toBe("ui_surface");
     expect(blocks[0]!.data!.skills.map((s) => s.skillId)).toEqual([

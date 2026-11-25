@@ -11,9 +11,9 @@ import { beforeEach, describe, expect, mock, spyOn, test } from "bun:test";
 
 import type { Conversation } from "../daemon/conversation.js";
 import { shouldUseVirtualDesktop } from "../desktop/virtual-desktop-feature.js";
-import type { PermissionPrompter } from "../permissions/prompter.js";
-import type { SecretPrompter } from "../permissions/secret-prompter.js";
-import type { ToolExecutor } from "../tools/executor.js";
+import { PermissionPrompter } from "../permissions/prompter.js";
+import { SecretPrompter } from "../permissions/secret-prompter.js";
+import { ToolExecutor } from "../tools/executor.js";
 import type { ToolContext, ToolExecutionResult } from "../tools/types.js";
 
 // ---------------------------------------------------------------------------
@@ -113,25 +113,28 @@ function makeCtx(overrides: Partial<Conversation> = {}): Conversation {
 /** Fake ToolExecutor that captures the context of each execute() call. */
 function makeCapturingExecutor() {
   const calls: Array<{ name: string; context: ToolContext }> = [];
-  const executor = {
-    execute: async (
-      name: string,
-      _input: Record<string, unknown>,
-      context: ToolContext,
-    ): Promise<ToolExecutionResult> => {
-      calls.push({ name, context });
-      return { content: "ok", isError: false };
-    },
+  const executor = new ToolExecutor(noopPrompter);
+  executor.execute = async (
+    name: string,
+    _input: Record<string, unknown>,
+    context: ToolContext,
+  ): Promise<ToolExecutionResult> => {
+    calls.push({ name, context });
+    return { content: "ok", isError: false };
   };
-  return { executor: executor as unknown as ToolExecutor, calls };
+  return { executor, calls };
 }
 
-const noopPrompter = {
-  prompt: mock(async () => ({ decision: "allow" as const })),
-} as unknown as PermissionPrompter;
-const noopSecretPrompter = {
-  prompt: mock(async () => ({ cancelled: true })),
-} as unknown as SecretPrompter;
+const noopPrompter = new PermissionPrompter(() => {});
+noopPrompter.prompt = mock<PermissionPrompter["prompt"]>(async () => ({
+  decision: "allow",
+}));
+const noopSecretPrompter = new SecretPrompter();
+noopSecretPrompter.prompt = mock<SecretPrompter["prompt"]>(async () => ({
+  value: null,
+  delivery: "store",
+  reason: "cancelled",
+}));
 
 function makeToolFn(executor: ToolExecutor, ctx: Conversation) {
   return createToolExecutor(executor, noopPrompter, noopSecretPrompter, ctx);

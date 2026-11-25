@@ -21,6 +21,7 @@ import type { AssistantEvent } from "../../api/index.js";
 import { getDb } from "../../persistence/db-connection.js";
 import { initializeDb } from "../../persistence/db-init.js";
 import { acpSessionHistory } from "../../persistence/schema/acp.js";
+import { AcpAgentProcess } from "../agent-process.js";
 import { CadetAcpClientHandler } from "../client-handler.js";
 import { AcpSessionManager } from "../session-manager.js";
 import type { AcpUsageSnapshot } from "../types.js";
@@ -48,10 +49,7 @@ function buildSessionWithFakeProcess(opts: {
   latestUsage?: AcpUsageSnapshot;
 }): {
   manager: AcpSessionManager;
-  resolvePrompt: (v: {
-    stopReason: string;
-    usage?: { inputTokens: number; outputTokens: number };
-  }) => void;
+  resolvePrompt: (v: Awaited<ReturnType<AcpAgentProcess["prompt"]>>) => void;
   rejectPrompt: (e: Error) => void;
   emitUpdate: (update: AcpSessionUpdateEvent) => void;
 } {
@@ -59,10 +57,7 @@ function buildSessionWithFakeProcess(opts: {
   const sent: AssistantEvent[] = [];
   const sendToCadet = (msg: AssistantEvent) => sent.push(msg);
 
-  type PromptResolution = {
-    stopReason: string;
-    usage?: { inputTokens: number; outputTokens: number };
-  };
+  type PromptResolution = Awaited<ReturnType<AcpAgentProcess["prompt"]>>;
   let resolvePrompt!: (v: PromptResolution) => void;
   let rejectPrompt!: (e: Error) => void;
   const promptPromise = new Promise<PromptResolution>((res, rej) => {
@@ -70,37 +65,23 @@ function buildSessionWithFakeProcess(opts: {
     rejectPrompt = rej;
   });
 
-  const fakeProcess = {
-    prompt: () => promptPromise,
-    kill: () => {},
-    spawn: () => {},
-    initialize: () => Promise.resolve(),
-    createSession: () =>
-      Promise.resolve({
-        sessionId: opts.protocolSessionId,
-        configOptions: [],
-      }),
-    cancel: () => Promise.resolve(),
-    markStderr: () => 0,
-    stderrSince: () => "",
-  };
+  const fakeProcess = new AcpAgentProcess(
+    opts.agentId,
+    { command: "claude-agent-acp", args: [] },
+    () => {
+      throw new Error("The persistence test does not start an ACP process");
+    },
+  );
+  fakeProcess.prompt = () => promptPromise;
 
   // Match spawn()'s wiring: pre-create the buffer and route emitted updates
   // through the wrapped sender so appendToBuffer fires for each event.
-  const sessions = (manager as unknown as { sessions: Map<string, unknown> })
-    .sessions;
-  const eventBuffers = (
-    manager as unknown as { eventBuffers: Map<string, unknown[]> }
-  ).eventBuffers;
-  eventBuffers.set(opts.id, []);
+  const sessions = manager["sessions"];
+  manager["eventBuffers"].set(opts.id, []);
 
   const wrappedSend = (msg: AssistantEvent) => {
     if (msg.type === "acp_session_update") {
-      (
-        manager as unknown as {
-          appendToBuffer: (id: string, u: AcpSessionUpdateEvent) => void;
-        }
-      ).appendToBuffer(opts.id, msg);
+      manager["appendToBuffer"](opts.id, msg);
     }
     sendToCadet(msg);
   };
@@ -111,11 +92,12 @@ function buildSessionWithFakeProcess(opts: {
     opts.parentConversationId,
   );
 
-  const entry = {
+  const entry: Parameters<AcpSessionManager["firePromptInBackground"]>[1] = {
     process: fakeProcess,
     state: {
       id: opts.id,
       agentId: opts.agentId,
+      parentConversationId: opts.parentConversationId,
       acpSessionId: opts.protocolSessionId,
       status: "running",
       startedAt: Date.now(),
@@ -125,7 +107,7 @@ function buildSessionWithFakeProcess(opts: {
     },
     clientHandler,
     sendToCadet: wrappedSend,
-    currentPrompt: null as Promise<unknown> | null,
+    currentPrompt: null,
     parentConversationId: opts.parentConversationId,
     cwd: opts.cwd ?? "/tmp",
     command: "claude-agent-acp",
@@ -133,16 +115,12 @@ function buildSessionWithFakeProcess(opts: {
   sessions.set(opts.id, entry);
 
   // Fire the prompt via the private method, matching spawn()'s wiring.
-  const bgPromise = (
-    manager as unknown as {
-      firePromptInBackground: (
-        id: string,
-        e: typeof entry,
-        protoId: string,
-        msg: string,
-      ) => Promise<unknown>;
-    }
-  ).firePromptInBackground(opts.id, entry, opts.protocolSessionId, "do work");
+  const bgPromise = manager["firePromptInBackground"](
+    opts.id,
+    entry,
+    opts.protocolSessionId,
+    "do work",
+  );
   entry.currentPrompt = bgPromise;
 
   // Helper that pushes an update through the wrapped sender — exactly
@@ -242,9 +220,7 @@ describe("AcpSessionManager — terminal persistence", () => {
     });
 
     // Buffer entry is dropped after persistence.
-    const eventBuffers = (
-      handles.manager as unknown as { eventBuffers: Map<string, unknown[]> }
-    ).eventBuffers;
+    const eventBuffers = handles.manager["eventBuffers"];
     expect(eventBuffers.has(id)).toBe(false);
   });
 
@@ -344,11 +320,7 @@ describe("AcpSessionManager — terminal persistence", () => {
     }
 
     // Verify in-memory buffer is bounded before persistence.
-    const eventBuffers = (
-      handles.manager as unknown as {
-        eventBuffers: Map<string, { update: AcpSessionUpdateEvent }[]>;
-      }
-    ).eventBuffers;
+    const eventBuffers = handles.manager["eventBuffers"];
     expect(eventBuffers.get(id)?.length).toBe(200);
 
     handles.resolvePrompt({ stopReason: "end_turn" });
@@ -489,11 +461,7 @@ describe("AcpSessionManager — terminal persistence", () => {
     });
 
     // Capture the usage event emitted at turn end.
-    const captureSend = (
-      handles.manager as unknown as {
-        sessions: Map<string, { sendToCadet: (m: AssistantEvent) => void }>;
-      }
-    ).sessions.get(id);
+    const captureSend = handles.manager["sessions"].get(id);
     const originalSend = captureSend!.sendToCadet;
     captureSend!.sendToCadet = (msg: AssistantEvent) => {
       sent.push(msg);
@@ -502,7 +470,7 @@ describe("AcpSessionManager — terminal persistence", () => {
 
     handles.resolvePrompt({
       stopReason: "end_turn",
-      usage: { inputTokens: 5000, outputTokens: 800 },
+      usage: { inputTokens: 5000, outputTokens: 800, totalTokens: 5800 },
     });
     await Promise.resolve();
     await Promise.resolve();
@@ -536,11 +504,7 @@ describe("AcpSessionManager — terminal persistence", () => {
       parentConversationId: "conv-io-none",
     });
 
-    const entry = (
-      handles.manager as unknown as {
-        sessions: Map<string, { sendToCadet: (m: AssistantEvent) => void }>;
-      }
-    ).sessions.get(id);
+    const entry = handles.manager["sessions"].get(id);
     const originalSend = entry!.sendToCadet;
     entry!.sendToCadet = (msg: AssistantEvent) => {
       sent.push(msg);

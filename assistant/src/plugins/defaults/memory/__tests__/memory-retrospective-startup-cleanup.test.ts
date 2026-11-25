@@ -8,6 +8,8 @@ import {
   test,
 } from "bun:test";
 
+import { z } from "zod";
+
 // ---------------------------------------------------------------------------
 // Mock state — reset between tests.
 // ---------------------------------------------------------------------------
@@ -60,9 +62,9 @@ const makeFakeDb = () => ({
               .map((j) => {
                 let convId: string | null = null;
                 try {
-                  const parsed = JSON.parse(j.payload) as {
-                    conversationId?: unknown;
-                  };
+                  const parsed = z
+                    .looseObject({ conversationId: z.unknown().optional() })
+                    .parse(JSON.parse(j.payload));
                   if (typeof parsed.conversationId === "string") {
                     convId = parsed.conversationId;
                   }

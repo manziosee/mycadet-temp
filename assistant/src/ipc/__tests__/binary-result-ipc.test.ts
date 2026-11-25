@@ -8,9 +8,9 @@
  * `BINARY_UNSUPPORTED_OVER_IPC` error; the gateway IPC proxy uses that signal
  * to fall back to the HTTP proxy, which streams binary responses correctly.
  */
-
 import { describe, expect, test } from "bun:test";
 
+import { jsonObjectSchema } from "../../__tests__/helpers/json-object-schema.js";
 import { RouteResponse } from "../../runtime/routes/types.js";
 import { AssistantIpcServer } from "../assistant-server.js";
 
@@ -47,7 +47,7 @@ function captureSendResult(value: unknown): Record<string, unknown> {
   server.sendResult(socket, reader, "req-1", value);
 
   expect(writes).toHaveLength(1);
-  return JSON.parse(writes[0]) as Record<string, unknown>;
+  return jsonObjectSchema.parse(JSON.parse(writes[0]));
 }
 
 describe("AssistantIpcServer.sendResult binary handling", () => {

@@ -5,8 +5,9 @@
  * copies that locator into `plugins install`. The human footer tells it to
  * install by marketplace name instead.
  */
-
 import { describe, expect, mock, test } from "bun:test";
+
+import { z } from "zod";
 
 import { PLUGINS_SEARCH_INSTALL_HINT } from "../plugins.help.js";
 import { runCliCommand } from "./cli-test-harness.js";
@@ -71,10 +72,12 @@ describe("plugins search", () => {
 
     expect(exitCode).toBe(0);
     expect(stdout).not.toContain(PLUGINS_SEARCH_INSTALL_HINT);
-    const parsed = JSON.parse(stdout) as {
-      query: string;
-      matches: Array<{ name: string }>;
-    };
+    const parsed = z
+      .looseObject({
+        query: z.string(),
+        matches: z.array(z.looseObject({ name: z.string() })),
+      })
+      .parse(JSON.parse(stdout));
     expect(parsed.query).toBe("imessage");
     expect(parsed.matches.map((m) => m.name)).toEqual(["imessage"]);
   });

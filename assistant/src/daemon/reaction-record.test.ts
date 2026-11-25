@@ -1,5 +1,7 @@
 import { beforeEach, describe, expect, mock, test } from "bun:test";
 
+import { z } from "zod";
+
 import type { ProviderMessageMetadata } from "../messaging/provider-message-metadata.js";
 import { readSlackMetadataFromMessageMetadata } from "../messaging/providers/slack/message-metadata.js";
 import type { QueuedReactionRecord } from "./reaction-record.js";
@@ -170,9 +172,9 @@ describe("persistReactionRecords", () => {
     failNext = true;
     await persistReactionRecords("conv-1", [record(), record({ emoji: "👍" })]);
     expect(persisted).toHaveLength(1);
-    const envelope = JSON.parse(
-      String(persisted[0]?.metadata?.providerMeta),
-    ) as { reaction: { emoji: string } };
+    const envelope = z
+      .looseObject({ reaction: z.looseObject({ emoji: z.string() }) })
+      .parse(JSON.parse(String(persisted[0]?.metadata?.providerMeta)));
     expect(envelope.reaction.emoji).toBe("👍");
   });
 });

@@ -2,6 +2,8 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, mock, test } from "bun:test";
 
+import { z } from "zod";
+
 import { initializeDb } from "../persistence/db-init.js";
 import type { ToolContext } from "../tools/types.js";
 import { seedApp } from "./helpers/seed-app.js";
@@ -252,17 +254,28 @@ describe("app-builder skill tool scripts", () => {
 // ---------------------------------------------------------------------------
 
 describe("app-builder TOOLS.json app_id optionality", () => {
-  const manifest = JSON.parse(
-    readFileSync(
-      resolve(
-        import.meta.dirname,
-        "../config/bundled-skills/app-builder/TOOLS.json",
+  const manifest = z
+    .looseObject({
+      tools: z.array(
+        z.looseObject({
+          name: z.string(),
+          input_schema: z.looseObject({
+            required: z.array(z.string()).optional(),
+          }),
+        }),
       ),
-      "utf8",
-    ),
-  ) as {
-    tools: Array<{ name: string; input_schema: { required?: string[] } }>;
-  };
+    })
+    .parse(
+      JSON.parse(
+        readFileSync(
+          resolve(
+            import.meta.dirname,
+            "../config/bundled-skills/app-builder/TOOLS.json",
+          ),
+          "utf8",
+        ),
+      ),
+    );
 
   function requiredFor(name: string): string[] {
     const tool = manifest.tools.find((t) => t.name === name);

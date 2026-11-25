@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
+import { jsonObjectSchema } from "../../__tests__/helpers/json-object-schema.js";
 import { PROVIDER_CATALOG } from "../../providers/model-catalog.js";
 import { projectProviderForWire } from "./config-model.js";
 
@@ -97,10 +98,9 @@ describe("projectProviderForWire", () => {
   test("JSON round-trip exposes only the legacy wire keys", () => {
     for (const entry of PROVIDER_CATALOG) {
       const wire = projectProviderForWire(entry);
-      const serialized = JSON.parse(JSON.stringify(wire)) as Record<
-        string,
-        unknown
-      >;
+      const serialized = jsonObjectSchema.parse(
+        JSON.parse(JSON.stringify(wire)),
+      );
       for (const key of Object.keys(serialized)) {
         expect(LEGACY_WIRE_KEYS.has(key)).toBe(true);
       }

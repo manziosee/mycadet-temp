@@ -2,11 +2,12 @@
  * Tests for `conversations new --json` — the flag emits a machine-readable
  * result (incl. the new id) so callers can capture it without scraping the log.
  */
-
 import * as nodeFs from "node:fs";
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 
 import { Command } from "commander";
+
+import { jsonObjectSchema } from "../../../__tests__/helpers/json-object-schema.js";
 
 let lastIpcCall: { method: string; params?: Record<string, unknown> } | null =
   null;
@@ -90,7 +91,7 @@ function jsonOutput(): Record<string, unknown> {
   if (!last) {
     throw new Error("no info output captured");
   }
-  return JSON.parse(last.msg) as Record<string, unknown>;
+  return jsonObjectSchema.parse(JSON.parse(last.msg));
 }
 
 let savedRunId: string | undefined;
