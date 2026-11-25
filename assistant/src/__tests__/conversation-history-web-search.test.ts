@@ -861,7 +861,7 @@ describe("web_search_tool_result structural guard", () => {
   function collectSourceFiles(dir: string): string[] {
     const files: string[] = [];
 
-    for (const entry of readdirSync(dir) as string[]) {
+    for (const entry of readdirSync(dir)) {
       const fullPath = join(dir, entry);
       const stat = statSync(fullPath);
 

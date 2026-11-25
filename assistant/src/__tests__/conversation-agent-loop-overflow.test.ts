@@ -32,8 +32,13 @@ import {
 
 import type { LoopToolExecutor } from "../agent/loop.js";
 import type { AssistantEvent } from "../api/index.js";
+import { ContextWindowConfigSchema } from "../config/schemas/inference.js";
 import { MessageQueue } from "../daemon/conversation-queue-manager.js";
 import { PermissionPrompter } from "../permissions/prompter.js";
+import {
+  ContextWindowManager,
+  type ContextWindowResult,
+} from "../plugins/defaults/compaction/window-manager.js";
 import { resetPluginRegistryAndRegisterDefaults } from "../plugins/defaults/index.js";
 import type { Message, Provider } from "../providers/types.js";
 import { ContextOverflowError } from "../providers/types.js";
@@ -285,8 +290,27 @@ import {
 
 // ── Test helpers ─────────────────────────────────────────────────────
 
+function noCompactionResult(messages: Message[]): ContextWindowResult {
+  return {
+    messages,
+    compacted: false,
+    previousEstimatedInputTokens: 0,
+    estimatedInputTokens: 0,
+    maxInputTokens: 200_000,
+    thresholdTokens: 160_000,
+    compactedMessages: 0,
+    compactedPersistedMessages: 0,
+    summaryCalls: 0,
+    summaryInputTokens: 0,
+    summaryOutputTokens: 0,
+    summaryModel: "",
+    summaryText: "",
+  };
+}
+
 function makeCtx(
-  overrides?: Partial<Conversation> & {
+  overrides?: Omit<Partial<Conversation>, "contextWindowManager"> & {
+    contextWindowManager?: Pick<ContextWindowManager, "maybeCompact">;
     providerResponses?: ScriptedResponse[];
     loopProvider?: Provider;
     loopTools?: ToolDefinition[];
@@ -294,6 +318,7 @@ function makeCtx(
   },
 ): Conversation {
   const {
+    contextWindowManager: compactionOverrides,
     providerResponses,
     loopProvider,
     loopTools,
@@ -321,6 +346,20 @@ function makeCtx(
     toolExecutor,
   });
 
+  const contextWindowManager = new ContextWindowManager({
+    provider,
+    config: ContextWindowConfigSchema.parse({ maxInputTokens: 200_000 }),
+  });
+  contextWindowManager.updateConfig = () => {};
+  contextWindowManager.shouldCompact = () => ({
+    needed: false,
+    estimatedTokens: 0,
+  });
+  contextWindowManager.maybeCompact =
+    compactionOverrides?.maybeCompact ??
+    (async (messages) => noCompactionResult(messages));
+  Object.assign(contextWindowManager, makeOverflowLadderStub());
+
   const ctx = asConversation({
     conversationId: "test-conv",
     messages: [{ role: "user", content: [{ type: "text", text: "Hello" }] }],
@@ -346,11 +385,7 @@ function makeCtx(
     },
     systemPrompt: "system prompt",
 
-    contextWindowManager: {
-      updateConfig: () => {},
-      shouldCompact: () => ({ needed: false, estimatedTokens: 0 }),
-      maybeCompact: async () => ({ compacted: false }),
-    } as unknown as Conversation["contextWindowManager"],
+    contextWindowManager,
     contextCompactedMessageCount: 0,
     contextCompactedAt: null,
 
@@ -426,16 +461,6 @@ function makeCtx(
 
     ...ctxOverrides,
   });
-  // The convergence driver resolves the turn-scoped overflow ladder off the
-  // manager; give every fake manager the ladder methods unless a test supplied
-  // its own.
-  const manager = ctx.contextWindowManager as unknown as Record<
-    string,
-    unknown
-  >;
-  if (typeof manager.reduceOverflowOneRung !== "function") {
-    Object.assign(manager, makeOverflowLadderStub());
-  }
   fakeContextWindowManagers.set(conversationId, ctx.contextWindowManager);
   return ctx;
 }
@@ -615,11 +640,6 @@ describe("session-agent-loop overflow recovery (JARVIS-110)", () => {
         content: "file1.ts\nfile2.ts",
         isError: false,
       }),
-      contextWindowManager: {
-        updateConfig: () => {},
-        shouldCompact: () => ({ needed: false, estimatedTokens: 0 }),
-        maybeCompact: async () => ({ compacted: false }),
-      } as unknown as Conversation["contextWindowManager"],
     });
 
     await runAgentLoopImpl(ctx, "hello", "msg-1", (msg) => events.push(msg));
@@ -687,11 +707,6 @@ describe("session-agent-loop overflow recovery (JARVIS-110)", () => {
 
     const ctx = makeCtx({
       loopProvider: provider,
-      contextWindowManager: {
-        updateConfig: () => {},
-        shouldCompact: () => ({ needed: false, estimatedTokens: 0 }),
-        maybeCompact: async () => ({ compacted: false }),
-      } as unknown as Conversation["contextWindowManager"],
     });
 
     // WHEN the turn runs
@@ -724,7 +739,14 @@ describe("session-agent-loop overflow recovery (JARVIS-110)", () => {
 
     // Reducer captures the targetTokens from the config
     mockReducerStepFn = (msgs: Message[], cfg: unknown) => {
-      capturedTargetTokens = (cfg as { targetTokens: number }).targetTokens;
+      if (
+        typeof cfg === "object" &&
+        cfg !== null &&
+        "targetTokens" in cfg &&
+        typeof cfg.targetTokens === "number"
+      ) {
+        capturedTargetTokens = cfg.targetTokens;
+      }
       return {
         messages: msgs,
         tier: "forced_compaction",
@@ -762,11 +784,6 @@ describe("session-agent-loop overflow recovery (JARVIS-110)", () => {
 
     const ctx = makeCtx({
       loopProvider: provider,
-      contextWindowManager: {
-        updateConfig: () => {},
-        shouldCompact: () => ({ needed: false, estimatedTokens: 0 }),
-        maybeCompact: async () => ({ compacted: false }),
-      } as unknown as Conversation["contextWindowManager"],
     });
 
     await runAgentLoopImpl(ctx, "hello", "msg-1", (msg) => events.push(msg));
@@ -849,11 +866,6 @@ describe("session-agent-loop overflow recovery (JARVIS-110)", () => {
       const ctx = makeCtx({
         loopProvider: provider,
         messages: longHistory,
-        contextWindowManager: {
-          updateConfig: () => {},
-          shouldCompact: () => ({ needed: false, estimatedTokens: 0 }),
-          maybeCompact: async () => ({ compacted: false }),
-        } as unknown as Conversation["contextWindowManager"],
       });
 
       await runAgentLoopImpl(ctx, "analyze this", "msg-1", (msg) =>
@@ -933,13 +945,7 @@ describe("session-agent-loop overflow recovery (JARVIS-110)", () => {
           isError: false,
         }),
         contextWindowManager: {
-          updateConfig: () => {},
-          shouldCompact: () => ({ needed: false, estimatedTokens: 0 }),
-          maybeCompact: async (
-            _msgs: Message[],
-            _signal: AbortSignal,
-            opts?: Record<string, unknown>,
-          ) => {
+          maybeCompact: async (_msgs, _signal, opts) => {
             if (opts?.force && opts?.minKeepRecentUserTurns === 0) {
               emergencyCompactCalled = true;
               return {
@@ -963,9 +969,9 @@ describe("session-agent-loop overflow recovery (JARVIS-110)", () => {
                 summaryModel: "mock-model",
               };
             }
-            return { compacted: false };
+            return noCompactionResult(_msgs);
           },
-        } as unknown as Conversation["contextWindowManager"],
+        },
       });
 
       await runAgentLoopImpl(ctx, "hello", "msg-1", (msg) => events.push(msg));
@@ -1034,8 +1040,6 @@ describe("session-agent-loop overflow recovery (JARVIS-110)", () => {
         isError: false,
       }),
       contextWindowManager: {
-        updateConfig: () => {},
-        shouldCompact: () => ({ needed: false, estimatedTokens: 0 }),
         maybeCompact: async () => {
           compactionCalled = true;
           return {
@@ -1059,7 +1063,7 @@ describe("session-agent-loop overflow recovery (JARVIS-110)", () => {
             summaryModel: "mock-model",
           };
         },
-      } as unknown as Conversation["contextWindowManager"],
+      },
     });
 
     await runAgentLoopImpl(ctx, "hello", "msg-1", (msg) => events.push(msg));
@@ -1144,8 +1148,6 @@ describe("session-agent-loop overflow recovery (JARVIS-110)", () => {
         isError: false,
       }),
       contextWindowManager: {
-        updateConfig: () => {},
-        shouldCompact: () => ({ needed: false, estimatedTokens: 0 }),
         maybeCompact: async () => {
           compactionCalled = true;
           return {
@@ -1169,7 +1171,7 @@ describe("session-agent-loop overflow recovery (JARVIS-110)", () => {
             summaryModel: "mock-model",
           };
         },
-      } as unknown as Conversation["contextWindowManager"],
+      },
     });
 
     await runAgentLoopImpl(ctx, "hello", "msg-1", (msg) => {

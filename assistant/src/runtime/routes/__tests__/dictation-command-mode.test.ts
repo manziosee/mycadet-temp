@@ -67,7 +67,7 @@ async function speakOverSelection(transcription: string) {
         cursorInTextField: true,
       },
     },
-  } as unknown as Parameters<typeof route.handler>[0])) as {
+  })) as {
     text: string;
     mode: string;
   };

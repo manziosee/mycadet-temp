@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, test } from "bun:test";
 
-import type { AssistantConfig } from "../config/schema.js";
+import { AssistantConfigSchema } from "../config/schema.js";
 import { getDb } from "../persistence/db-connection.js";
 import { initializeDb } from "../persistence/db-init.js";
 import { pruneOldConversationsJob } from "../persistence/job-handlers/cleanup.js";
@@ -18,9 +18,9 @@ const STALE_ID = "conv-prune-job-stale";
 const FRESH_ID = "conv-prune-job-fresh";
 
 const JOB = { payload: {} } as unknown as MemoryJob;
-const CONFIG = {
+const CONFIG = AssistantConfigSchema.parse({
   memory: { cleanup: { conversationRetentionDays: 30 } },
-} as unknown as AssistantConfig;
+});
 
 function seedConversation(id: string, updatedAt: number): void {
   const db = getDb();
@@ -77,9 +77,12 @@ describe("pruneOldConversationsJob", () => {
     const ancientUpdatedAt = Date.now() - 999 * 86_400_000;
     seedConversation(STALE_ID, ancientUpdatedAt);
 
-    pruneOldConversationsJob(JOB, {
-      memory: { cleanup: { conversationRetentionDays: 0 } },
-    } as unknown as AssistantConfig);
+    pruneOldConversationsJob(
+      JOB,
+      AssistantConfigSchema.parse({
+        memory: { cleanup: { conversationRetentionDays: 0 } },
+      }),
+    );
 
     const remaining = getDb().select().from(conversations).all();
     expect(remaining.map((c) => c.id)).toEqual([STALE_ID]);

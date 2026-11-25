@@ -154,7 +154,7 @@ describe("derived input_schema", () => {
 
   test("derived schemas are plain tool-definition JSON schemas", () => {
     for (const tool of derivedTools) {
-      const schema = tool.input_schema as Record<string, unknown>;
+      const schema = tool.input_schema;
       expect(schema.type).toBe("object");
       // Tool definitions carry no draft marker, and permissive
       // `additionalProperties` authoring artifacts are stripped.

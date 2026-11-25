@@ -1,3 +1,4 @@
+import assert from "node:assert/strict";
 /**
  * Tests for `substrate/ingest.ts`.
  *
@@ -496,7 +497,8 @@ describe("ingestPages", () => {
 
     // The write error propagates to the caller.
     expect(thrown).toBeInstanceOf(Error);
-    expect((thrown as Error).message).toContain(
+    assert(thrown instanceof Error);
+    expect(thrown.message).toContain(
       "simulated write failure: projects/garden",
     );
     // The first page committed before the failure and still gets its

@@ -67,7 +67,7 @@ mock.module("../apps/app-store.js", () => ({
     schemaJson: string;
     htmlDefinition: string;
   }) => {
-    createdParams = params as unknown as Record<string, unknown>;
+    createdParams = params;
     return mockApp!;
   },
   updateApp: (

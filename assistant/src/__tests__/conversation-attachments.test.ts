@@ -27,6 +27,7 @@ mock.module("../permissions/types.js", () => ({
 }));
 
 import type { AssistantAttachmentDraft } from "../daemon/assistant-attachments.js";
+import type { PermissionPrompter } from "../permissions/prompter.js";
 import { getFilePathForAttachment } from "../persistence/attachments-store.js";
 import {
   addMessage,
@@ -442,9 +443,9 @@ describe("approveHostAttachmentRead", () => {
 
   test("prompts and allows on allow decision", async () => {
     const conversation = createConversation("attachment-host-gate");
-    const promptSpy = mock(() =>
-      Promise.resolve({ decision: "allow" as const }),
-    );
+    const promptSpy = mock<PermissionPrompter["prompt"]>(async () => ({
+      decision: "allow",
+    }));
 
     const { approveHostAttachmentRead } =
       await import("../daemon/conversation-attachments.js");
@@ -460,7 +461,7 @@ describe("approveHostAttachmentRead", () => {
     expect(allowed).toBe(true);
     expect(checkSpy).not.toHaveBeenCalled();
     expect(addRuleSpy).not.toHaveBeenCalled();
-    const call = promptSpy.mock.calls[0] as unknown as unknown[];
+    const call = promptSpy.mock.calls[0];
     expect(call[3]).toEqual([]);
     expect(call[4]).toEqual([]);
     expect(call[8]).toBe(false); // persistentDecisionsAllowed
@@ -468,9 +469,9 @@ describe("approveHostAttachmentRead", () => {
 
   test("denies when hasNoClient is true without prompting", async () => {
     const conversation = createConversation("attachment-no-client");
-    const promptSpy = mock(() =>
-      Promise.resolve({ decision: "allow" as const }),
-    );
+    const promptSpy = mock<PermissionPrompter["prompt"]>(async () => ({
+      decision: "allow",
+    }));
 
     const { approveHostAttachmentRead } =
       await import("../daemon/conversation-attachments.js");

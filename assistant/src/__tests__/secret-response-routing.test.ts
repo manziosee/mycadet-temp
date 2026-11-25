@@ -1,3 +1,4 @@
+import assert from "node:assert/strict";
 import { beforeEach, describe, expect, mock, test } from "bun:test";
 
 import type { SecretRequestEvent } from "../api/events/secret-request.js";
@@ -154,7 +155,8 @@ describe("secret response routing", () => {
       await promise;
       expect(true).toBe(false); // should not reach here
     } catch (e: unknown) {
-      expect((e as Error).message).toBe("Prompter disposed");
+      assert(e instanceof Error);
+      expect(e.message).toBe("Prompter disposed");
     }
   });
 });

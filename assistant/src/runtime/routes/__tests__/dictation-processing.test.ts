@@ -57,7 +57,7 @@ async function dictate(
 ) {
   return (await route.handler({
     body: { transcription, context },
-  } as unknown as Parameters<typeof route.handler>[0])) as {
+  })) as {
     text: string;
     mode: string;
     actionPlan?: string;

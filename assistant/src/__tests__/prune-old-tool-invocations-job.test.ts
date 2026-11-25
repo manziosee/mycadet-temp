@@ -1,6 +1,9 @@
 import { beforeEach, describe, expect, test } from "bun:test";
 
-import type { AssistantConfig } from "../config/schema.js";
+import {
+  type AssistantConfig,
+  AssistantConfigSchema,
+} from "../config/schema.js";
 import { getDb } from "../persistence/db-connection.js";
 import { initializeDb } from "../persistence/db-init.js";
 import { pruneOldToolInvocationsJob } from "../persistence/job-handlers/cleanup.js";
@@ -42,7 +45,7 @@ function job(payload: Record<string, unknown> = {}): MemoryJob {
 }
 
 function config(retentionDays: number): AssistantConfig {
-  return { auditLog: { retentionDays } } as unknown as AssistantConfig;
+  return AssistantConfigSchema.parse({ auditLog: { retentionDays } });
 }
 
 describe("pruneOldToolInvocationsJob", () => {

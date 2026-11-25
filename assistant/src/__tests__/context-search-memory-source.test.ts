@@ -1,6 +1,9 @@
 import { beforeEach, describe, expect, mock, test } from "bun:test";
 
-import type { AssistantConfig } from "../config/schema.js";
+import {
+  type AssistantConfig,
+  AssistantConfigSchema,
+} from "../config/schema.js";
 import type {
   RecallEvidence,
   RecallSearchContext,
@@ -344,19 +347,19 @@ describe("searchMemorySource", () => {
 });
 
 function makeV2EnabledConfig(): AssistantConfig {
-  return {
+  return AssistantConfigSchema.parse({
     memory: {
       v2: { enabled: true },
     },
-  } as unknown as AssistantConfig;
+  });
 }
 
 function makeV2DisabledConfig(): AssistantConfig {
-  return {
+  return AssistantConfigSchema.parse({
     memory: {
       v2: { enabled: false },
     },
-  } as unknown as AssistantConfig;
+  });
 }
 
 function makeContext(

@@ -365,8 +365,7 @@ describe("trusted contact lifecycle notification signals", () => {
 
     const signals = emitSignalCalls.filter(
       (c) =>
-        typeof c.dedupeKey === "string" &&
-        (c.dedupeKey as string).includes(approval.id),
+        typeof c.dedupeKey === "string" && c.dedupeKey.includes(approval.id),
     );
     // Exactly one lifecycle signal per denial, keyed on the request id.
     expect(signals.length).toBe(1);

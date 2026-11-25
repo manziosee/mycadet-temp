@@ -148,7 +148,7 @@ describe("TelegramAdapter", () => {
 
     await adapter.send(payload, makeDestination());
 
-    const text = sendCalls[0]?.text as string;
+    const text = sendCalls[0]?.text;
     expect(text).toBe("Check the oven now!");
     expect(text).not.toMatch(/via telegram/i);
     expect(text).not.toMatch(/may i go ahead/i);

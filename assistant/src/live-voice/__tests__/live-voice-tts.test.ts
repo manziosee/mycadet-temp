@@ -1,3 +1,4 @@
+import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { beforeEach, describe, expect, test } from "bun:test";
 
@@ -539,7 +540,8 @@ describe("streamLiveVoiceTtsAudio", () => {
         code: "LIVE_VOICE_TTS_SYNTHESIS_FAILED",
         provider: "fish-audio",
       });
-      expect((err as Error).message).toContain("provider exploded");
+      assert(err instanceof Error);
+      expect(err.message).toContain("provider exploded");
     }
   });
 

@@ -107,7 +107,7 @@ async function realUiShowResult(
     }),
   });
   expect(result.isError).toBe(false);
-  return result.content as string;
+  return result.content;
 }
 
 function updateSurface(

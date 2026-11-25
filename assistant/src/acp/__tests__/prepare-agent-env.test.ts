@@ -291,7 +291,8 @@ describe("prepareAgentEnv — claude-agent-acp gating", () => {
     expect(caught.details).toEqual({
       code: ACP_CLAUDE_OAUTH_MISSING_CODE,
     });
-    const message = (caught as Error).message;
+    assert(caught instanceof Error);
+    const message = caught.message;
     // Names the missing env var (the token) so the failure is legible.
     expect(message).toContain("CLAUDE_CODE_OAUTH_TOKEN");
     // Directs the model at the inline card, not a CLI/token-paste workaround.
@@ -351,7 +352,8 @@ describe("prepareAgentEnv — claude-agent-acp gating", () => {
     expect(caught.details).toEqual({
       code: ACP_CLAUDE_OAUTH_MISSING_CODE,
     });
-    const message = (caught as Error).message;
+    assert(caught instanceof Error);
+    const message = caught.message;
     expect(message).toContain("cannot read the Claude OAuth token");
     expect(message).toContain("blocks the acp_spawn read");
     expect(message).toContain("CLAUDE_CODE_OAUTH_TOKEN");
@@ -412,7 +414,8 @@ describe("prepareAgentEnv — claude-agent-acp gating", () => {
     });
     // Connect genuinely repairs this by storing a fresh OAuth token, so the
     // message stays the missing-token one rather than the policy-blocked one.
-    expect((caught as Error).message).toContain(
+    assert(caught instanceof Error);
+    expect(caught.message).toContain(
       'which is not set. The app shows the user an inline "Connect Claude Code" card.',
     );
 

@@ -1,3 +1,4 @@
+import assert from "node:assert/strict";
 import { describe, expect, mock, test } from "bun:test";
 
 import { GoogleGeminiProvider } from "./google-gemini.js";
@@ -213,7 +214,8 @@ describe("GoogleGeminiProvider", () => {
       await provider.transcribe(Buffer.from("audio"), "audio/wav");
       expect.unreachable("should have thrown");
     } catch (err) {
-      const msg = (err as Error).message;
+      assert(err instanceof Error);
+      const msg = err.message;
       expect(msg).toContain("Google Gemini API error (500)");
       // The body portion should be at most 300 chars
       const bodyPart = msg.replace("Google Gemini API error (500): ", "");

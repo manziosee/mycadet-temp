@@ -19,7 +19,10 @@ mock.module("../memory-retrospective-enqueue.js", () => ({
 
 import { eq } from "drizzle-orm";
 
-import { AssistantConfig } from "../../../../config/schema.js";
+import {
+  type AssistantConfig,
+  AssistantConfigSchema,
+} from "../../../../config/schema.js";
 import { AUTO_ANALYSIS_SOURCE } from "../../../../persistence/auto-analysis-constants.js";
 import { createConversation } from "../../../../persistence/conversation-crud.js";
 import { MEMORY_V2_CONSOLIDATION_SOURCE } from "../../../../persistence/conversation-types.js";
@@ -53,9 +56,9 @@ function makeConfig(
   sweepIntervalMs = SWEEP_INTERVAL_MS,
   sweepLookbackMs = SWEEP_LOOKBACK_MS,
 ): AssistantConfig {
-  return {
+  return AssistantConfigSchema.parse({
     memory: { retrospective: { sweepIntervalMs, sweepLookbackMs } },
-  } as unknown as AssistantConfig;
+  });
 }
 
 function setLastMessageAt(conversationId: string, ts: number | null): void {

@@ -1,10 +1,10 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 
-import { AssistantConfig } from "../../../config/schema.js";
+import { AssistantConfigSchema } from "../../../config/schema.js";
 
-const CONFIG = {
+const CONFIG = AssistantConfigSchema.parse({
   memory: { qdrant: { url: "http://127.0.0.1:6333", vectorSize: 768 } },
-} as unknown as AssistantConfig;
+});
 
 // ── Stub selectEmbeddingBackend + the billing breaker ──────────────
 let backendToReturn: {

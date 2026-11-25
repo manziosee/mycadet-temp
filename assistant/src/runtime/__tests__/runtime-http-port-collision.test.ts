@@ -1,3 +1,4 @@
+import assert from "node:assert/strict";
 import { afterEach, describe, expect, test } from "bun:test";
 
 import { emitDaemonError } from "../../daemon/startup-error.js";
@@ -55,8 +56,9 @@ describe("runtime HTTP port collision", () => {
       expect((err as NodeJS.ErrnoException).code).toBe("EADDRINUSE");
 
       // AND the message names the occupied port and the env var that moves it
-      expect((err as Error).message).toContain(String(foreign.port));
-      expect((err as Error).message).toContain("RUNTIME_HTTP_PORT");
+      assert(err instanceof Error);
+      expect(err.message).toContain(String(foreign.port));
+      expect(err.message).toContain("RUNTIME_HTTP_PORT");
     } finally {
       foreign.stop(true);
     }

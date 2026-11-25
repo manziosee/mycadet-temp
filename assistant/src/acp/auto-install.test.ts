@@ -182,9 +182,7 @@ describe("ensureAdapterInstalled", () => {
     expect(claude.installed).toBe(true);
     expect(codex.installed).toBe(true);
     expect(execFileMock).toHaveBeenCalledTimes(2);
-    const installedPackages = execFileMock.mock.calls.map(
-      (call) => (call[1] as string[])[2],
-    );
+    const installedPackages = execFileMock.mock.calls.map((call) => call[1][2]);
     expect(installedPackages.sort()).toEqual([
       "@agentclientprotocol/claude-agent-acp@0.75.1",
       "@agentclientprotocol/codex-acp@1.10.0",

@@ -174,7 +174,7 @@ describe("contacts read API relays from the gateway", () => {
     const [contact] = result.contacts;
     // Role comes straight from the relayed payload; the name override keys off
     // that role. The guardian id set is NOT consulted on relayed reads.
-    expect((contact as { role?: string }).role).toBe("guardian");
+    expect(jsonObjectSchema.parse(contact).role).toBe("guardian");
     expect(contact.displayName).toBe("guardian:Alice");
     expect(getGuardianContactIdsMock).not.toHaveBeenCalled();
     expect(contact.interactionCount).toBe(7);
@@ -201,7 +201,7 @@ describe("contacts read API relays from the gateway", () => {
     const result = await handleListContacts({ limit: "50" });
 
     const [contact] = result.contacts;
-    expect((contact as { role?: string }).role).toBe("guardian");
+    expect(jsonObjectSchema.parse(contact).role).toBe("guardian");
     expect(contact.displayName).toBe("guardian:Alice");
     // Relayed reads don't consult the guardian id set (they trust the role).
     expect(getGuardianContactIdsMock).not.toHaveBeenCalled();
@@ -303,11 +303,15 @@ describe("contacts read API relays from the gateway", () => {
     const route = ROUTES.find((r) => r.operationId === "search_contacts");
     expect(route).toBeDefined();
 
-    const contacts = (await route!.handler({ body: {} })) as Array<{
-      role: string;
-      interactionCount: number;
-      channels: { status: string }[];
-    }>;
+    const contacts = z
+      .array(
+        z.looseObject({
+          role: z.string(),
+          interactionCount: z.number(),
+          channels: z.array(z.looseObject({ status: z.string() })),
+        }),
+      )
+      .parse(await route!.handler({ body: {} }));
 
     expect(ipcCalls).toEqual([
       { method: "contacts_list_rich", params: { limit: 50 } },
@@ -356,9 +360,15 @@ const nativeGatewayRead = {
 
 describe("filtered/native contact reads: daemon filters, gateway hydrates telemetry", () => {
   const listRoute = ROUTES.find((r) => r.operationId === "listContacts")!;
-  const listResponseSchema = listRoute.responseBody as z.ZodTypeAny;
+  const listResponseSchema = listRoute.responseBody;
   const searchRoute = ROUTES.find((r) => r.operationId === "search_contacts")!;
-  const searchResponseSchema = searchRoute.responseBody as z.ZodTypeAny;
+  const searchResponseSchema = searchRoute.responseBody;
+  if (
+    !(listResponseSchema instanceof z.ZodType) ||
+    !(searchResponseSchema instanceof z.ZodType)
+  ) {
+    throw new Error("Expected contact route response schemas");
+  }
 
   beforeEach(() => {
     ipcCalls = [];
@@ -391,17 +401,14 @@ describe("filtered/native contact reads: daemon filters, gateway hydrates teleme
     // (4/4200/4100).
     expect(contact.interactionCount).toBe(11);
     expect(contact.lastInteraction).toBe(9200);
-    expect(
-      (contact as { autoApproveThreshold?: string | null })
-        .autoApproveThreshold,
-    ).toBe("high");
+    expect(jsonObjectSchema.parse(contact).autoApproveThreshold).toBe("high");
     const channel = jsonObjectSchema.parse(contact.channels[0]);
     expect(channel.interactionCount).toBe(11);
     expect(channel.lastSeenAt).toBe(9100);
     expect(channel.lastInteraction).toBe(9200);
     expect(channel.externalUserId).toBe("+15550200");
     // Non-guardian id derives role "contact" (no name override).
-    expect((contact as { role: string }).role).toBe("contact");
+    expect(jsonObjectSchema.parse(contact).role).toBe("contact");
     expect(contact.displayName).toBe("Bob");
     // Channel-level ACL fields (status/policy) are gateway-owned and absent on
     // the daemon-native shape.
@@ -423,10 +430,7 @@ describe("filtered/native contact reads: daemon filters, gateway hydrates teleme
     const [contact] = result.contacts;
     expect(contact.interactionCount).toBe(0);
     expect(contact.lastInteraction).toBeNull();
-    expect(
-      (contact as { autoApproveThreshold?: string | null })
-        .autoApproveThreshold,
-    ).toBeNull();
+    expect(jsonObjectSchema.parse(contact).autoApproveThreshold).toBeNull();
     const channel = jsonObjectSchema.parse(contact.channels[0]);
     expect(channel.interactionCount).toBe(0);
     expect(channel.lastSeenAt).toBeNull();
@@ -442,7 +446,7 @@ describe("filtered/native contact reads: daemon filters, gateway hydrates teleme
 
     expect(searchContactsMock).toHaveBeenCalled();
     const [contact] = result.contacts;
-    expect((contact as { role: string }).role).toBe("guardian");
+    expect(jsonObjectSchema.parse(contact).role).toBe("guardian");
     expect(contact.displayName).toBe("guardian:Bob");
     expect(getGuardianContactIdsMock).toHaveBeenCalled();
   });
@@ -454,22 +458,27 @@ describe("filtered/native contact reads: daemon filters, gateway hydrates teleme
     const result = await handleListContacts({ query: "Bob", limit: "10" });
 
     const [contact] = result.contacts;
-    expect((contact as { role: string }).role).toBe("contact");
+    expect(jsonObjectSchema.parse(contact).role).toBe("contact");
     expect(contact.displayName).toBe("Bob");
   });
 
   test("POST search with a filter hydrates telemetry and validates against the response schema", async () => {
     searchContactsResult = [nativeContact];
 
-    const contacts = (await searchRoute.handler({
-      body: { query: "Bob" },
-    })) as Array<{ interactionCount: number | null }>;
+    const contacts = await searchRoute.handler({ body: { query: "Bob" } });
+    const parsed = z
+      .array(
+        z.looseObject({
+          interactionCount: z.number().nullable(),
+        }),
+      )
+      .parse(contacts);
 
     expect(searchContactsMock).toHaveBeenCalled();
     expect(ipcCalls).toEqual([
       { method: "contacts_list_rich", params: { ids: ["ct_2"] } },
     ]);
-    expect(contacts[0].interactionCount).toBe(11);
+    expect(parsed[0].interactionCount).toBe(11);
     expect(() => searchResponseSchema.parse(contacts)).not.toThrow();
   });
 });

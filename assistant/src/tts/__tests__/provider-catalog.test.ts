@@ -1,3 +1,4 @@
+import assert from "node:assert/strict";
 import { describe, expect, test } from "bun:test";
 
 import {
@@ -102,7 +103,8 @@ describe("TTS provider catalog", () => {
       getCatalogProvider("nonexistent-provider");
       throw new Error("Expected getCatalogProvider to throw");
     } catch (err) {
-      const msg = (err as Error).message;
+      assert(err instanceof Error);
+      const msg = err.message;
       for (const id of ids) {
         expect(msg).toContain(id);
       }

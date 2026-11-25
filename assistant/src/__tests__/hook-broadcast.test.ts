@@ -69,7 +69,7 @@ function baseCtx(
       warn: () => {},
       error: () => {},
       debug: () => {},
-    } as unknown as UserPromptSubmitContext["logger"],
+    },
     // Placeholder — the pipeline rebinds this per hook.
     broadcast: () => {},
     ...overrides,

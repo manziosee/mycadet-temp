@@ -27,7 +27,7 @@ function stub(name: string): Provider {
     sendMessage: async () => {
       throw new Error("not dispatched in this test");
     },
-  } as unknown as Provider;
+  };
 }
 
 describe("resolveTypesafeProvider", () => {

@@ -1,3 +1,4 @@
+import assert from "node:assert/strict";
 /**
  * Unit tests for the daemon merge_contacts relay.
  *
@@ -9,7 +10,6 @@
  * gateway response verbatim, never touches the assistant contact store, and
  * propagates a relay failure (no local-merge fallback).
  */
-
 import { beforeEach, describe, expect, mock, test } from "bun:test";
 
 import { IpcCallError } from "@mycadet/gateway-client/ipc-client";
@@ -170,7 +170,8 @@ describe("merge contacts relay", () => {
       });
       throw new Error("expected handler to throw");
     } catch (err) {
-      expect((err as Error).message).toBe("ipc transport exploded");
+      assert(err instanceof Error);
+      expect(err.message).toBe("ipc transport exploded");
     }
     // No daemon-side fallback write.
     expect(contactStoreWriteGuard).not.toHaveBeenCalled();

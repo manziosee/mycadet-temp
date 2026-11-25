@@ -1,6 +1,9 @@
 import { beforeEach, describe, expect, test } from "bun:test";
 
-import { AssistantConfig } from "../../../../../config/schema.js";
+import {
+  type AssistantConfig,
+  AssistantConfigSchema,
+} from "../../../../../config/schema.js";
 import {
   getDb,
   getMemorySqlite,
@@ -33,9 +36,9 @@ const ZERO_CONFIG = {
 let seq = 0;
 
 function config(historicalPairs: number): AssistantConfig {
-  return {
+  return AssistantConfigSchema.parse({
     memory: { v2: { router: { historical_pairs: historicalPairs } } },
-  } as unknown as AssistantConfig;
+  });
 }
 
 function ensureConversation(id: string): void {

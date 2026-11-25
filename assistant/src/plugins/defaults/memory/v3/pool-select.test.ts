@@ -1,3 +1,4 @@
+import assert from "node:assert/strict";
 /**
  * Tests for `pool-select.ts` `selectPool` — focused on error SURFACING:
  *   - a provider call that THROWS on every attempt surfaces the underlying
@@ -14,7 +15,6 @@
  * `getConfiguredProvider` unless this test is actively running
  * (`selectMockActive`) — mirrors `prune.test.ts` / `ever-injected-store.test.ts`.
  */
-
 import { afterAll, beforeEach, describe, expect, mock, test } from "bun:test";
 
 import type {
@@ -100,11 +100,10 @@ describe("selectPool", () => {
       caught = err;
     }
     expect(caught).toBeInstanceOf(MemoryV3RetrievalUnavailableError);
-    expect((caught as Error).message).toContain(
-      "provider call failed after retries",
-    );
+    assert(caught instanceof Error);
+    expect(caught.message).toContain("provider call failed after retries");
     // The real upstream error is no longer hidden behind the generic message.
-    expect((caught as Error).message).toContain(upstream);
+    expect(caught.message).toContain(upstream);
   });
 
   test("a 200 with no usable tool_use throws the generic message", async () => {
@@ -117,7 +116,8 @@ describe("selectPool", () => {
       caught = err;
     }
     expect(caught).toBeInstanceOf(MemoryV3RetrievalUnavailableError);
-    expect((caught as Error).message).toBe(
+    assert(caught instanceof Error);
+    expect(caught.message).toBe(
       "memory-v3 pool selector returned no usable selection after retries",
     );
   });

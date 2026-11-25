@@ -133,7 +133,7 @@ function naiveDropCount(messages: Message[], budgetTokens: number): number {
 
 function textOfMessage(message: Message | undefined): string {
   return (message?.content ?? [])
-    .map((block) => ("text" in block ? (block.text as string) : ""))
+    .map((block) => ("text" in block ? block.text : ""))
     .join("\n");
 }
 

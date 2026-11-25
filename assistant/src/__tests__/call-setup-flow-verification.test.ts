@@ -226,14 +226,14 @@ function createFlow(opts?: {
         metadata: options?.metadata,
       });
     }) as unknown as CallSetupFlowDeps["addMessage"],
-    postPointerMessage: ((
+    postPointerMessage: (
       conversationId: string,
       event: string,
       phoneNumber: string,
       extra?: Record<string, unknown>,
     ) => {
       pointerMessages.push({ conversationId, event, phoneNumber, extra });
-    }) as unknown as CallSetupFlowDeps["postPointerMessage"],
+    },
     fireCallTranscriptNotifier: (
       conversationId,
       callSessionId,

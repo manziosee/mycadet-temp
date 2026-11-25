@@ -98,7 +98,7 @@ function createHarness(
   const turnOptions: VoiceTurnOptions[] = [];
   const startVoiceTurn =
     options.startVoiceTurn ??
-    (mock(async (opts: VoiceTurnOptions) => {
+    mock(async (opts: VoiceTurnOptions) => {
       turnOptions.push(opts);
       if (options.autoCompleteTurns) {
         opts.callbacks?.message_complete?.({
@@ -108,7 +108,7 @@ function createHarness(
         });
       }
       return { turnId: `bridge-turn-${turnOptions.length}`, abort: mock() };
-    }) as unknown as LiveVoiceTurnStarter);
+    });
 
   const resolveTranscriber = mock(async () => new MockStreamingTranscriber());
   const session = new LiveVoiceSession(context, {

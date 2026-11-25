@@ -311,7 +311,7 @@ describe("PR 11 — inbound Slack message metadata persistence", () => {
         slackInbound: {
           // channelTs intentionally missing — simulates a bug upstream.
           channelId: "C0123CHANNEL",
-        } as unknown as Record<string, unknown>,
+        },
       },
     });
 

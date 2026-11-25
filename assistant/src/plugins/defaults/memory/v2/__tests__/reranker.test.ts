@@ -8,7 +8,10 @@
  */
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 
-import { AssistantConfig } from "../../../../../config/schema.js";
+import {
+  type AssistantConfig,
+  AssistantConfigSchema,
+} from "../../../../../config/schema.js";
 
 // Spread the real module: the reranker reaches the plugin API, whose import
 const backendState: {
@@ -57,7 +60,7 @@ const { rerankCandidates, _resetRerankCacheForTests } =
   await import("../reranker.js");
 
 function configWithModel(model = "test-model"): AssistantConfig {
-  return {
+  return AssistantConfigSchema.parse({
     memory: {
       v2: {
         rerank: {
@@ -69,7 +72,7 @@ function configWithModel(model = "test-model"): AssistantConfig {
         },
       },
     },
-  } as unknown as AssistantConfig;
+  });
 }
 
 function resetState() {
@@ -315,7 +318,7 @@ describe("rerankCandidates", () => {
       await import("../reranker.js");
     reset();
 
-    const config = {
+    const config = AssistantConfigSchema.parse({
       memory: {
         v2: {
           rerank: {
@@ -327,7 +330,7 @@ describe("rerankCandidates", () => {
           },
         },
       },
-    } as unknown as AssistantConfig;
+    });
 
     await freshRerank(["q"], ["a"], config);
 

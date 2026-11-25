@@ -8,7 +8,10 @@
 
 import { describe, expect, test } from "bun:test";
 
-import type { AssistantConfig } from "../../../../../config/schema.js";
+import {
+  type AssistantConfig,
+  AssistantConfigSchema,
+} from "../../../../../config/schema.js";
 import { MemoryV3ConfigSchema } from "../../../../../config/schemas/memory-v3.js";
 import {
   MEMORY_V3_FULL_PROFILE_MIN_PAGES,
@@ -21,9 +24,9 @@ import {
 function configWith(
   v3Overrides: Record<string, unknown> = {},
 ): AssistantConfig {
-  return {
+  return AssistantConfigSchema.parse({
     memory: { v3: MemoryV3ConfigSchema.parse(v3Overrides) },
-  } as unknown as AssistantConfig;
+  });
 }
 
 describe("resolveV3Tuning", () => {

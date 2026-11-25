@@ -950,12 +950,7 @@ describe("SubagentManager run budgets", () => {
     const manager = new SubagentManager();
     await manager.spawn(cfg, (msg) => {
       if (msg.type === "subagent_status_changed") {
-        statusEvents.push(
-          msg as unknown as {
-            status: string;
-            usage?: { inputTokens: number; outputTokens: number };
-          },
-        );
+        statusEvents.push(msg);
       }
     });
     await new Promise((resolve) => setTimeout(resolve, 80));

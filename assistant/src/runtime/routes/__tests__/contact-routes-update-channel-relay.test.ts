@@ -1,3 +1,4 @@
+import assert from "node:assert/strict";
 /**
  * Unit tests for the daemon updateContactChannel relay.
  *
@@ -8,7 +9,6 @@
  * unchanged, returns the gateway response verbatim, never touches the assistant
  * contact store, and propagates an unexpected relay rejection (no fallback).
  */
-
 import { beforeEach, describe, expect, mock, test } from "bun:test";
 
 import { IpcCallError } from "@mycadet/gateway-client/ipc-client";
@@ -149,7 +149,8 @@ describe("update contact channel relay", () => {
       });
       throw new Error("expected handler to throw");
     } catch (err) {
-      expect((err as Error).message).toBe("ipc transport exploded");
+      assert(err instanceof Error);
+      expect(err.message).toBe("ipc transport exploded");
     }
     // No daemon-side fallback write.
     expect(contactStoreWriteGuard).not.toHaveBeenCalled();

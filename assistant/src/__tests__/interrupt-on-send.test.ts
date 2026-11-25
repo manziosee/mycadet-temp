@@ -959,9 +959,7 @@ describe("repairInterruptedToolUseBlocks", () => {
         },
       ],
     });
-    expect(JSON.parse(persisted[0].content)).toEqual(
-      messages[1].content as unknown as unknown[],
-    );
+    expect(JSON.parse(persisted[0].content)).toEqual(messages[1].content);
   });
 
   test("adds nothing when the loop already wrote its own results", async () => {
