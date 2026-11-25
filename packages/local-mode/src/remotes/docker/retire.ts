@@ -1,7 +1,7 @@
 import { exec } from "../../exec";
 import { stopProcess, isCadetProcess } from "../../process";
 import { DockerAssistant, isDockerEntry } from "../../lockfile-contract";
-import { dockerResourceNames } from "./common";
+import { removeDockerResources } from "./common";
 import { sleepDocker } from "./sleep";
 import { DOCKER_STATEFUL_SET_SPEC } from "./statefulset";
 
@@ -35,27 +35,7 @@ export async function retireDocker(entry: DockerAssistant): Promise<void> {
   }
 
   await sleepDocker(entry);
-
-  const res = dockerResourceNames(entry.assistantId);
-
-  await removeContainer(res.cesContainer);
-  await removeContainer(res.gatewayContainer);
-  await removeContainer(res.assistantContainer);
-
-  // Remove network and volumes
-  try {
-    await exec("docker", ["network", "rm", res.network]);
-  } catch {
-    // network may not exist
-  }
-  for (const claim of DOCKER_STATEFUL_SET_SPEC.volumeClaimTemplates) {
-    const vol = claim.dockerVolume(entry.assistantId);
-    try {
-      await exec("docker", ["volume", "rm", vol]);
-    } catch {
-      // volume may not exist
-    }
-  }
+  await removeDockerResources(entry.assistantId);
 
   // Future: consider stopping Colima VM when no Docker instances remain.
   // Considerations:
