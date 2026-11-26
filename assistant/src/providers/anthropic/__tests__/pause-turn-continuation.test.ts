@@ -28,7 +28,7 @@ function makeMessage(overrides: {
 }
 
 function textBlock(text: string): Anthropic.ContentBlock {
-  return { type: "text", text, citations: null } as Anthropic.ContentBlock;
+  return { type: "text", text, citations: null };
 }
 
 function serverToolUseBlock(id: string): Anthropic.ContentBlock {
@@ -36,8 +36,9 @@ function serverToolUseBlock(id: string): Anthropic.ContentBlock {
     type: "server_tool_use",
     id,
     name: "web_search",
+    caller: { type: "direct" },
     input: { query: "test" },
-  } as Anthropic.ContentBlock;
+  };
 }
 
 /**
@@ -65,11 +66,9 @@ function stubProvider(responses: Anthropic.Message[]): {
       },
     };
   };
-  (provider as unknown as { client: unknown }).client = {
-    baseURL: "https://api.anthropic.com",
-    messages: { stream },
-    beta: { messages: { stream } },
-  };
+  Object.assign(provider["client"], { baseURL: "https://api.anthropic.com" });
+  Object.assign(provider["client"].messages, { stream });
+  Object.assign(provider["client"].beta.messages, { stream });
   return { provider, calls };
 }
 
