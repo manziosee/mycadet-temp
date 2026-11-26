@@ -43,6 +43,11 @@ interface experience should look entirely unique.
 Cadet already has the base primitives for managing contacts. This effort solves all of the outstanding
 issues preventing simple interaction between a user and another user's Cadet.
 
+## OIDC Support for agents
+
+It's dangerous to let agents have access to api keys. OIDC Workfload Federation allows authentication of
+agents based on the machines they run on, allowing the assistant to avoid storing any long lived API key.
+
 ## Schedules move out of the sandbox
 
 Recurring tasks, wakes, and heartbeats move from the assistant container to
