@@ -17,13 +17,13 @@ mock.module("../util/retry.js", () => ({
       return false;
     }
     const codes = new Set(["ECONNRESET", "ECONNREFUSED", "ETIMEDOUT", "EPIPE"]);
-    const code = (error as { code?: string }).code;
-    if (code && codes.has(code)) {
+    const code = "code" in error ? error.code : undefined;
+    if (typeof code === "string" && codes.has(code)) {
       return true;
     }
     if (error.cause instanceof Error) {
-      const causeCode = (error.cause as { code?: string }).code;
-      if (causeCode && codes.has(causeCode)) {
+      const causeCode = "code" in error.cause ? error.cause.code : undefined;
+      if (typeof causeCode === "string" && codes.has(causeCode)) {
         return true;
       }
     }
@@ -57,8 +57,12 @@ mock.module("../cloud/client.js", () => ({
       return {
         cloudAssistantId: "test-assistant-id",
         fetch: async (path: string, init?: RequestInit) => {
-          const body = init?.body
-            ? jsonObjectSchema.parse(JSON.parse(init.body as string))
+          const rawBody = init?.body;
+          if (rawBody != null && typeof rawBody !== "string") {
+            throw new Error("Expected a JSON request body");
+          }
+          const body = rawBody
+            ? jsonObjectSchema.parse(JSON.parse(rawBody))
             : {};
           fetchCalls.push({
             path,
@@ -545,7 +549,10 @@ describe("CloudPushAdapter", () => {
       expect(result.success).toBe(true);
       const dispatched = fetchCalls[0]!.body;
       expect(dispatched.title).toBe("Build finished");
-      const dispatchedBody = dispatched.body as string;
+      const dispatchedBody = dispatched.body;
+      if (typeof dispatchedBody !== "string") {
+        throw new Error("Expected a notification body");
+      }
       expect(dispatchedBody).not.toContain("![");
       expect(dispatchedBody).not.toContain("```");
       expect(dispatchedBody).not.toContain("|");
