@@ -1,0 +1,19 @@
+import type { IpcRenderer } from "electron";
+
+import type { CadetBridge } from "@mycadet/ipc-contract";
+import type { BridgeCapabilityRegistry } from "../../capability-registry";
+import { createNotificationsBridge } from "../../preload";
+
+// Renderer bridge for native notifications and file sharing, mirroring the
+// macOS preload surface channel-for-channel so the renderer's runtime
+// wrappers work unchanged.
+export const install = (
+  bridge: BridgeCapabilityRegistry<CadetBridge>,
+  ipc: IpcRenderer,
+): void => {
+  bridge.contribute("notifications", createNotificationsBridge(ipc));
+  bridge.contribute("share", {
+    shareFile: (bytes: Uint8Array, filename: string): Promise<void> =>
+      Promise.resolve(ipc.invoke("cadet:share:file", bytes, filename)),
+  });
+};
