@@ -289,6 +289,15 @@ Examples:
             "Re-pin the schedule to your current default inference profile",
         },
         {
+          flags: "--max-run-cost <usd>",
+          description:
+            "Most a single run may spend on LLM calls, in US dollars (at least 0.01)",
+        },
+        {
+          flags: "--clear-max-run-cost",
+          description: "Remove the per-run spending limit",
+        },
+        {
           flags: "--json",
           description: "Machine-readable compact JSON output",
         },
@@ -317,6 +326,12 @@ Options:
   --clear-profile           Re-pin the schedule to your current default
                             inference profile (mutually exclusive with
                             --profile).
+  --max-run-cost <usd>      Most a single run may spend on LLM calls, in US
+                            dollars (at least 0.01). A run that goes over is
+                            stopped and the schedule paused until you enable
+                            it again.
+  --clear-max-run-cost      Remove the spending limit (mutually exclusive with
+                            --max-run-cost).
   --json                    Output the updated schedule list as compact JSON.
 
 Arguments:

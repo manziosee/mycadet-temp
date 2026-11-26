@@ -114,6 +114,12 @@ export interface ScheduleJob {
    */
   inferenceProfile: string | null;
   /**
+   * Most a single run may spend on LLM calls, in USD. A run that goes over is
+   * stopped and the schedule paused (see `run-cost-guard.ts`); null = no
+   * limit.
+   */
+  maxRunCostUsd: number | null;
+  /**
    * Sidebar group (`conversation_groups` id) for conversations created by
    * the schedule's runs; null = the default `system:scheduled`. Resolve via
    * {@link resolveScheduleConversationGroupId}, since the group may have
@@ -368,6 +374,7 @@ async function insertSchedule(
     retryBackoffMs,
     timeoutMs,
     inferenceProfile,
+    maxRunCostUsd: null,
     groupId,
     createdFromConversationId,
     createdBy: params.createdBy ?? "agent",
@@ -566,6 +573,7 @@ export async function updateSchedule(
     retryBackoffMs?: number;
     timeoutMs?: number | null;
     inferenceProfile?: string | null;
+    maxRunCostUsd?: number | null;
     groupId?: string | null;
     // `createdBy` and `createdFromConversationId` are deliberately absent: a
     // deferred wake's firing reads both to decide whether the woken turn may
@@ -736,6 +744,9 @@ export async function updateSchedule(
     // schedule's model and price without the user touching the schedule.
     set.inferenceProfile =
       updates.inferenceProfile ?? resolveDefaultScheduleInferenceProfile();
+  }
+  if (updates.maxRunCostUsd !== undefined) {
+    set.maxRunCostUsd = updates.maxRunCostUsd;
   }
   if (updates.groupId !== undefined) {
     set.groupId = updates.groupId;
@@ -2059,6 +2070,7 @@ function parseJobRow(row: typeof cronJobs.$inferSelect): ScheduleJob {
     retryBackoffMs: row.retryBackoffMs ?? 60000,
     timeoutMs: row.timeoutMs ?? null,
     inferenceProfile: row.inferenceProfile ?? null,
+    maxRunCostUsd: row.maxRunCostUsd ?? null,
     groupId: row.groupId ?? null,
     createdFromConversationId: row.createdFromConversationId ?? null,
     createdBy: row.createdBy,

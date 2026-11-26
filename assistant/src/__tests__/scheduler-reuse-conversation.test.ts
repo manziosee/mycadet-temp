@@ -18,6 +18,9 @@ const runBackgroundJobOptions: Array<{
 }> = [];
 let runBackgroundJobShouldFail = false;
 let runBackgroundJobBootstrapFails = false;
+// USD of LLM spend the stubbed run records against its cron run, the way real
+// usage rows are stamped with `cron_run_id`.
+let runBackgroundJobSpendUsd = 0;
 mock.module("../runtime/background-job-runner.js", () => ({
   runBackgroundJob: async (opts: {
     prompt: string;
@@ -26,6 +29,7 @@ mock.module("../runtime/background-job-runner.js", () => ({
     scheduleJobId?: string;
     suppressFailureNotifications?: boolean;
     onConversationCreated?: (id: string) => void;
+    cronRunId?: string;
   }) => {
     runBackgroundJobOptions.push({
       conversationType: opts.conversationType,
@@ -60,6 +64,21 @@ mock.module("../runtime/background-job-runner.js", () => ({
     // conversation id.
     opts.onConversationCreated?.(conv.id);
     processedMessages.push({ conversationId: conv.id, message: opts.prompt });
+    if (runBackgroundJobSpendUsd > 0 && opts.cronRunId) {
+      const { getSqlite } = await import("../persistence/db-connection.js");
+      getSqlite().run(
+        `INSERT INTO llm_usage_events
+           (id, created_at, cron_run_id, actor, provider, model,
+            input_tokens, output_tokens, estimated_cost_usd, pricing_status)
+         VALUES (?, ?, ?, 'main_agent', 'test', 'test-model', 0, 0, ?, 'priced')`,
+        [
+          crypto.randomUUID(),
+          Date.now(),
+          opts.cronRunId,
+          runBackgroundJobSpendUsd,
+        ],
+      );
+    }
     if (runBackgroundJobShouldFail) {
       return {
         conversationId: conv.id,
@@ -102,7 +121,12 @@ import { deleteConversation } from "../persistence/conversation-crud.js";
 import { getDb, getSqlite } from "../persistence/db-connection.js";
 import { initializeDb } from "../persistence/db-init.js";
 import { assistantEventHub } from "../runtime/assistant-event-hub.js";
-import { createSchedule, getScheduleRuns } from "../schedule/schedule-store.js";
+import {
+  createSchedule,
+  getSchedule,
+  getScheduleRuns,
+  updateSchedule,
+} from "../schedule/schedule-store.js";
 import { runDueSchedulesOnce } from "../schedule/scheduler.js";
 
 await initializeDb();
@@ -617,5 +641,87 @@ describe("scheduler talk-mode runner option propagation", () => {
     expect(sseCalls[0].conversationId).toBe(
       processedMessages[0].conversationId,
     );
+  });
+});
+
+describe("scheduler per-run spending limit", () => {
+  beforeEach(() => {
+    const db = getDb();
+    db.run("DELETE FROM cron_runs");
+    db.run("DELETE FROM cron_jobs");
+    db.run("DELETE FROM messages");
+    db.run("DELETE FROM conversations");
+    db.run("DELETE FROM llm_usage_events");
+    processedMessages.length = 0;
+    processMessageImpl = captureProcessedMessage;
+    runBackgroundJobOptions.length = 0;
+    runBackgroundJobShouldFail = false;
+    runBackgroundJobBootstrapFails = false;
+    runBackgroundJobSpendUsd = 0;
+  });
+
+  async function createRecurringSchedule(name: string) {
+    const rruleExpr = buildEveryMinuteRrule();
+    return createSchedule({
+      name,
+      cronExpression: rruleExpr,
+      message: "Summarize the day",
+      syntax: "rrule",
+      expression: rruleExpr,
+    });
+  }
+
+  test("a run that spends past its limit fails and pauses the schedule instead of retrying", async () => {
+    // GIVEN a recurring schedule limited to $1.00 per run
+    const schedule = await createRecurringSchedule("Costly digest");
+    await updateSchedule(schedule.id, { maxRunCostUsd: 1 });
+
+    // WHEN a run spends $2.50
+    runBackgroundJobSpendUsd = 2.5;
+    forceScheduleDue(schedule.id);
+    await runDueSchedulesOnce();
+
+    // THEN the run is recorded as an error naming the spend and the limit
+    const runs = getScheduleRuns(schedule.id);
+    expect(runs).toHaveLength(1);
+    expect(runs[0].status).toBe("error");
+    expect(runs[0].error).toContain("$2.50");
+    expect(runs[0].error).toContain("$1.00");
+
+    // AND the schedule is paused, so it does not run again even when due
+    expect(getSchedule(schedule.id)?.enabled).toBe(false);
+    forceScheduleDue(schedule.id);
+    await runDueSchedulesOnce();
+    expect(getScheduleRuns(schedule.id)).toHaveLength(1);
+  });
+
+  test("a run within its limit completes normally", async () => {
+    // GIVEN a recurring schedule limited to $5.00 per run
+    const schedule = await createRecurringSchedule("Cheap digest");
+    await updateSchedule(schedule.id, { maxRunCostUsd: 5 });
+
+    // WHEN a run spends $2.00
+    runBackgroundJobSpendUsd = 2;
+    forceScheduleDue(schedule.id);
+    await runDueSchedulesOnce();
+
+    // THEN the run succeeds and the schedule stays enabled
+    expect(getScheduleRuns(schedule.id)[0].status).toBe("ok");
+    expect(getSchedule(schedule.id)?.enabled).toBe(true);
+  });
+
+  test("a schedule without a limit is never stopped for spend", async () => {
+    // GIVEN a recurring schedule with no limit
+    const schedule = await createRecurringSchedule("Unlimited digest");
+    expect(schedule.maxRunCostUsd).toBeNull();
+
+    // WHEN a run spends $100.00
+    runBackgroundJobSpendUsd = 100;
+    forceScheduleDue(schedule.id);
+    await runDueSchedulesOnce();
+
+    // THEN the run succeeds and the schedule stays enabled
+    expect(getScheduleRuns(schedule.id)[0].status).toBe("ok");
+    expect(getSchedule(schedule.id)?.enabled).toBe(true);
   });
 });

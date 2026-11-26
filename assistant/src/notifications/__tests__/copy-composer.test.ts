@@ -116,6 +116,20 @@ describe("activity.failed copy", () => {
     );
     expect(copy.cadet?.body).toContain("It ran out of time before finishing.");
   });
+
+  test("cost_limit renders its own prose", () => {
+    const copy = composeFallbackCopy(
+      failedSignal({
+        jobName: "schedule:Daily digest",
+        errorKind: "cost_limit",
+        errorMessage: "",
+      }),
+      CHANNELS,
+    );
+    expect(copy.cadet?.body).toContain(
+      "It went over its spending limit and was paused.",
+    );
+  });
 });
 
 // ── composeFallbackCopy with requestedMessage ─────────────────────────

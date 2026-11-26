@@ -10,7 +10,11 @@ const log = getLogger("background-failure-signal");
  * Coarse classification of why a background job failed, as the notification
  * copy and dedupe key switch on it.
  */
-export type BackgroundJobErrorKind = "timeout" | "model_provider" | "exception";
+export type BackgroundJobErrorKind =
+  | "timeout"
+  | "model_provider"
+  | "exception"
+  | "cost_limit";
 
 /**
  * One background failure, as a producer reports it.

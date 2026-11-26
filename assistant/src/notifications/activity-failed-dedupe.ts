@@ -88,6 +88,9 @@ export function activityFailedDedupeKey(args: {
     }
     return `activity-failed:${args.jobName}:${day}`;
   }
+  if (args.errorKind === "cost_limit") {
+    return `activity-failed:cost_limit:${args.jobName}:${day}`;
+  }
   if (args.errorKind === "model_provider" && scope) {
     return `activity-failed:cause:model_provider:${scope}:${day}`;
   }

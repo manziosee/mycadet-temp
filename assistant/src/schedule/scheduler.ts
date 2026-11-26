@@ -40,6 +40,7 @@ import { getWorkflowRunManager } from "../workflows/run-manager.js";
 import { declarationExistsOnDisk } from "./plugin-schedule-declarations.js";
 import { hasSetConstructs } from "./recurrence-engine.js";
 import { applyRetryDecision, decideRetry } from "./retry-policy.js";
+import { startRunCostGuard } from "./run-cost-guard.js";
 import { runScript, type ScriptResult } from "./run-script.js";
 import {
   claimDueSchedules,
@@ -57,6 +58,7 @@ import {
   type ScheduleJob,
   scheduleRetry,
   setScheduleRunConversationId,
+  setUserEnabled,
 } from "./schedule-store.js";
 import {
   getScheduleToolSurfaceSnapshot,
@@ -168,13 +170,10 @@ async function awaitDelegatedWork(
   return false;
 }
 
-function cancelTimedOutScheduleWork(
-  conversationId: string,
-  runId: string,
-): void {
+function cancelScheduledRunWork(conversationId: string, runId: string): void {
   const manager = getSubagentManager();
   for (const child of manager.getChildrenOf(conversationId)) {
-    cancelTimedOutScheduleWork(child.conversationId, runId);
+    cancelScheduledRunWork(child.conversationId, runId);
     if (child.config.cronRunId !== runId) {
       continue;
     }
@@ -406,6 +405,46 @@ async function handleExecutionFailure(params: {
       });
     },
     log,
+  });
+}
+
+/** Run-record and notification text for a run that went over its limit. */
+function describeOverspend(
+  costUsd: number,
+  limitUsd: number,
+  isOneShot: boolean,
+): string {
+  const spent = `This run spent $${costUsd.toFixed(2)}, over its $${limitUsd.toFixed(2)} spending limit, so it was stopped.`;
+  return isOneShot
+    ? spent
+    : `${spent} The schedule is paused until you enable it again.`;
+}
+
+/**
+ * Stop a schedule whose run went over its spending limit and tell the user.
+ * Deliberately bypasses the retry policy, since a retry would spend the same
+ * money again: a recurring schedule is paused (re-enabling it is the user's
+ * call) and a one-shot is failed for good.
+ */
+async function stopScheduleOverCostLimit(params: {
+  job: ScheduleJob;
+  isOneShot: boolean;
+  message: string;
+}): Promise<void> {
+  const { job, isOneShot, message } = params;
+  if (isOneShot) {
+    await failOneShotPermanently(job.id);
+  } else {
+    await setUserEnabled(job.id, false);
+  }
+  emitBackgroundFailureSignal({
+    jobName: `schedule:${job.id}`,
+    displayName: `schedule:${job.name}`,
+    sourceChannel: "scheduler",
+    sourceContextId: job.id,
+    errorKind: "cost_limit",
+    errorMessage: message,
+    failureSummary: message,
   });
 }
 
@@ -1106,6 +1145,19 @@ export async function runDueSchedulesOnce(
     // silence the fallback for every run after it.
     const runStartedAt = Date.now();
     const runId = await createScheduleRun(job.id, reusedConversationId);
+    const costGuard = startRunCostGuard({
+      runId,
+      limitUsd: job.maxRunCostUsd,
+      onExceeded: (costUsd) => {
+        log.warn(
+          { jobId: job.id, runId, costUsd, limitUsd: job.maxRunCostUsd },
+          "Schedule run went over its spending limit; stopping it",
+        );
+        if (runConversationId) {
+          cancelScheduledRunWork(runConversationId, runId);
+        }
+      },
+    });
 
     if (reusedConversationId) {
       // Reuse path: dispatch the message into the existing conversation so it
@@ -1229,6 +1281,13 @@ export async function runDueSchedulesOnce(
       errorMsg = "Scheduled work did not finish before its time limit";
     }
 
+    const overspendUsd = costGuard.finish();
+    if (overspendUsd !== null && job.maxRunCostUsd !== null) {
+      ok = false;
+      errorKind = "cost_limit";
+      errorMsg = describeOverspend(overspendUsd, job.maxRunCostUsd, isOneShot);
+    }
+
     if (ok) {
       await completeScheduleRun(runId, { status: "ok" });
       // Automatic completion notification for successful execute-mode runs.
@@ -1267,16 +1326,24 @@ export async function runDueSchedulesOnce(
           : "Schedule execution failed",
       );
       await completeScheduleRun(runId, { status: "error", error: errorMsg });
-      if (errorKind === "timeout") {
-        cancelTimedOutScheduleWork(conversationId, runId);
+      if (errorKind === "timeout" || errorKind === "cost_limit") {
+        cancelScheduledRunWork(conversationId, runId);
       }
-      await handleExecutionFailure({
-        job,
-        errorMsg: errorMsg ?? "Schedule run failed",
-        isOneShot,
-        ...(errorKind !== undefined ? { errorKind } : {}),
-        ...(failedTurn !== undefined ? { turnFailure: failedTurn } : {}),
-      });
+      if (errorKind === "cost_limit") {
+        await stopScheduleOverCostLimit({
+          job,
+          isOneShot,
+          message: errorMsg ?? "Schedule run went over its spending limit",
+        });
+      } else {
+        await handleExecutionFailure({
+          job,
+          errorMsg: errorMsg ?? "Schedule run failed",
+          isOneShot,
+          ...(errorKind !== undefined ? { errorKind } : {}),
+          ...(failedTurn !== undefined ? { turnFailure: failedTurn } : {}),
+        });
+      }
 
       // Only skip invalidation when the conversation was *actually* reused,
       // i.e. it contains prior successful context worth preserving. When
