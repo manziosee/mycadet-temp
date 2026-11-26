@@ -31,20 +31,16 @@ import {
  * tweaks (e.g. `thinking.enabled`) combine leaf-wise with the winner rather
  * than wholesale-replacing sibling fields.
  *
- * Precedence of the selection chain (high → low):
+ * Precedence of the selection chain (high → low), identical for every call
+ * site:
  *   1. `opts.overrideProfile` (per-turn / per-conversation pin)
- *   2. `llm.activeProfile` — `mainAgent` only, since it IS that call site's
- *      user-facing chat-model selection
- *   3. `llm.callSites[callSite].profile` (the call site's named profile)
- *   4. `CALL_SITE_DEFAULTS[callSite].profile` intent resolved through
- *      `llm.default`
- *   5. balanced intent through `llm.default`: the code-owned anchor
- *      for profileless call sites, or when nothing above is usable
+ *   2. `llm.callSites[callSite].profile` (the call site's named profile)
+ *   3. `llm.activeProfile` (the chat-model selection)
+ *   4. the default provider's balanced profile (code-owned anchor)
  *
  * A winner must carry its own `provider` AND `model`: the base layer's schema
- * default identity never stands in for a selected profile. The anchor is
- * code-owned and resolved through `llm.default`, never through
- * user-mutable state.
+ * default identity never stands in for a selected profile. The anchor is the
+ * main agent's winner, which bottoms out in the code-owned catalog.
  *
  * `temperature`/`top_p` come only from the winner (or an explicit call-site
  * tweak); `logitBias` only ever from the winner. These are provider-coupled, so
@@ -152,19 +148,14 @@ export function resolveCallSiteConfig(
 
 // ─── Single-winner profile resolution ───────────────────────────────────────
 //
-// Selection is a single-winner chain — each rung is either a complete
-// explicit choice or skipped with a reported reason — bottoming out on the
-// code-owned default intent resolved through `llm.default`:
+// Selection is a single-winner chain, identical for every call site:
 //   1. `opts.overrideProfile` (conversation/schedule/per-turn pin)
-//   2. `llm.activeProfile` (mainAgent only — it IS that call site's selection)
-//   3. `llm.callSites[callSite].profile`
-//   4. `CALL_SITE_DEFAULTS[callSite].profile` intent × default provider
-//   5. balanced intent × default provider (profileless sites, or nothing
-//      above usable)
+//   2. `llm.callSites[callSite].profile`
+//   3. `llm.activeProfile`
+//   4. the default provider's balanced profile (code-owned anchor)
 // A winner must carry its own `provider` AND `model`: the base layer's
 // schema-default identity must never stand in for a selected profile (that
-// would be merge inheritance by the back door). A fallback anchor must be
-// code-owned, never user-mutable state.
+// would be merge inheritance by the back door).
 //
 // The request config is the base + winner + site-tweak composition:
 // code-owned schema defaults, then the single winning profile, then the call
@@ -178,7 +169,8 @@ export function resolveCallSiteConfig(
 // `forceOverrideProfile` is a no-op here (the override is already first).
 
 export interface ProfileWinnerSelection {
-  /** Named winner (a mix's own name, not its arm); null → the anchor rung. */
+  /** Named winner (a mix's own name, not its arm); null → even the anchor
+   *  catalog was unusable. */
   profileName: string | null;
   source: "override" | "active" | "call_site" | "default";
   /** The concrete (mix-expanded) entry that won; null only if even the code
@@ -202,16 +194,6 @@ export function selectWinningProfile(
       entry: override.entry,
     };
   }
-  if (callSite === "mainAgent") {
-    const active = usableEntry(llm.activeProfile, llm, opts, report);
-    if (active) {
-      return {
-        profileName: active.name,
-        source: "active",
-        entry: active.entry,
-      };
-    }
-  }
   const sitePin = usableEntry(
     llm.callSites?.[callSite]?.profile,
     llm,
@@ -225,22 +207,23 @@ export function selectWinningProfile(
       entry: sitePin.entry,
     };
   }
-  const intent = CALL_SITE_DEFAULTS[callSite]?.profile;
-  if (intent != null) {
-    const entry = usableDefaultIntent(intent, llm, opts, report);
-    if (entry) {
-      return { profileName: intent, source: "default", entry };
-    }
+  const active = usableEntry(llm.activeProfile, llm, opts, report);
+  if (active) {
+    return {
+      profileName: active.name,
+      source: "active",
+      entry: active.entry,
+    };
   }
-  // Anchor: profileless call sites (`vision`, `workflowLeaf`) and any
-  // resolution whose every named rung was unusable land on balanced intent
-  // through the default provider, bottoming out on the code-owned catalog,
-  // so it always resolves. `profileName` stays null on the catalog path:
-  // the anchor itself is not a selection.
+  // Anchor: the code-owned balanced intent resolved through the default
+  // provider, so the chain always resolves. It is a named rung — the
+  // resolved body is the "balanced" default key's column — but it is still
+  // the lowest tier, never user-mutable state.
+  const anchor = usableDefaultIntent("balanced", llm, opts, report);
   return {
-    profileName: null,
+    profileName: anchor != null ? "balanced" : null,
     source: "default",
-    entry: usableDefaultIntent("balanced", llm, opts, report) ?? null,
+    entry: anchor ?? null,
   };
 }
 
@@ -618,19 +601,18 @@ export function resolveDefaultProfileKey(
 }
 
 /**
- * Returns the code-owned profile tier for catalog display when that tier is
- * available through the workspace's default provider. Workspace call-site
- * pins do not affect this value. A managed-only tier on a BYOK install returns
- * undefined so clients do not report a profile that cannot run there.
+ * The code-owned anchor tier every call site bottoms out on when nothing
+ * above it is usable: "balanced" when it has a body under the workspace's
+ * default provider, undefined otherwise (a managed-only tier on a BYOK
+ * install). Shared by every call site — user pins and `llm.activeProfile`
+ * outrank it.
  */
 export function resolveShippedDefaultProfileKey(
-  callSite: LLMCallSite,
   llm: z.infer<typeof LLMSchema>,
 ): string | undefined {
-  const intent = CALL_SITE_DEFAULTS[callSite]?.profile ?? "balanced";
-  return usableDefaultIntent(intent, llm, {}, () => undefined) == null
+  return usableDefaultIntent("balanced", llm, {}, () => undefined) == null
     ? undefined
-    : intent;
+    : "balanced";
 }
 
 /**

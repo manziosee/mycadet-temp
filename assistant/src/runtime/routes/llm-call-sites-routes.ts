@@ -27,13 +27,9 @@ const callSiteEntrySchema = z.object({
   /** The effective winning profile key: includes per-call-site pins. */
   defaultProfile: z.string().optional(),
   /**
-   * The code-owned `CALL_SITE_DEFAULTS` tier key, independent of pins and
-   * tier remaps. Clients group call sites by tier with this; grouping by
-   * `defaultProfile` would scatter pinned or remapped sites across their
-   * winners. Profileless call sites report `balanced`: the resolver's
-   * fallback anchor consults the balanced remap for them, so they follow
-   * the Balanced tier like any balanced-keyed site. A managed-only tier is
-   * omitted when it has no body under the workspace's default provider.
+   * The code-owned anchor tier every call site bottoms out on: "balanced"
+   * when it has a body under the workspace's default provider, undefined
+   * otherwise. User pins and `llm.activeProfile` outrank it.
    */
   shippedDefaultProfile: z.string().optional(),
 });
@@ -47,7 +43,7 @@ export function buildCallSiteCatalog(llm: LLMConfig) {
   return CALL_SITE_CATALOG.map((entry) => ({
     ...entry,
     defaultProfile: resolveDefaultProfileKey(entry.id, llm),
-    shippedDefaultProfile: resolveShippedDefaultProfileKey(entry.id, llm),
+    shippedDefaultProfile: resolveShippedDefaultProfileKey(llm),
   }));
 }
 

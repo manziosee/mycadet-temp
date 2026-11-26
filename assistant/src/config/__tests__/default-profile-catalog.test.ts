@@ -229,17 +229,16 @@ describe("resolver integration", () => {
     expect(resolved.provider_connection).toBeUndefined();
   });
 
-  test("an empty workspace resolves every call-site default from the catalog", () => {
+  test("an empty workspace resolves every tuned call site on the balanced anchor", () => {
     const llm = LLMSchema.parse({ activeProfile: "balanced" });
-    for (const [callSite, dflt] of Object.entries(CALL_SITE_DEFAULTS)) {
-      if (dflt.profile == null) {
-        continue;
-      }
-      const expected = CODE_DEFAULT_PROFILE_ENTRIES[dflt.profile];
-      const resolved = resolveCallSiteConfig(callSite as LLMCallSite, llm);
-      // A site-level model pin legitimately overrides the profile's model.
-      expect(resolved.model).toBe(
-        capturedStringSchema.parse(dflt.model ?? expected.model),
+    const anchor = capturedStringSchema.parse(
+      CODE_DEFAULT_PROFILE_ENTRIES.balanced.model,
+    );
+    for (const callSite of Object.keys(CALL_SITE_DEFAULTS)) {
+      // No site pins a profile anymore, so every site resolves the anchor's
+      // model; only its knobs (effort, temperature, caps) differ.
+      expect(resolveCallSiteConfig(callSite as LLMCallSite, llm).model).toBe(
+        anchor,
       );
     }
   });
@@ -284,9 +283,9 @@ describe("resolver integration", () => {
   });
 
   test("a user profile cannot shadow latency-optimized", () => {
-    // `latency-optimized` is code-owned: it fronts every live-voice turn, so
-    // a same-named workspace entry never governs what it resolves to. The
-    // entry stays on disk and stays a valid `activeProfile` reference.
+    // `latency-optimized` is code-owned at the catalog level: a same-named
+    // workspace entry never changes what the key resolves to. The entry stays
+    // on disk and stays a valid `activeProfile` reference.
     const llm = LLMSchema.parse({
       profiles: {
         "latency-optimized": {
@@ -299,15 +298,6 @@ describe("resolver integration", () => {
       },
     });
     const body = CODE_DEFAULT_PROFILE_ENTRIES["latency-optimized"]!;
-    for (const callSite of [
-      "voiceFrontDoor",
-      "voiceProgressNarration",
-    ] as const) {
-      const resolved = resolveCallSiteConfig(callSite, llm);
-      expect(resolved.model).toBe(capturedStringSchema.parse(body.model));
-      expect(resolved.model).not.toBe("claude-opus-4-6");
-      expect(String(resolved.provider)).toBe("cadet");
-    }
     // Listing follows resolution: the catalog body is what surfaces.
     expect(getEffectiveProfiles(llm.profiles)["latency-optimized"]?.model).toBe(
       body.model,
@@ -318,6 +308,35 @@ describe("resolver integration", () => {
         profiles: llm.profiles,
       }),
     ).not.toThrow();
+  });
+
+  test("voice latency sites inherit the chat model like every background site", () => {
+    // Velcro #18: the voice sites ship no profile tier, so with no
+    // activeProfile they ride the main agent's balanced anchor — the user's
+    // latency-optimized shadow cannot capture them by name.
+    const llm = LLMSchema.parse({
+      profiles: {
+        "latency-optimized": {
+          provider: "anthropic",
+          model: "claude-opus-4-6",
+          provider_connection: "anthropic-personal",
+          maxTokens: 32000,
+          effort: "high",
+        },
+      },
+    });
+    for (const callSite of [
+      "voiceFrontDoor",
+      "voiceProgressNarration",
+    ] as const) {
+      const resolved = resolveCallSiteConfig(callSite, llm);
+      expect(String(resolved.provider)).toBe("cadet");
+      expect(resolved.model).toBe(
+        capturedStringSchema.parse(
+          CODE_DEFAULT_PROFILE_ENTRIES["balanced"].model,
+        ),
+      );
+    }
   });
 
   test("a user profile cannot shadow a cloud backup profile", () => {

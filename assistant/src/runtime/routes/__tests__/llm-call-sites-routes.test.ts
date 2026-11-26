@@ -1,6 +1,5 @@
 import { describe, expect, test } from "bun:test";
 
-import { CALL_SITE_DEFAULTS } from "../../../config/call-site-defaults.js";
 import { LLMCallSiteEnum, LLMSchema } from "../../../config/schemas/llm.js";
 import {
   buildCallSiteCatalog,
@@ -56,38 +55,27 @@ describe("llm-call-sites-routes", () => {
     }
   });
 
-  test("shippedDefaultProfile is the code-owned tier, unaffected by pins", async () => {
+  test("shippedDefaultProfile is the shared balanced anchor tier", async () => {
     const result = await readCatalog();
     for (const site of result.callSites) {
-      expect(site.shippedDefaultProfile).toBe(
-        CALL_SITE_DEFAULTS[LLMCallSiteEnum.parse(site.id)]?.profile ??
-          "balanced",
-      );
+      // Every call site ships the same anchor tier — the chain bottoms out
+      // on balanced for all of them; pins and activeProfile outrank it.
+      expect(site.shippedDefaultProfile).toBe("balanced");
     }
   });
 
-  test("profileless call sites report the balanced anchor tier", async () => {
-    const result = await readCatalog();
-    // Both omit `profile` in CALL_SITE_DEFAULTS and ride the resolver's
-    // balanced anchor, so the catalog groups them under Balanced.
-    for (const id of ["workflowLeaf", "vision"]) {
-      const site = result.callSites.find((s) => s.id === id);
-      expect(site?.shippedDefaultProfile).toBe("balanced");
-    }
-  });
-
-  test("omits an unavailable managed-only shipped default under BYOK", () => {
+  test("voiceEscalationJudge reports the shared anchor on managed and BYOK installs", () => {
     const managed = buildCallSiteCatalog(LLMSchema.parse({})).find(
       ({ id }) => id === "voiceEscalationJudge",
     );
-    expect(managed?.defaultProfile).toBe("jev-managed");
-    expect(managed?.shippedDefaultProfile).toBe("jev-managed");
+    expect(managed?.defaultProfile).toBe("balanced");
+    expect(managed?.shippedDefaultProfile).toBe("balanced");
 
     const byok = buildCallSiteCatalog(
       LLMSchema.parse({ default: { provider: "anthropic" } }),
     ).find(({ id }) => id === "voiceEscalationJudge");
-    expect(byok?.defaultProfile).toBeUndefined();
-    expect(byok?.shippedDefaultProfile).toBeUndefined();
+    expect(byok?.defaultProfile).toBe("balanced");
+    expect(byok?.shippedDefaultProfile).toBe("balanced");
   });
 
   test("domains have non-empty id and displayName", async () => {
