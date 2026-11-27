@@ -424,7 +424,7 @@ describe("resolveCallSiteConfig", () => {
     const { fallbacks, opts } = collect();
     const resolved = resolveCallSiteConfig("mainAgent", llm, opts);
     expect(resolved.model).toBe(
-      CODE_DEFAULT_PROFILE_ENTRIES.balanced.model as string,
+      z.string().parse(CODE_DEFAULT_PROFILE_ENTRIES.balanced.model),
     );
     expect(fallbacks).toContainEqual({
       callSite: "mainAgent",
@@ -599,7 +599,7 @@ describe("resolveCallSiteConfig", () => {
     };
     const resolved = resolveCallSiteConfig("mainAgent", llm);
     expect(resolved.model).toBe(
-      CODE_DEFAULT_PROFILE_ENTRIES.balanced.model as string,
+      z.string().parse(CODE_DEFAULT_PROFILE_ENTRIES.balanced.model),
     );
   });
 
