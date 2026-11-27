@@ -499,6 +499,7 @@ import { migrateCreateDocumentRevisions } from "./migrations/385-create-document
 import { migrateConversationsLastReopenedAt } from "./migrations/386-conversations-last-reopened-at.js";
 import { migrateDropTelemetryTables } from "./migrations/387-drop-telemetry-tables.js";
 import { migrateDropConversationStarters } from "./migrations/388-drop-conversation-starters.js";
+import { migrateScheduleMaxRunCost } from "./migrations/389-schedule-max-run-cost.js";
 import type { MigrationStep } from "./migrations/run-migrations.js";
 
 export const migrationSteps: MigrationStep[] = [
@@ -1671,4 +1672,5 @@ export const migrationSteps: MigrationStep[] = [
   migrateConversationsLastReopenedAt,
   migrateDropTelemetryTables,
   migrateDropConversationStarters,
+  migrateScheduleMaxRunCost,
 ];

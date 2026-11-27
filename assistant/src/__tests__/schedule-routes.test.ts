@@ -1393,6 +1393,37 @@ describe("PATCH /schedules/:id — description", () => {
     expect(listSchedules()[0].inferenceProfile).toBe(resolvedDefault);
   });
 
+  test("sets, validates, returns, and clears maxRunCostUsd", async () => {
+    const schedule = await createSchedule({
+      name: "Spend limit",
+      description: "Limited schedule",
+      cronExpression: "0 9 * * *",
+      message: "hi",
+      syntax: "cron",
+    });
+    const route = findRoute("schedules/:id", "PATCH");
+    const pathParams = { id: schedule.id };
+
+    const result = schedulesResponseSchema.parse(
+      await route.handler({ pathParams, body: { maxRunCostUsd: 2.5 } }),
+    );
+    expect(result.schedules[0]).toMatchObject({
+      id: schedule.id,
+      maxRunCostUsd: 2.5,
+    });
+    expect(listSchedules()[0].maxRunCostUsd).toBe(2.5);
+
+    for (const invalid of [0, 0.001, -1, "5"]) {
+      await expect(
+        route.handler({ pathParams, body: { maxRunCostUsd: invalid } }),
+      ).rejects.toThrow("maxRunCostUsd must be null or a number of at least");
+    }
+    expect(listSchedules()[0].maxRunCostUsd).toBe(2.5);
+
+    await route.handler({ pathParams, body: { maxRunCostUsd: null } });
+    expect(listSchedules()[0].maxRunCostUsd).toBeNull();
+  });
+
   test("re-derives syntax when the expression switches cron to rrule", async () => {
     const schedule = await createSchedule({
       name: "Syntax switch",

@@ -158,4 +158,21 @@ describe("activityFailedDedupeKey", () => {
     expect(timeoutA).not.toBe(timeoutB);
     expect(exceptionA).toMatch(/^activity-failed:job-a:\d{4}-\d{2}-\d{2}$/);
   });
+
+  test("a cost-limit stop keys per job apart from the job's other failures", () => {
+    // A pause notice must not be swallowed by an earlier same-day failure
+    // alert for the same schedule.
+    const costLimit = activityFailedDedupeKey({
+      jobName: "schedule:job-123",
+      errorKind: "cost_limit",
+    });
+    const exception = activityFailedDedupeKey({
+      jobName: "schedule:job-123",
+      errorKind: "exception",
+    });
+    expect(costLimit).toMatch(
+      /^activity-failed:cost_limit:schedule:job-123:\d{4}-\d{2}-\d{2}$/,
+    );
+    expect(costLimit).not.toBe(exception);
+  });
 });

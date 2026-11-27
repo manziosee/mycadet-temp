@@ -55,7 +55,9 @@ function describeUnclassifiedFailure(payload: Record<string, unknown>): string {
       ? "It ran out of time before finishing."
       : kind === "model_provider"
         ? "The model provider did not respond."
-        : "It stopped with an error.";
+        : kind === "cost_limit"
+          ? "It went over its spending limit and was paused."
+          : "It stopped with an error.";
   const raw =
     typeof payload.errorMessage === "string"
       ? payload.errorMessage.replace(/\s+/g, " ").trim()

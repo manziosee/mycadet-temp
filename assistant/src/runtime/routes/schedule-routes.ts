@@ -28,6 +28,7 @@ import {
   isSingleFireRRule,
 } from "../../schedule/recurrence-engine.js";
 import { normalizeScheduleSyntax } from "../../schedule/recurrence-types.js";
+import { validateMaxRunCostUsd } from "../../schedule/run-cost-guard.js";
 import {
   runScript,
   validateScriptTimeoutMs,
@@ -200,6 +201,7 @@ export const scheduleSchema = z.object({
   retryBackoffMs: z.number(),
   timeoutMs: z.number().nullable(),
   inferenceProfile: z.string().nullable(),
+  maxRunCostUsd: z.number().nullable(),
   groupId: z.string().nullable(),
   createdFromConversationId: z.string().nullable(),
   createdFromConversationExists: z.boolean(),
@@ -369,6 +371,7 @@ function serializeSchedule(
     retryBackoffMs: j.retryBackoffMs,
     timeoutMs: j.timeoutMs,
     inferenceProfile: j.inferenceProfile,
+    maxRunCostUsd: j.maxRunCostUsd,
     groupId: j.groupId,
     createdFromConversationId: j.createdFromConversationId,
     createdFromConversationExists: sourceConversation.exists,
@@ -868,6 +871,14 @@ async function handleUpdateSchedule(
     updates.inferenceProfile = inferenceProfile;
   }
 
+  if ("maxRunCostUsd" in body) {
+    const limitError = validateMaxRunCostUsd(body.maxRunCostUsd);
+    if (limitError) {
+      throw new BadRequestError(limitError);
+    }
+    updates.maxRunCostUsd = body.maxRunCostUsd;
+  }
+
   try {
     const updated = await updateSchedule(id, updates);
     if (!updated) {
@@ -1267,6 +1278,13 @@ export const ROUTES: RouteDefinition[] = [
         .nullable()
         .describe(
           "Inference profile (llm.profiles key) the schedule's runs use; null re-pins the schedule to the currently resolved default profile. Workflow-mode schedules resolve a model per workflow step, so the pin is recorded but does not govern their runs.",
+        )
+        .optional(),
+      maxRunCostUsd: z
+        .number()
+        .nullable()
+        .describe(
+          "Most a single LLM-executed run may spend, in USD (at least 0.01). A run that goes over is stopped and the schedule paused. null removes the limit.",
         )
         .optional(),
     }),
